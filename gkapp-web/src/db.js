@@ -234,6 +234,42 @@ db.version(12).stores({
   });
 });
 
+db.version(13).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt',
+  sessions: '++id, name, date, createdAt, seasonId',
+  seasons: '++id, name, createdAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+}).upgrade(async trans => {
+  const orphanSessions = await trans.table('sessions').filter(s => !s.seasonId).toArray();
+  if (orphanSessions.length === 0) return;
+
+  const affectedTaskIds = new Set();
+  for (const session of orphanSessions) {
+    for (const tid of (session.tasks || [])) {
+      affectedTaskIds.add(tid);
+    }
+    await trans.table('sessions').delete(session.id);
+    await trans.table('taskHistory').where('sessionId').equals(session.id).delete();
+  }
+
+  for (const taskId of affectedTaskIds) {
+    const remainingHistory = await trans.table('taskHistory').where('taskId').equals(taskId).toArray();
+    if (remainingHistory.length === 0) {
+      await trans.table('tasks').update(taskId, { usageCount: 0, lastUsedDate: null });
+    } else {
+      let lastDate = null;
+      for (const h of remainingHistory) {
+        if (!lastDate || h.date > lastDate) {
+          lastDate = h.date;
+        }
+      }
+      await trans.table('tasks').update(taskId, { usageCount: remainingHistory.length, lastUsedDate: lastDate });
+    }
+  }
+});
+
 export async function initDatabase() {
   const count = await db.tasks.count();
   if (count === 0) {
