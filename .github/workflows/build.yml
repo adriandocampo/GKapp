@@ -15,6 +15,10 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
 
+    defaults:
+      run:
+        working-directory: gkapp-web
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,6 +28,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: gkapp-web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
