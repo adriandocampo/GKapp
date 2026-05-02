@@ -44,7 +44,7 @@ jobs:
 
       - name: Build Electron (macOS)
         if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac --publish onTag
+        run: npx electron-builder --mac --publish onTag --config.mac.identity=null --config.mac.hardenedRuntime=false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
