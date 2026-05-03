@@ -204,7 +204,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                     {teamCrest ? (
                       <img src={teamCrest} alt={teamName} className="w-full h-full object-contain drop-shadow-sm" />
                     ) : (
-                      <img src="/images/lugo_badge.webp" alt="CD Lugo" className="w-full h-full object-contain drop-shadow-sm" />
+                      <img src={`${import.meta.env.BASE_URL}images/lugo_badge.webp`} alt="CD Lugo" className="w-full h-full object-contain drop-shadow-sm" />
                     )}
                   </div>
                   <span className="text-red-600 font-extrabold text-base whitespace-nowrap tracking-tight">{teamName}</span>
@@ -367,7 +367,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                     {secondaryImage ? (
                       <img src={secondaryImage} alt="Imagen secundaria" className="w-32 h-auto object-contain" />
                     ) : (
-                      <img src="/images/espirito_loitador.webp" alt="Espíritu Loitador" className="w-32 h-auto object-contain" />
+                      <img src={`${import.meta.env.BASE_URL}images/espirito_loitador.webp`} alt="Espíritu Loitador" className="w-32 h-auto object-contain" />
                     )}
                   </div>
                 </div>

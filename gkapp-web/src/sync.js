@@ -19,6 +19,10 @@ import { db } from './db';
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 let isSyncingFromFirestore = false;
+let hooksInstalled = false;
+let currentSyncUid = null;
+
+const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings'];
 
 /** Strip videoBlob and compress imageBlob for Firestore */
 async function stripBlobs(obj) {
@@ -114,9 +118,26 @@ function base64ToBlob(base64, mimeType = 'image/jpeg') {
   return new Blob([byteArr], { type: mimeType });
 }
 
-// ─── Initial sync: Firestore → Dexie (merge, never delete local data) ───────
+// ─── Reset / cleanup ────────────────────────────────────────────────────────
 
-const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings'];
+export async function clearAllLocalData() {
+  for (const table of TABLES) {
+    try {
+      await db.table(table).clear();
+    } catch (err) {
+      console.warn(`[sync] Error clearing table ${table}:`, err);
+    }
+  }
+  console.log('[sync] All local tables cleared');
+}
+
+export function resetSyncHooks() {
+  hooksInstalled = false;
+  currentSyncUid = null;
+  console.log('[sync] Hooks reset');
+}
+
+// ─── Initial sync: Firestore → Dexie ────────────────────────────────────────
 
 export async function syncFromFirestore(uid) {
   if (!isFirebaseEnabled || !uid) return;
@@ -132,10 +153,10 @@ export async function syncFromFirestore(uid) {
         const snap = await getDocs(userCol(uid, table));
         console.log(`[sync] Firestore table "${table}": ${snap.size} docs found`);
 
-        if (snap.empty) {
-          console.log(`[sync] Firestore table "${table}" empty, skipping`);
-          continue;
-        }
+        // Clear local table so it matches Firestore exactly for this user
+        await db.table(table).clear();
+
+        if (snap.empty) continue;
 
         const rows = await Promise.all(snap.docs.map(async d => {
           const data = d.data();
@@ -155,10 +176,8 @@ export async function syncFromFirestore(uid) {
           return { ...data, id };
         }));
 
-        // Merge into local DB (upsert via bulkPut, NEVER clear)
-        // This preserves seed data and any local items not yet synced up.
         await db.table(table).bulkPut(rows);
-        console.log(`[sync] Dexie table "${table}": ${rows.length} docs merged`);
+        console.log(`[sync] Dexie table "${table}": ${rows.length} docs inserted`);
       } catch (tableErr) {
         console.error(`[sync] Error syncing table "${table}":`, tableErr);
       }
@@ -173,11 +192,12 @@ export async function syncFromFirestore(uid) {
 
 // ─── Ongoing sync: Dexie hooks → Firestore ──────────────────────────────────
 
-let hooksInstalled = false;
-
 export function setupFirestoreSync(uid) {
-  if (!isFirebaseEnabled || !uid || hooksInstalled) return;
+  if (!isFirebaseEnabled || !uid) return;
+  if (hooksInstalled && currentSyncUid === uid) return;
+
   hooksInstalled = true;
+  currentSyncUid = uid;
 
   for (const table of TABLES) {
     const tbl = db.table(table);

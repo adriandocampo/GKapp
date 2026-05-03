@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut, User } from 'lucide-react';
 import { db, initDatabase, seedDatabase } from './db';
-import { syncFromFirestore, setupFirestoreSync } from './sync';
+import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthGate, { handleSignOut } from './components/AuthGate';
@@ -26,10 +26,15 @@ function Layout() {
 
       // 2. If Firebase is active and user is logged in, sync cloud → local
       if (isFirebaseEnabled && user?.uid) {
+        // Clean slate: wipe local data from previous user/session
+        // and reset hooks so they install for the NEW uid.
+        await clearAllLocalData();
+        resetSyncHooks();
+
         await syncFromFirestore(user.uid);
         setupFirestoreSync(user.uid);
 
-        // Fallback: if Firestore had no tasks (or sync wiped seed data), re-seed
+        // Fallback: if Firestore had no tasks (first login), seed defaults
         const taskCount = await db.tasks.count();
         if (taskCount === 0) {
           console.log('[app] No tasks after sync, re-seeding...');
