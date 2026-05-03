@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { Database, PlusCircle, ClipboardList, Settings, LogOut } from 'lucide-react';
+import { Database, PlusCircle, ClipboardList, Settings, LogOut, User } from 'lucide-react';
 import { db, initDatabase, seedDatabase } from './db';
 import { syncFromFirestore, setupFirestoreSync } from './sync';
 import { isFirebaseEnabled } from './firebase';
@@ -17,7 +17,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 function Layout() {
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, isGuest, exitGuestMode } = useAuth();
 
   useEffect(() => {
     async function init() {
@@ -58,6 +58,31 @@ function Layout() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [user?.uid]);
+
+  // Guest mode: check for expiration every minute while the app is open
+  useEffect(() => {
+    if (!isGuest) return;
+
+    const interval = setInterval(() => {
+      try {
+        const raw = localStorage.getItem('gkapp_guest');
+        if (!raw) {
+          window.location.reload();
+          return;
+        }
+        const data = JSON.parse(raw);
+        const elapsed = Date.now() - data.startedAt;
+        if (elapsed > 6 * 60 * 60 * 1000) {
+          console.log('[guest] Session expired during use, reloading...');
+          window.location.reload();
+        }
+      } catch {
+        window.location.reload();
+      }
+    }, 60_000);
+
+    return () => clearInterval(interval);
+  }, [isGuest]);
 
   if (loading) {
     return (
@@ -114,6 +139,14 @@ function Layout() {
               </NavLink>
             </div>
             <div className="flex items-center gap-2">
+              {/* Guest mode indicator */}
+              {isGuest && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-600/15 border border-amber-500/30 rounded-lg text-amber-400 text-xs font-medium">
+                  <User size={13} />
+                  Invitado
+                </span>
+              )}
+
               <NavLink
                 to="/settings"
                 className={({ isActive }) =>
@@ -126,18 +159,31 @@ function Layout() {
                 <span>Ajustes</span>
               </NavLink>
 
-              {/* Sign-out button — only visible in web/Firebase mode */}
-              {isFirebaseEnabled && user && (
-                <button
-                  onClick={handleSignOut}
-                  title={`Cerrar sesión (${user.email})`}
-                  className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
-                >
-                  {user.photoURL && (
-                    <img src={user.photoURL} alt="" className="w-6 h-6 rounded-full" />
+              {/* Sign-out / Exit guest button */}
+              {isFirebaseEnabled && (
+                <>
+                  {user && (
+                    <button
+                      onClick={handleSignOut}
+                      title={`Cerrar sesión (${user.email})`}
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                    >
+                      {user.photoURL && (
+                        <img src={user.photoURL} alt="" className="w-6 h-6 rounded-full" />
+                      )}
+                      <LogOut size={16} />
+                    </button>
                   )}
-                  <LogOut size={16} />
-                </button>
+                  {isGuest && (
+                    <button
+                      onClick={exitGuestMode}
+                      title="Salir del modo invitado (se borrarán los datos)"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-amber-400 hover:bg-amber-900/30 hover:text-amber-300 transition-colors"
+                    >
+                      <LogOut size={16} />
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

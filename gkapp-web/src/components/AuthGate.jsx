@@ -17,6 +17,7 @@ async function handleSignOut() {
 function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+  const { enterGuestMode }    = useAuth();
 
   async function handleLogin() {
     setLoading(true);
@@ -47,7 +48,7 @@ function LoginScreen() {
         </div>
 
         {/* Card */}
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl">
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl space-y-4">
           <h2 className="text-lg font-semibold text-slate-100 mb-1">Iniciar sesión</h2>
           <p className="text-sm text-slate-400 mb-6">
             Tus datos se sincronizan de forma segura en la nube, aislados de otros usuarios.
@@ -72,14 +73,27 @@ function LoginScreen() {
             {loading ? 'Conectando...' : 'Continuar con Google'}
           </button>
 
-          {error && (
-            <p className="mt-4 text-sm text-red-400 text-center">{error}</p>
-          )}
+          {/* Guest mode button */}
+          <button
+            onClick={enterGuestMode}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-slate-300 font-semibold text-sm transition-all border border-slate-600 hover:border-slate-500 active:scale-[0.98]"
+          >
+            <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8}>
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            Entrar como invitado
+          </button>
 
-          <p className="text-xs text-slate-500 text-center mt-6 leading-relaxed">
-            Cada cuenta Google tiene su propia base de datos independiente.
-            Nadie más puede ver tus tareas ni sesiones.
+          <p className="text-xs text-slate-500 text-center leading-relaxed">
+            Modo invitado: tus datos se guardan solo en este dispositivo y se borran automáticamente a las 6 horas.
           </p>
+
+          {error && (
+            <p className="text-sm text-red-400 text-center">{error}</p>
+          )}
         </div>
       </div>
     </div>
@@ -89,12 +103,16 @@ function LoginScreen() {
 /**
  * Wraps the app: shows LoginScreen if Firebase is enabled and no user is logged in.
  * In Electron mode (Firebase disabled) it renders children immediately.
+ * Guest mode bypasses authentication.
  */
 export default function AuthGate({ children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, isGuest } = useAuth();
 
   // Electron / no Firebase: pass through
   if (!isFirebaseEnabled) return children;
+
+  // Guest mode: pass through without login
+  if (isGuest) return children;
 
   if (loading) {
     return (
