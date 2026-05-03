@@ -270,6 +270,40 @@ db.version(13).stores({
   }
 });
 
+db.version(14).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt',
+  sessions: '++id, name, date, createdAt, seasonId',
+  seasons: '++id, name, createdAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+}).upgrade(async trans => {
+  const VALID_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
+  
+  await trans.table('tasks').toCollection().modify(task => {
+    if (task.imagePath && task.imagePath.startsWith('/')) {
+      task.imagePath = task.imagePath.substring(1);
+    }
+    if (task.videoPath && task.videoPath.startsWith('/')) {
+      task.videoPath = task.videoPath.substring(1);
+    }
+    
+    if (VALID_SITUATIONS.includes(task.category)) {
+      task.situation = task.category;
+      task.category = 'Otro';
+    }
+  });
+
+  const existingTags = await trans.table('tags').toArray();
+  const existingNames = new Set(existingTags.map(t => `${t.type}:${t.name}`));
+  
+  for (const name of VALID_SITUATIONS) {
+    if (!existingNames.has(`situation:${name}`)) {
+      await trans.table('tags').add({ type: 'situation', name });
+    }
+  }
+});
+
 export async function initDatabase() {
   const count = await db.tasks.count();
   if (count === 0) {
@@ -335,6 +369,14 @@ async function seedDatabase() {
     const VALID_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
 
     for (const task of tasks) {
+      if (task.imagePath && task.imagePath.startsWith('/')) task.imagePath = task.imagePath.substring(1);
+      if (task.videoPath && task.videoPath.startsWith('/')) task.videoPath = task.videoPath.substring(1);
+
+      if (VALID_SITUATIONS.includes(task.category)) {
+        task.situation = task.category;
+        task.category = 'Otro';
+      }
+
       if (!VALID_PHASES.includes(task.phase)) task.phase = 'Activación';
       if (!VALID_CATEGORIES.includes(task.category)) task.category = 'Otro';
       if (!VALID_SITUATIONS.includes(task.situation)) task.situation = 'Otro';
