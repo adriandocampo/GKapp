@@ -262,11 +262,11 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
 
     let targetId = session?.id;
     if (!targetId) {
-      data.createdAt = new Date();
-      targetId = await db.sessions.add(data);
-    } else {
-      await db.sessions.update(targetId, data);
+      targetId = crypto.randomUUID();
     }
+    data.id = targetId;
+    data.createdAt = data.createdAt || new Date();
+    await db.sessions.put(data);
 
     const today = todayISO();
     for (const task of tasks) {
