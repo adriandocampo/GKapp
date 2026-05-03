@@ -1,7 +1,7 @@
 {
   "name": "gkapp",
   "productName": "GKApp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "main": "electron/main.js",
   "type": "module",
@@ -15,7 +15,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
     "electron:build": "vite build && electron-builder",
     "electron:build:win": "vite build && electron-builder --win --publish never",
     "electron:build:mac": "vite build && electron-builder --mac --publish never",
@@ -33,6 +33,7 @@
       "repo": "GKapp",
       "releaseType": "release"
     },
+    "generateUpdatesFilesForAllChannels": true,
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -42,24 +43,26 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "verifyUpdateCodeSignature": false
     },
     "mac": {
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "build/icon.png",
-      "category": "public.app-category.sports",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "category": "public.app-category.sports"
     },
     "dmg": {
       "writeUpdateInfo": false,
@@ -69,12 +72,14 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     }
   },
   "dependencies": {
     "dexie": "^4.4.2",
     "dom-to-image-more": "^3.7.2",
+    "electron-updater": "^6.8.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.14.0",
@@ -97,8 +102,8 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
     "postcss": "^8.5.12",
-    "tailwindcss": "^4.2.4",
     "sharp": "^0.33.5",
+    "tailwindcss": "^4.2.4",
     "vite": "^8.0.10",
     "wait-on": "^8.0.1"
   }
