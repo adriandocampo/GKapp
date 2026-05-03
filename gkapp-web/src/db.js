@@ -304,6 +304,30 @@ db.version(14).stores({
   }
 });
 
+// Version 15 — Add YouTube video support fields
+db.version(15).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt',
+  sessions: '++id, name, date, createdAt, seasonId',
+  seasons: '++id, name, createdAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+}).upgrade(async trans => {
+  await trans.table('tasks').toCollection().modify(task => {
+    // videoType: 'local' | 'youtube' | 'none'
+    if (task.videoType === undefined) {
+      task.videoType = (task.videoBlob || task.videoPath) ? 'local' : 'none';
+    }
+    if (task.youtubeUrl === undefined) task.youtubeUrl = null;
+  });
+  await trans.table('sessions').toCollection().modify(session => {
+    if (session.videoType === undefined) {
+      session.videoType = session.videoBlob ? 'local' : 'none';
+    }
+    if (session.youtubeUrl === undefined) session.youtubeUrl = null;
+  });
+});
+
 export async function initDatabase() {
   const count = await db.tasks.count();
   if (count === 0) {
@@ -360,7 +384,8 @@ async function ensureDefaultSettings() {
 
 async function seedDatabase() {
   try {
-    const response = await fetch('./seed_data.json');
+    const base = import.meta.env.BASE_URL ?? './';
+    const response = await fetch(`${base}seed_data.json`);
     if (!response.ok) throw new Error('Failed to load seed data');
     const tasks = await response.json();
 

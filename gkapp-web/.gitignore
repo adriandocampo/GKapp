@@ -26,3 +26,6 @@ dist-electron
 
 # Generated icons (keep icon.png, icon.ico, icon.icns)
 *.iconset
+
+dist-web/
+

@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Save, Trash2, ArrowLeft, Upload, X, Paintbrush, ClipboardList, Video, Play } from 'lucide-react';
+import { Save, Trash2, ArrowLeft, Upload, X, Paintbrush, ClipboardList, Video, Link, CloudUpload, Loader2 } from 'lucide-react';
 import { db } from '../db';
 import ImageEditor from '../components/ImageEditor';
 import { useTags } from '../hooks/useTags';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Modal';
+import { useYouTubeUpload, extractYouTubeId, youtubeEmbedUrl } from '../hooks/useYouTubeUpload';
+import { isFirebaseEnabled } from '../firebase';
 
 export default function TaskEditor() {
   const { id } = useParams();
@@ -28,13 +30,19 @@ export default function TaskEditor() {
     imageElements: null,
     videoBlob: null,
     videoPath: null,
+    videoType: 'none',  // 'none' | 'local' | 'youtube'
+    youtubeUrl: null,
   });
   const [newTags, setNewTags] = useState({ phase: '', category: '', situation: '' });
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [videoUrl, setVideoUrl] = useState(null);
-  const [saving, setSaving] = useState(false);
+  const [previewUrl, setPreviewUrl]       = useState(null);
+  const [videoUrl, setVideoUrl]           = useState(null);    // blob URL for local videos
+  const [videoMode, setVideoMode]         = useState('local'); // active tab: 'local'|'youtube'|'upload'
+  const [youtubeUrlInput, setYoutubeUrlInput] = useState('');
+  const [saving, setSaving]               = useState(false);
   const [showImageEditor, setShowImageEditor] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [hasChanges, setHasChanges]       = useState(false);
+
+  const { upload: ytUpload, uploading: ytUploading, progress: ytProgress, error: ytError } = useYouTubeUpload();
 
   const { tags, addTag: addTagHook } = useTags();
   const { addToast } = useToast();
@@ -47,9 +55,20 @@ export default function TaskEditor() {
       if (t.imageBlob) setPreviewUrl(URL.createObjectURL(t.imageBlob));
       else if (t.imagePath) setPreviewUrl(t.imagePath);
       else setPreviewUrl(null);
-      if (t.videoBlob) setVideoUrl(URL.createObjectURL(t.videoBlob));
-      else if (t.videoPath) setVideoUrl(t.videoPath);
-      else setVideoUrl(null);
+
+      if (t.videoType === 'youtube' && t.youtubeUrl) {
+        setYoutubeUrlInput(t.youtubeUrl);
+        setVideoMode('youtube');
+        setVideoUrl(null);
+      } else if (t.videoBlob) {
+        setVideoUrl(URL.createObjectURL(t.videoBlob));
+        setVideoMode('local');
+      } else if (t.videoPath) {
+        setVideoUrl(t.videoPath);
+        setVideoMode('local');
+      } else {
+        setVideoUrl(null);
+      }
     }
   };
 
@@ -105,16 +124,41 @@ export default function TaskEditor() {
   function handleVideoChange(e) {
     const file = e.target.files[0];
     if (!file) return;
-    setTask(prev => ({ ...prev, videoBlob: file }));
+    setTask(prev => ({ ...prev, videoBlob: file, videoType: 'local', youtubeUrl: null }));
     if (videoUrl && videoUrl.startsWith('blob:')) URL.revokeObjectURL(videoUrl);
     setVideoUrl(URL.createObjectURL(file));
     setHasChanges(true);
   }
 
+  function handleYouTubeUrl(url) {
+    setYoutubeUrlInput(url);
+    const vid = extractYouTubeId(url);
+    if (vid) {
+      const canonical = `https://www.youtube.com/watch?v=${vid}`;
+      setTask(prev => ({ ...prev, youtubeUrl: canonical, videoType: 'youtube', videoBlob: null, videoPath: null }));
+      setHasChanges(true);
+    }
+  }
+
+  async function handleYouTubeUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const url = await ytUpload(file, task.title || 'GKApp Video', task.description || '');
+      setTask(prev => ({ ...prev, youtubeUrl: url, videoType: 'youtube', videoBlob: null, videoPath: null }));
+      setYoutubeUrlInput(url);
+      setHasChanges(true);
+      addToast('Vídeo subido a YouTube correctamente', 'success');
+    } catch {
+      addToast('Error al subir a YouTube: ' + (ytError || 'Error desconocido'), 'error');
+    }
+  }
+
   function removeVideo() {
-    setTask(prev => ({ ...prev, videoBlob: null, videoPath: null }));
+    setTask(prev => ({ ...prev, videoBlob: null, videoPath: null, videoType: 'none', youtubeUrl: null }));
     if (videoUrl && videoUrl.startsWith('blob:')) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
+    setYoutubeUrlInput('');
     setHasChanges(true);
   }
 
@@ -364,22 +408,111 @@ export default function TaskEditor() {
 
         <div>
           <label className="block text-sm font-medium text-slate-400 mb-2">Video</label>
-          <div className="flex items-center gap-4 flex-wrap">
-            <button
-              onClick={() => videoFileInputRef.current?.click()}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 flex items-center gap-2 transition-colors"
-            >
-              <Video size={16} /> Subir video
-            </button>
-            {videoUrl && (
-              <button onClick={removeVideo} className="px-4 py-2 bg-red-900/50 hover:bg-red-900/80 rounded-lg text-red-300 flex items-center gap-2 transition-colors">
-                <X size={16} /> Eliminar
+
+          {/* Mode tabs */}
+          <div className="flex gap-1 mb-3 bg-slate-900 p-1 rounded-lg w-fit">
+            {[
+              { key: 'local',  icon: Video,       label: 'Archivo local' },
+              { key: 'youtube', icon: Link,        label: 'URL YouTube' },
+              ...(isFirebaseEnabled && import.meta.env.VITE_YOUTUBE_CLIENT_ID
+                ? [{ key: 'upload', icon: CloudUpload, label: 'Subir a YouTube' }]
+                : []),
+            ].map(({ key, icon: Icon, label }) => (
+              <button
+                key={key}
+                onClick={() => setVideoMode(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  videoMode === key
+                    ? 'bg-slate-700 text-teal-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Icon size={13} />{label}
               </button>
-            )}
-            <input ref={videoFileInputRef} type="file" accept="video/*" onChange={handleVideoChange} className="hidden" />
+            ))}
           </div>
-          {videoUrl && (
-            <video src={videoUrl} controls className="mt-4 max-h-64 rounded-lg border border-slate-700 w-full" />
+
+          {/* Local file mode */}
+          {videoMode === 'local' && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => videoFileInputRef.current?.click()}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 flex items-center gap-2 transition-colors"
+              >
+                <Video size={16} /> Seleccionar video
+              </button>
+              {(videoUrl || task.videoType === 'local') && (
+                <button onClick={removeVideo} className="px-4 py-2 bg-red-900/50 hover:bg-red-900/80 rounded-lg text-red-300 flex items-center gap-2 transition-colors">
+                  <X size={16} /> Eliminar
+                </button>
+              )}
+              <input ref={videoFileInputRef} type="file" accept="video/*" onChange={handleVideoChange} className="hidden" />
+              <p className="w-full text-xs text-slate-500">El vídeo se guarda en este dispositivo. No se sincroniza entre dispositivos.</p>
+            </div>
+          )}
+          {videoMode === 'local' && videoUrl && (
+            <video src={videoUrl} controls className="mt-3 max-h-64 rounded-lg border border-slate-700 w-full" />
+          )}
+
+          {/* YouTube URL mode */}
+          {videoMode === 'youtube' && (
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={youtubeUrlInput}
+                  onChange={e => handleYouTubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="flex-1 px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                />
+                {task.youtubeUrl && (
+                  <button onClick={removeVideo} className="px-3 py-2 bg-red-900/50 hover:bg-red-900/80 rounded-lg text-red-300 transition-colors">
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              {task.youtubeUrl && extractYouTubeId(task.youtubeUrl) && (
+                <iframe
+                  src={youtubeEmbedUrl(extractYouTubeId(task.youtubeUrl))}
+                  className="mt-2 w-full aspect-video rounded-lg border border-slate-700"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title="YouTube preview"
+                />
+              )}
+              <p className="text-xs text-slate-500">Pega cualquier URL de YouTube. El vídeo puede ser público, no listado o privado.</p>
+            </div>
+          )}
+
+          {/* Upload to YouTube mode */}
+          {videoMode === 'upload' && (
+            <div className="space-y-3">
+              {ytUploading ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-slate-300">
+                    <Loader2 size={16} className="animate-spin text-teal-400" />
+                    Subiendo a YouTube… {ytProgress}%
+                  </div>
+                  <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="bg-teal-500 h-2 rounded-full transition-all duration-300" style={{ width: `${ytProgress}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-slate-700/50 rounded-xl text-slate-400 hover:border-teal-500/50 hover:text-teal-400 cursor-pointer transition-all bg-slate-900/30">
+                  <CloudUpload size={18} />
+                  <span className="text-sm font-medium">Seleccionar vídeo para subir a tu YouTube</span>
+                  <input type="file" accept="video/*" onChange={handleYouTubeUpload} className="hidden" />
+                </label>
+              )}
+              {task.youtubeUrl && !ytUploading && (
+                <div className="flex items-center gap-2 text-xs text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-lg px-3 py-2">
+                  <Link size={12} />
+                  <a href={task.youtubeUrl} target="_blank" rel="noreferrer" className="underline truncate">{task.youtubeUrl}</a>
+                  <button onClick={removeVideo} className="ml-auto text-red-400 hover:text-red-300"><X size={12} /></button>
+                </div>
+              )}
+              <p className="text-xs text-slate-500">Se subirá como "No listado" a tu canal de YouTube. Solo accesible mediante enlace directo.</p>
+            </div>
           )}
         </div>
 

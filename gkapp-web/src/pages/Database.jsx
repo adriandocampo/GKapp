@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLeft, ChevronRight, ImageIcon, Download, Upload, Star, ArrowUpDown, Video } from 'lucide-react';
 import { db } from '../db';
+import { extractYouTubeId, youtubeEmbedUrl } from '../hooks/useYouTubeUpload';
 import { useTags } from '../hooks/useTags';
 import { useToast } from '../components/Toast';
 import { useConfirm, usePrompt, useAlert } from '../components/Modal';
@@ -139,7 +140,7 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick }) {
             <FileText size={32} />
           </div>
         )}
-        {task.videoBlob || task.videoPath ? (
+        {task.youtubeUrl || task.videoBlob || task.videoPath ? (
           <div className="absolute bottom-2 right-2 bg-black/70 rounded-full p-1.5">
             <Video size={14} className="text-white" />
           </div>
@@ -587,12 +588,24 @@ export default function DatabasePage() {
               {detailImageUrl && (
                 <img src={detailImageUrl} alt={selectedTask.title} className="w-full rounded-lg border border-slate-700" />
               )}
-              {detailVideoUrl && (
+              {/* Video section — supports local blob and YouTube embed */}
+              {selectedTask.videoType === 'youtube' && selectedTask.youtubeUrl && extractYouTubeId(selectedTask.youtubeUrl) ? (
                 <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-2">Video</div>
+                  <div className="text-xs text-slate-500 mb-2">Video (YouTube)</div>
+                  <iframe
+                    src={youtubeEmbedUrl(extractYouTubeId(selectedTask.youtubeUrl))}
+                    className="w-full aspect-video rounded-lg border border-slate-700"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title={selectedTask.title}
+                  />
+                </div>
+              ) : detailVideoUrl ? (
+                <div className="bg-slate-900 p-3 rounded-lg">
+                  <div className="text-xs text-slate-500 mb-2">Video (local)</div>
                   <video src={detailVideoUrl} controls className="w-full rounded-lg border border-slate-700" />
                 </div>
-              )}
+              ) : null}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Fase</div>

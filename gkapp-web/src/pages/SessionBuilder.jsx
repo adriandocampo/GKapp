@@ -1,12 +1,14 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Plus, ArrowUp, ArrowDown, Trash2, Save, X, Search, Calendar, Printer, LayoutTemplate, Eye, ArrowLeft, User, FolderOpen, ChevronLeft, ChevronRight, Star, Video, Play, BookOpen, Target, Eye as EyeIcon, Film } from 'lucide-react';
+import { Plus, ArrowUp, ArrowDown, Trash2, Save, X, Search, Calendar, Printer, LayoutTemplate, Eye, ArrowLeft, User, FolderOpen, ChevronLeft, ChevronRight, Star, Video, Play, BookOpen, Target, Eye as EyeIcon, Film, Link, CloudUpload, Loader2 } from 'lucide-react';
 import { db, getSetting } from '../db';
 import { useToast } from '../components/Toast';
 import { useConfirm, usePrompt } from '../components/Modal';
 import SessionTemplateEditor from '../components/SessionTemplateEditor';
 import { formatDateDDMMYY, todayISO, tomorrowISO } from '../utils/date';
+import { extractYouTubeId, youtubeEmbedUrl, useYouTubeUpload } from '../hooks/useYouTubeUpload';
+import { isFirebaseEnabled } from '../firebase';
 
 const defaultPorteros = [
   { name: 'MARC', active: true },
@@ -163,8 +165,14 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
     return saved && saved.length >= 2 ? saved : ['', ''];
   });
   const [videoBlob, setVideoBlob] = useState(session?.videoBlob || null);
+  const [sessionVideoMode, setSessionVideoMode] = useState(
+    session?.videoType === 'youtube' ? 'youtube' : 'local'
+  );
+  const [sessionYoutubeUrlInput, setSessionYoutubeUrlInput] = useState(session?.youtubeUrl || '');
+  const [sessionYoutubeUrl, setSessionYoutubeUrl] = useState(session?.youtubeUrl || null);
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const sessionVideoUrl = useSessionVideoUrl(videoBlob);
+  const { upload: ytUpload, uploading: ytUploading, progress: ytProgress, error: ytError } = useYouTubeUpload();
 
   useEffect(() => {
     if (porteros.length === 0) {
@@ -188,6 +196,11 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
     if (session?.templateFields?.objetivos) setObjetivos(session.templateFields.objetivos);
     if (session?.templateFields?.focos) setFocos(session.templateFields.focos);
     if (session?.videoBlob) setVideoBlob(session.videoBlob);
+    if (session?.youtubeUrl) {
+      setSessionYoutubeUrl(session.youtubeUrl);
+      setSessionYoutubeUrlInput(session.youtubeUrl);
+      setSessionVideoMode('youtube');
+    }
   }, [session?.templateFields?.porteros, session?.valoracionGeneral, session?.feedbackGeneral, session?.rpePorteros, session?.templateFields?.contenidos, session?.templateFields?.objetivos, session?.templateFields?.focos, session?.videoBlob]);
 
   const [showPicker, setShowPicker] = useState(false);
@@ -222,6 +235,8 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
       addToast('Selecciona una temporada', 'warning');
       return;
     }
+    const sessionVideoType = sessionVideoMode === 'youtube' && sessionYoutubeUrl ? 'youtube'
+      : videoBlob ? 'local' : 'none';
     const data = {
       name,
       date,
@@ -231,7 +246,9 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
       valoracionGeneral,
       feedbackGeneral,
       rpePorteros,
-      videoBlob,
+      videoBlob: sessionVideoMode === 'local' ? videoBlob : null,
+      videoType: sessionVideoType,
+      youtubeUrl: sessionVideoMode === 'youtube' ? sessionYoutubeUrl : null,
     };
     const mergedTemplateFields = {
       ...(session?.templateFields || {}),
@@ -349,10 +366,38 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
     const file = e.target.files?.[0];
     if (!file) return;
     setVideoBlob(file);
+    setSessionVideoMode('local');
+    setSessionYoutubeUrl(null);
+    setSessionYoutubeUrlInput('');
+  }
+
+  function handleSessionYouTubeUrl(url) {
+    setSessionYoutubeUrlInput(url);
+    const vid = extractYouTubeId(url);
+    if (vid) {
+      setSessionYoutubeUrl(`https://www.youtube.com/watch?v=${vid}`);
+    }
+  }
+
+  async function handleSessionYouTubeUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await ytUpload(file, name || 'Sesión GKApp', '');
+      setSessionYoutubeUrl(url);
+      setSessionYoutubeUrlInput(url);
+      setSessionVideoMode('youtube');
+      setVideoBlob(null);
+      addToast('Vídeo de sesión subido a YouTube', 'success');
+    } catch {
+      addToast('Error al subir: ' + (ytError || 'Error desconocido'), 'error');
+    }
   }
 
   function removeVideo() {
     setVideoBlob(null);
+    setSessionYoutubeUrl(null);
+    setSessionYoutubeUrlInput('');
   }
 
   function togglePortero(index) {
@@ -638,37 +683,111 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
             {/* Video de sesión */}
             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/30">
               <SectionHeader icon={Film} title="Video de Sesión" />
-              {videoBlob ? (
-                <div className="mt-3 flex items-center gap-3">
-                  <div className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800/50 border border-slate-700/30 rounded-lg text-sm text-slate-300 truncate">
-                    {videoBlob.name}
+
+              {/* Mode tabs */}
+              <div className="flex gap-1 mt-3 mb-3 bg-slate-900 p-1 rounded-lg w-fit">
+                {[
+                  { key: 'local',   icon: Video,       label: 'Archivo local' },
+                  { key: 'youtube', icon: Link,        label: 'URL YouTube' },
+                  ...(isFirebaseEnabled && import.meta.env.VITE_YOUTUBE_CLIENT_ID
+                    ? [{ key: 'upload', icon: CloudUpload, label: 'Subir a YouTube' }]
+                    : []),
+                ].map(({ key, icon: Icon, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setSessionVideoMode(key)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      sessionVideoMode === key ? 'bg-slate-700 text-teal-400' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Icon size={13} />{label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Local */}
+              {sessionVideoMode === 'local' && (
+                videoBlob ? (
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800/50 border border-slate-700/30 rounded-lg text-sm text-slate-300 truncate">
+                      {videoBlob.name}
+                    </div>
+                    <button
+                      onClick={() => setShowVideoPlayer(true)}
+                      className="p-2.5 bg-teal-600 hover:bg-teal-500 rounded-lg text-white transition-colors"
+                    >
+                      <Play size={16} />
+                    </button>
+                    <button onClick={removeVideo} className="p-2.5 bg-red-600/10 hover:bg-red-600/20 rounded-lg text-red-400 border border-red-600/20">
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setShowVideoPlayer(true)}
-                    className="p-2.5 bg-teal-600 hover:bg-teal-500 rounded-lg text-white transition-colors shadow-lg shadow-teal-600/20"
-                    title="Reproducir video"
-                  >
-                    <Play size={16} />
-                  </button>
-                  <button
-                    onClick={removeVideo}
-                    className="p-2.5 bg-red-600/10 hover:bg-red-600/20 rounded-lg text-red-400 transition-colors border border-red-600/20"
-                    title="Eliminar video"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-slate-700/50 rounded-xl text-slate-500 hover:border-teal-500/50 hover:text-teal-400 cursor-pointer transition-all bg-slate-800/20">
+                    <Video size={16} />
+                    <span className="text-sm font-medium">Seleccionar video</span>
+                    <input type="file" accept="video/*" onChange={handleVideoSelect} className="hidden" />
+                  </label>
+                )
+              )}
+
+              {/* YouTube URL */}
+              {sessionVideoMode === 'youtube' && (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={sessionYoutubeUrlInput}
+                      onChange={e => handleSessionYouTubeUrl(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-teal-500/50"
+                    />
+                    {sessionYoutubeUrl && (
+                      <button onClick={removeVideo} className="p-2 bg-red-900/30 hover:bg-red-900/50 rounded-lg text-red-400">
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                  {sessionYoutubeUrl && extractYouTubeId(sessionYoutubeUrl) && (
+                    <iframe
+                      src={youtubeEmbedUrl(extractYouTubeId(sessionYoutubeUrl))}
+                      className="w-full aspect-video rounded-lg border border-slate-700"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      title="Vista previa sesión"
+                    />
+                  )}
                 </div>
-              ) : (
-                <label className="mt-3 flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-slate-700/50 rounded-xl text-slate-500 hover:border-teal-500/50 hover:text-teal-400 cursor-pointer transition-all bg-slate-800/20 hover:bg-slate-800/30">
-                  <Video size={16} />
-                  <span className="text-sm font-medium">Seleccionar video</span>
-                  <input
-                    type="file"
-                    accept="video/*"
-                    onChange={handleVideoSelect}
-                    className="hidden"
-                  />
-                </label>
+              )}
+
+              {/* Upload to YouTube */}
+              {sessionVideoMode === 'upload' && (
+                <div className="space-y-3">
+                  {ytUploading ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-slate-300">
+                        <Loader2 size={16} className="animate-spin text-teal-400" />
+                        Subiendo… {ytProgress}%
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div className="bg-teal-500 h-2 rounded-full transition-all" style={{ width: `${ytProgress}%` }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-slate-700/50 rounded-xl text-slate-500 hover:border-teal-500/50 hover:text-teal-400 cursor-pointer transition-all bg-slate-800/20">
+                      <CloudUpload size={16} />
+                      <span className="text-sm font-medium">Subir vídeo a tu YouTube</span>
+                      <input type="file" accept="video/*" onChange={handleSessionYouTubeUpload} className="hidden" />
+                    </label>
+                  )}
+                  {sessionYoutubeUrl && !ytUploading && (
+                    <div className="flex items-center gap-2 text-xs text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-lg px-3 py-2">
+                      <Link size={12} />
+                      <a href={sessionYoutubeUrl} target="_blank" rel="noreferrer" className="underline truncate">{sessionYoutubeUrl}</a>
+                      <button onClick={removeVideo} className="ml-auto text-red-400"><X size={12} /></button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -785,12 +904,24 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
               {urls[selectedTask.id] && (
                 <img src={urls[selectedTask.id]} alt={selectedTask.title} className="w-full rounded-lg border border-slate-700" />
               )}
-              {videoUrls[selectedTask.id] && (
+              {/* Task video: YouTube embed or local blob */}
+              {selectedTask.videoType === 'youtube' && selectedTask.youtubeUrl && extractYouTubeId(selectedTask.youtubeUrl) ? (
                 <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-2">Video</div>
+                  <div className="text-xs text-slate-500 mb-2">Video (YouTube)</div>
+                  <iframe
+                    src={youtubeEmbedUrl(extractYouTubeId(selectedTask.youtubeUrl))}
+                    className="w-full aspect-video rounded-lg border border-slate-700"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title={selectedTask.title}
+                  />
+                </div>
+              ) : videoUrls[selectedTask.id] ? (
+                <div className="bg-slate-900 p-3 rounded-lg">
+                  <div className="text-xs text-slate-500 mb-2">Video (local)</div>
                   <video src={videoUrls[selectedTask.id]} controls className="w-full rounded-lg border border-slate-700" />
                 </div>
-              )}
+              ) : null}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Fase</div>
