@@ -22,13 +22,13 @@ function generate() {
 
   const fieldsData = fields.map((f, i) => ({
     id: `field${i + 1}`,
-    src: `/images/templates/fields/${f}`,
+    src: `images/templates/fields/${f}`,
     name: `Campo ${i + 1}`,
   }));
 
   const objectsData = objects.map(f => ({
     id: f.replace('.webp', ''),
-    src: `/images/templates/objects/extracted/${f}`,
+    src: `images/templates/objects/extracted/${f}`,
     name: f.replace('.webp', ''),
   }));
 
