@@ -121,6 +121,7 @@ export async function syncFromFirestore(uid) {
   try {
     for (const table of TABLES) {
       const snap = await getDocs(userCol(uid, table));
+      console.log(`[sync] Firestore table "${table}": ${snap.size} docs found`);
       if (snap.empty) continue;
       const rows = await Promise.all(snap.docs.map(async d => {
         const data = d.data();
@@ -144,6 +145,7 @@ export async function syncFromFirestore(uid) {
       // Clear local table and repopulate from cloud
       await db.table(table).clear();
       await db.table(table).bulkPut(rows);
+      console.log(`[sync] Dexie table "${table}": ${rows.length} docs inserted`);
     }
     console.log('[sync] Firestore → Dexie complete');
   } catch (err) {
@@ -169,7 +171,8 @@ export function setupFirestoreSync(uid) {
           ...stripped,
           _syncedAt: serverTimestamp(),
         });
-      })().catch(err => console.warn('[sync] create failed', table, err));
+        console.log(`[sync] Firestore create success: ${table}/${primKey}`);
+      })().catch(err => console.warn('[sync] create failed', table, primKey, err));
     });
 
     tbl.hook('updating', (mods, primKey, _obj, _trans) => {
@@ -180,12 +183,14 @@ export function setupFirestoreSync(uid) {
           ...safe,
           _syncedAt: serverTimestamp(),
         });
-      })().catch(err => console.warn('[sync] update failed', table, err));
+        console.log(`[sync] Firestore update success: ${table}/${primKey}`);
+      })().catch(err => console.warn('[sync] update failed', table, primKey, err));
     });
 
     tbl.hook('deleting', (primKey) => {
       deleteDoc(userDoc(uid, table, primKey))
-        .catch(err => console.warn('[sync] delete failed', table, err));
+        .then(() => console.log(`[sync] Firestore delete success: ${table}/${primKey}`))
+        .catch(err => console.warn('[sync] delete failed', table, primKey, err));
     });
   }
 

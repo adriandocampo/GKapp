@@ -36,6 +36,22 @@ function Layout() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
+  // Re-sync from Firestore when the tab becomes visible again
+  // (e.g. user switched devices and came back to this tab)
+  useEffect(() => {
+    if (!isFirebaseEnabled || !user?.uid) return;
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        console.log('[app] Tab visible, re-syncing from Firestore...');
+        syncFromFirestore(user.uid);
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user?.uid]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-200">
