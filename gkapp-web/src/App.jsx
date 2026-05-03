@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings } from 'lucide-react';
 import { initDatabase } from './db';
+import UpdateNotification from './components/UpdateNotification';
 import DatabasePage from './pages/Database';
 import TaskEditor from './pages/TaskEditor';
 import SessionBuilder from './pages/SessionBuilder';
@@ -104,6 +105,7 @@ export default function App() {
         <ToastProvider>
           <ModalProvider>
             <Layout />
+            <UpdateNotification />
           </ModalProvider>
         </ToastProvider>
       </BrowserRouter>
