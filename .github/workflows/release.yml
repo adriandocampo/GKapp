@@ -55,30 +55,6 @@ jobs:
       - name: Build Electron Windows
         run: npx electron-builder --win --publish never
 
-      - name: Determine release tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=draft-run-${{ github.run_id }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          FILES=$(find gkapp-web/dist-electron -name "*.exe" -o -name "*.zip" | tr '\n' ' ')
-          
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish_type }}" = "draft" ]; then
-            gh release create "$TAG" $FILES --draft --generate-notes
-          else
-            gh release create "$TAG" $FILES --generate-notes
-          fi
-
   build-macos:
     runs-on: macos-latest
     defaults:
