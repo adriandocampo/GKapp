@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { sendUsageTracking } from './tracking.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentFile = fileURLToPath(import.meta.url);
+const currentDir = path.dirname(currentFile);
 
 let mainWindow = null;
 
@@ -101,7 +101,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: path.join(currentDir, '../preload/index.js'),
     },
   });
 
@@ -109,7 +109,7 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    mainWindow.loadFile(path.join(currentDir, '../renderer/index.html'));
   }
 
   mainWindow.on('closed', () => {
