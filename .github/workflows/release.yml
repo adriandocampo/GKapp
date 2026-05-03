@@ -4,6 +4,16 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish_type:
+        description: 'Tipo de publicación'
+        required: true
+        default: 'draft'
+        type: choice
+        options:
+        - draft
+        - release
 
 permissions:
   contents: write
@@ -42,10 +52,32 @@ jobs:
       - name: Build Vite
         run: npm run build
 
-      - name: Build and publish Windows
-        run: npx electron-builder --win --publish always
+      - name: Build Electron Windows
+        run: npx electron-builder --win --publish never
+
+      - name: Determine release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=draft-run-${{ github.run_id }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          FILES=$(find gkapp-web/dist-electron -name "*.exe" -o -name "*.zip" | tr '\n' ' ')
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish_type }}" = "draft" ]; then
+            gh release create "$TAG" $FILES --draft --generate-notes
+          else
+            gh release create "$TAG" $FILES --generate-notes
+          fi
 
   build-macos:
     runs-on: macos-latest
@@ -80,7 +112,29 @@ jobs:
       - name: Build Vite
         run: npm run build
 
-      - name: Build and publish macOS
-        run: npx electron-builder --mac --publish always
+      - name: Build Electron macOS
+        run: npx electron-builder --mac --publish never
+
+      - name: Determine release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=draft-run-${{ github.run_id }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          FILES=$(find gkapp-web/dist-electron -name "*.dmg" -o -name "*.zip" | tr '\n' ' ')
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish_type }}" = "draft" ]; then
+            gh release create "$TAG" $FILES --draft --generate-notes
+          else
+            gh release create "$TAG" $FILES --generate-notes
+          fi

@@ -1,4 +1,4 @@
-name: Build & Release
+name: Build & Test
 
 on:
   push:
@@ -6,40 +6,73 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-
-    defaults:
-      run:
-        working-directory: gkapp-web
-
+  validate-seed-data:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      
+      - name: Validate seed_data.json has 175 tasks
+        run: |
+          count=$(jq length gkapp-web/public/seed_data.json)
+          if [ "$count" -ne 175 ]; then
+            echo "Error: seed_data.json has $count tasks, expected 175"
+            exit 1
+          fi
+          echo "✓ seed_data.json contains 175 tasks"
 
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: validate-seed-data
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    
+    defaults:
+      run:
+        working-directory: gkapp-web
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: gkapp-web/package-lock.json
-
+      
       - name: Install dependencies
         run: npm ci
-
+      
       - name: Build Vite
         run: npm run build
-
+      
       - name: Build Electron (Windows)
         if: matrix.os == 'windows-latest'
         run: npx electron-builder --win --publish never
-
+      
       - name: Build Electron (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: npx electron-builder --linux --publish never
+      
+      - name: Build Electron (macOS)
+        if: matrix.os == 'macos-latest'
+        run: npx electron-builder --mac --publish never
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: |
+            gkapp-web/dist-electron/*.exe
+            gkapp-web/dist-electron/*.dmg
+            gkapp-web/dist-electron/*.AppImage
+            gkapp-web/dist-electron/*.deb
+            gkapp-web/dist-electron/*.zip
+          if-no-files-found: ignore
