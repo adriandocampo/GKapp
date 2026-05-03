@@ -275,7 +275,6 @@ export async function initDatabase() {
   if (count === 0) {
     await seedDatabase();
   }
-  await ensureDefaultSeason();
   await ensureDefaultSettings();
   await cleanupOrphanTags();
   localStorage.removeItem('shapePresets');
@@ -326,12 +325,45 @@ async function ensureDefaultSettings() {
 }
 
 async function seedDatabase() {
-  // Database starts empty - no seed data
-}
+  try {
+    const response = await fetch('/seed_data.json');
+    if (!response.ok) throw new Error('Failed to load seed data');
+    const tasks = await response.json();
 
-async function ensureDefaultSeason() {
-  const count = await db.seasons.count();
-  if (count === 0) {
-    await db.seasons.add({ name: '2025-26', createdAt: new Date() });
+    const VALID_PHASES = ['Activación', 'Parte Principal'];
+    const VALID_CATEGORIES = ['Agarres', 'Desvíos', '1c1', 'Coberturas', 'Juego ofensivo', 'Velocidad de reacción'];
+    const VALID_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
+
+    for (const task of tasks) {
+      if (!VALID_PHASES.includes(task.phase)) task.phase = 'Activación';
+      if (!VALID_CATEGORIES.includes(task.category)) task.category = 'Otro';
+      if (!VALID_SITUATIONS.includes(task.situation)) task.situation = 'Otro';
+      await db.tasks.add(task);
+    }
+
+    const phases = [...new Set(tasks.map(t => t.phase).filter(Boolean))];
+    const categories = [...new Set(tasks.map(t => t.category).filter(Boolean))];
+    const situations = [...new Set(tasks.map(t => t.situation).filter(Boolean))];
+
+    for (const name of phases) {
+      if (name && name !== 'Otro') {
+        const exists = await db.tags.where({ type: 'phase', name }).first();
+        if (!exists) await db.tags.add({ type: 'phase', name });
+      }
+    }
+    for (const name of categories) {
+      if (name && name !== 'Otro') {
+        const exists = await db.tags.where({ type: 'category', name }).first();
+        if (!exists) await db.tags.add({ type: 'category', name });
+      }
+    }
+    for (const name of situations) {
+      if (name && name !== 'Otro') {
+        const exists = await db.tags.where({ type: 'situation', name }).first();
+        if (!exists) await db.tags.add({ type: 'situation', name });
+      }
+    }
+  } catch (err) {
+    console.error('Seed database error:', err);
   }
 }

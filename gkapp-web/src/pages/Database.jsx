@@ -347,10 +347,14 @@ export default function DatabasePage() {
 
   async function createSessionAndAdd() {
     if (!taskToAdd) return;
+    const allSeasons = await db.seasons.toArray();
+    if (allSeasons.length === 0) {
+      addToast('Crea una temporada primero en la sección de Sesiones', 'warning');
+      return;
+    }
     const name = await prompt('Nombre de la nueva sesión:', { placeholder: 'Mi sesión', required: true });
     if (!name) return;
-    const allSeasons = await db.seasons.toArray();
-    const lastSeason = allSeasons.length > 0 ? allSeasons[allSeasons.length - 1] : null;
+    const lastSeason = allSeasons[allSeasons.length - 1];
     const date = todayISO();
     const newId = await db.sessions.add({
       name,
@@ -358,7 +362,7 @@ export default function DatabasePage() {
       tasks: [taskToAdd.id],
       createdAt: new Date(),
       updatedAt: new Date(),
-      seasonId: lastSeason ? lastSeason.id : null,
+      seasonId: lastSeason.id,
     });
     await db.taskHistory.add({
       taskId: taskToAdd.id,
