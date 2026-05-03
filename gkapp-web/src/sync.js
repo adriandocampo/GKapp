@@ -18,6 +18,8 @@ import { db } from './db';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+let isSyncingFromFirestore = false;
+
 /** Strip videoBlob and compress imageBlob for Firestore */
 async function stripBlobs(obj) {
   const { imageBlob, videoBlob, imageBase64, ...rest } = obj ?? {};
@@ -112,44 +114,60 @@ function base64ToBlob(base64, mimeType = 'image/jpeg') {
   return new Blob([byteArr], { type: mimeType });
 }
 
-// ─── Initial sync: Firestore → Dexie ────────────────────────────────────────
+// ─── Initial sync: Firestore → Dexie (merge, never delete local data) ───────
 
 const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings'];
 
 export async function syncFromFirestore(uid) {
   if (!isFirebaseEnabled || !uid) return;
+  if (isSyncingFromFirestore) {
+    console.log('[sync] Already syncing, skipping duplicate call');
+    return;
+  }
+  isSyncingFromFirestore = true;
+
   try {
     for (const table of TABLES) {
-      const snap = await getDocs(userCol(uid, table));
-      console.log(`[sync] Firestore table "${table}": ${snap.size} docs found`);
-      if (snap.empty) continue;
-      const rows = await Promise.all(snap.docs.map(async d => {
-        const data = d.data();
-        // Restore auto-increment ids if they're numeric strings
-        const rawId = d.id;
-        const id    = isNaN(rawId) ? rawId : Number(rawId);
+      try {
+        const snap = await getDocs(userCol(uid, table));
+        console.log(`[sync] Firestore table "${table}": ${snap.size} docs found`);
 
-        // Restore image from base64
-        if (data.imageBase64) {
-          try {
-            data.imageBlob = base64ToBlob(data.imageBase64);
-          } catch (err) {
-            console.warn('[sync] Error restaurando imagen', err);
-          }
-          delete data.imageBase64;
+        if (snap.empty) {
+          console.log(`[sync] Firestore table "${table}" empty, skipping`);
+          continue;
         }
 
-        return { ...data, id };
-      }));
+        const rows = await Promise.all(snap.docs.map(async d => {
+          const data = d.data();
+          const rawId = d.id;
+          const id = isNaN(rawId) ? rawId : Number(rawId);
 
-      // Clear local table and repopulate from cloud
-      await db.table(table).clear();
-      await db.table(table).bulkPut(rows);
-      console.log(`[sync] Dexie table "${table}": ${rows.length} docs inserted`);
+          // Restore image from base64
+          if (data.imageBase64) {
+            try {
+              data.imageBlob = base64ToBlob(data.imageBase64);
+            } catch (err) {
+              console.warn('[sync] Error restaurando imagen', err);
+            }
+            delete data.imageBase64;
+          }
+
+          return { ...data, id };
+        }));
+
+        // Merge into local DB (upsert via bulkPut, NEVER clear)
+        // This preserves seed data and any local items not yet synced up.
+        await db.table(table).bulkPut(rows);
+        console.log(`[sync] Dexie table "${table}": ${rows.length} docs merged`);
+      } catch (tableErr) {
+        console.error(`[sync] Error syncing table "${table}":`, tableErr);
+      }
     }
     console.log('[sync] Firestore → Dexie complete');
   } catch (err) {
     console.error('[sync] syncFromFirestore failed', err);
+  } finally {
+    isSyncingFromFirestore = false;
   }
 }
 
@@ -165,6 +183,7 @@ export function setupFirestoreSync(uid) {
     const tbl = db.table(table);
 
     tbl.hook('creating', (primKey, obj) => {
+      if (isSyncingFromFirestore) return;
       (async () => {
         const stripped = await stripBlobs(obj);
         await setDoc(userDoc(uid, table, primKey), {
@@ -176,6 +195,7 @@ export function setupFirestoreSync(uid) {
     });
 
     tbl.hook('updating', (mods, primKey, _obj, _trans) => {
+      if (isSyncingFromFirestore) return;
       (async () => {
         const safe = await stripBlobs(mods);
         if (Object.keys(safe).length === 0) return;
@@ -188,6 +208,7 @@ export function setupFirestoreSync(uid) {
     });
 
     tbl.hook('deleting', (primKey) => {
+      if (isSyncingFromFirestore) return;
       deleteDoc(userDoc(uid, table, primKey))
         .then(() => console.log(`[sync] Firestore delete success: ${table}/${primKey}`))
         .catch(err => console.warn('[sync] delete failed', table, primKey, err));
