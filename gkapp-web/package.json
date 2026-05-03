@@ -3,29 +3,27 @@
   "productName": "GKApp",
   "version": "1.1.0",
   "private": true,
-  "main": "electron/main.js",
+  "main": "dist-electron/main/index.js",
   "type": "module",
   "scripts": {
     "generate:assets": "node scripts/generate-assets.js",
     "generate:icons": "node scripts/generate-icons.js",
     "compress:images": "node scripts/compress-images.js",
     "predev": "node scripts/generate-assets.js",
-    "dev": "vite",
-    "prebuild": "node scripts/generate-assets.js",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
-    "electron:build": "vite build && electron-builder",
-    "electron:build:win": "vite build && electron-builder --win --publish never",
-    "electron:build:mac": "vite build && electron-builder --mac --publish never",
-    "electron:build:linux": "vite build && electron-builder --linux --publish never"
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "electron:dev": "electron-vite dev",
+    "electron:build": "electron-vite build && electron-builder",
+    "electron:build:win": "electron-vite build && electron-builder --win --publish never",
+    "electron:build:mac": "electron-vite build && electron-builder --mac --publish never",
+    "electron:build:linux": "electron-vite build && electron-builder --linux --publish never"
   },
   "build": {
     "appId": "com.gkapp.app",
     "productName": "GKApp",
     "directories": {
-      "output": "dist-electron"
+      "output": "release"
     },
     "publish": {
       "provider": "github",
@@ -35,8 +33,9 @@
     },
     "generateUpdatesFilesForAllChannels": true,
     "files": [
-      "dist/**/*",
-      "electron/**/*",
+      "dist-electron/main/**/*",
+      "dist-electron/preload/**/*",
+      "dist-electron/renderer/**/*",
       "package.json"
     ],
     "win": {
@@ -97,6 +96,7 @@
     "concurrently": "^9.1.0",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
+    "electron-vite": "^6.0.0-beta.1",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
@@ -105,6 +105,8 @@
     "sharp": "^0.33.5",
     "tailwindcss": "^4.2.4",
     "vite": "^8.0.10",
+    "vite-plugin-electron": "^0.29.1",
+    "vite-plugin-electron-renderer": "^0.14.7",
     "wait-on": "^8.0.1"
   }
 }

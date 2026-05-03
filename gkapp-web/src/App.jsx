@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings } from 'lucide-react';
 import { initDatabase } from './db';
 import UpdateNotification from './components/UpdateNotification';
@@ -101,14 +101,14 @@ function Layout() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
+      <HashRouter>
         <ToastProvider>
           <ModalProvider>
             <Layout />
             <UpdateNotification />
           </ModalProvider>
         </ToastProvider>
-      </BrowserRouter>
+      </HashRouter>
     </ErrorBoundary>
   );
 }

@@ -326,7 +326,7 @@ async function ensureDefaultSettings() {
 
 async function seedDatabase() {
   try {
-    const response = await fetch('/seed_data.json');
+    const response = await fetch('./seed_data.json');
     if (!response.ok) throw new Error('Failed to load seed data');
     const tasks = await response.json();
 

@@ -1,22 +1,27 @@
-name: Release
+name: Release App
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch: # Permite compilar manualmente desde la pestaña Actions
 
 permissions:
   contents: write
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build-and-release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    
     defaults:
       run:
         working-directory: gkapp-web
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -29,78 +34,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Cache Electron
-        uses: actions/cache@v4
-        with:
-          path: |
-            %LOCALAPPDATA%\electron\Cache
-            %LOCALAPPDATA%\electron-builder\Cache
-          key: ${{ runner.os }}-electron-${{ hashFiles('gkapp-web/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-
       - name: Build Vite
         run: npm run build
 
-      - name: Build Electron Windows
-        run: npx electron-builder --win --publish never
-
-  build-macos:
-    runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: gkapp-web
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: gkapp-web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Cache Electron
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-          key: ${{ runner.os }}-electron-${{ hashFiles('gkapp-web/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-
-      - name: Build Vite
-        run: npm run build
-
-      - name: Build Electron macOS
-        run: npx electron-builder --mac --publish never
-
-      - name: Determine release tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=draft-run-${{ github.run_id }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create release
+      - name: Build and Publish Electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          FILES=$(find dist-electron -name "*.dmg" -o -name "*.zip" | tr '\n' ' ')
-          
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish_type }}" = "draft" ]; then
-            gh release create "$TAG" $FILES --draft --generate-notes
-          else
-            gh release create "$TAG" $FILES --generate-notes
-          fi
+        run: npx electron-builder --${{ matrix.os == 'windows-latest' && 'win' || 'mac' }} --publish always
