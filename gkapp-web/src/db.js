@@ -382,7 +382,7 @@ async function ensureDefaultSettings() {
   }
 }
 
-async function seedDatabase() {
+export async function seedDatabase() {
   try {
     const base = import.meta.env.BASE_URL ?? './';
     const response = await fetch(`${base}seed_data.json`);

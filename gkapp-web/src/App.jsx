@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut } from 'lucide-react';
-import { initDatabase } from './db';
+import { db, initDatabase, seedDatabase } from './db';
 import { syncFromFirestore, setupFirestoreSync } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -28,6 +28,13 @@ function Layout() {
       if (isFirebaseEnabled && user?.uid) {
         await syncFromFirestore(user.uid);
         setupFirestoreSync(user.uid);
+
+        // Fallback: if Firestore had no tasks (or sync wiped seed data), re-seed
+        const taskCount = await db.tasks.count();
+        if (taskCount === 0) {
+          console.log('[app] No tasks after sync, re-seeding...');
+          await seedDatabase();
+        }
       }
 
       setLoading(false);

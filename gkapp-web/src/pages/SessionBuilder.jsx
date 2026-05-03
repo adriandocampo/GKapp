@@ -1091,7 +1091,8 @@ export default function SessionBuilder() {
     const defaultName = `${nextYear}-${String(nextYear2).padStart(2, '0')}`;
     const name = await prompt('Nombre de la temporada:', { placeholder: defaultName, defaultValue: defaultName, required: true });
     if (!name) return;
-    const newId = await db.seasons.add({ name, createdAt: new Date() });
+    const newId = crypto.randomUUID();
+    await db.seasons.add({ id: newId, name, createdAt: new Date() });
     await loadSeasons();
     setSelectedSeason({ id: newId, name, createdAt: new Date() });
     addToast('Temporada creada', 'success');
@@ -1149,7 +1150,7 @@ export default function SessionBuilder() {
     const sessionCount = sessions.length;
     const nextNum = sessionCount + 1;
     const defaultName = `Sesión ${nextNum}`;
-    setSelectedSession({ name: defaultName, date: todayISO(), tasks: [], seasonId: selectedSeason.id });
+    setSelectedSession({ id: crypto.randomUUID(), name: defaultName, date: todayISO(), tasks: [], seasonId: selectedSeason.id });
     setSelectedSessionTasks([]);
   }
 
