@@ -798,7 +798,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                 <div
                   key={el.id}
                   className={`absolute ${isSelected && el.type !== 'field' ? 'ring-2 ring-teal-500' : ''}`}
-                  style={{ left: el.x, top: el.y, width: el.w, height: el.h, transform: el.type !== 'field' ? `rotate(${el.rotation || 0}deg) scaleX(${el.flipH ? -1 : 1})` : undefined, opacity: el.opacity, zIndex: el.zIndex, cursor: el.type === 'field' ? 'default' : 'move' }}
+                  style={{ left: el.x, top: el.y, width: el.type === 'field' ? canvasSize.w : el.w, height: el.type === 'field' ? canvasSize.h : el.h, transform: el.type !== 'field' ? `rotate(${el.rotation || 0}deg) scaleX(${el.flipH ? -1 : 1})` : undefined, opacity: el.opacity, zIndex: el.zIndex, cursor: el.type === 'field' ? 'default' : 'move' }}
                   onMouseDown={(e) => onMouseDownEl(e, el)}
                   onClick={(e) => handleSelect(el.id, e)}
                   onDoubleClick={(e) => { if (el.type === 'text') { e.stopPropagation(); setEditingTextId(el.id); } }}

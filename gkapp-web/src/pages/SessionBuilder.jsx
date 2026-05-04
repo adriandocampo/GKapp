@@ -1155,7 +1155,18 @@ export default function SessionBuilder() {
   }
 
   async function handleSave(updatedSession) {
-    await loadSessionsForSeason(selectedSeason.id);
+    const targetSeasonId = updatedSession.seasonId;
+    if (targetSeasonId && targetSeasonId !== selectedSeason?.id) {
+      const newSeason = seasons.find(s => s.id === targetSeasonId);
+      if (newSeason) {
+        setSelectedSeason(newSeason);
+        await loadSessionsForSeason(newSeason.id);
+      } else {
+        await loadSessionsForSeason(selectedSeason.id);
+      }
+    } else {
+      await loadSessionsForSeason(selectedSeason.id);
+    }
     const freshSession = await db.sessions.get(updatedSession.id);
     if (freshSession) {
       setSelectedSession(freshSession);

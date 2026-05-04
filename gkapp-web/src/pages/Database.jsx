@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLeft, ChevronRight, ImageIcon, Download, Upload, Star, ArrowUpDown, Video } from 'lucide-react';
+import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLeft, ChevronRight, ImageIcon, Download, Upload, Star, ArrowUpDown, Video, Pencil, Trash2 } from 'lucide-react';
 import { db } from '../db';
 import { extractYouTubeId, youtubeEmbedUrl } from '../hooks/useYouTubeUpload';
 import { useTags } from '../hooks/useTags';
@@ -463,6 +463,137 @@ export default function DatabasePage() {
     return desc.replace(/\\n/g, '\n');
   };
 
+  async function updateTaskField(taskId, field, value) {
+    await db.tasks.update(taskId, { [field]: value });
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t));
+    if (selectedTask?.id === taskId) {
+      setSelectedTask(prev => ({ ...prev, [field]: value }));
+    }
+  }
+
+  async function deleteTask(taskId) {
+    const ok = await confirm('¿Eliminar esta tarea? Esta acción no se puede deshacer.', { title: 'Eliminar tarea' });
+    if (!ok) return;
+    await db.tasks.delete(taskId);
+    await db.taskHistory.where('taskId').equals(taskId).delete();
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    closeDetail();
+    addToast('Tarea eliminada', 'success');
+  }
+
+  function InlineTextField({ value, field, taskId, multiline = false, placeholder = '-' }) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(value || '');
+
+    useEffect(() => {
+      setDraft(value || '');
+    }, [value]);
+
+    async function save() {
+      setEditing(false);
+      if (draft !== (value || '')) {
+        await updateTaskField(taskId, field, draft.trim() || null);
+      }
+    }
+
+    if (editing) {
+      if (multiline) {
+        return (
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={save}
+            onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) save(); }}
+            rows={4}
+            className="w-full px-2 py-1 bg-slate-800 border border-teal-500/50 rounded text-sm text-slate-100 focus:outline-none resize-none"
+          />
+        );
+      }
+      return (
+        <input
+          autoFocus
+          type="text"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setEditing(false); setDraft(value || ''); } }}
+          className="w-full px-2 py-1 bg-slate-800 border border-teal-500/50 rounded text-sm text-slate-100 focus:outline-none"
+        />
+      );
+    }
+
+    return (
+      <div className="group flex items-start gap-2">
+        <span className={`text-sm ${value ? 'font-medium text-slate-200' : 'text-slate-500'} flex-1 ${multiline ? 'whitespace-pre-wrap' : ''}`}>
+          {value || placeholder}
+        </span>
+        <button
+          onClick={() => setEditing(true)}
+          className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-teal-400 transition-all shrink-0 mt-0.5"
+          title="Editar"
+        >
+          <Pencil size={12} />
+        </button>
+      </div>
+    );
+  }
+
+  function InlineSelectField({ value, field, taskId, options, label }) {
+    const [showAdd, setShowAdd] = useState(false);
+    const [newTag, setNewTag] = useState('');
+    const { addTag } = useTags();
+
+    async function handleChange(e) {
+      const val = e.target.value;
+      if (val === '__add_new__') {
+        setShowAdd(true);
+        return;
+      }
+      await updateTaskField(taskId, field, val || null);
+    }
+
+    async function handleAddNew() {
+      const trimmed = newTag.trim();
+      if (!trimmed) return;
+      const added = await addTag(field, trimmed);
+      if (added) {
+        await updateTaskField(taskId, field, added);
+      }
+      setNewTag('');
+      setShowAdd(false);
+    }
+
+    if (showAdd) {
+      return (
+        <div className="flex gap-2">
+          <input
+            autoFocus
+            value={newTag}
+            onChange={e => setNewTag(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddNew(); if (e.key === 'Escape') setShowAdd(false); }}
+            placeholder={`Nueva ${label}...`}
+            className="flex-1 px-2 py-1 bg-slate-800 border border-teal-500/50 rounded text-sm text-slate-100 focus:outline-none"
+          />
+          <button onClick={handleAddNew} className="px-2 py-1 bg-teal-600 hover:bg-teal-500 rounded text-xs text-white">Añadir</button>
+          <button onClick={() => { setShowAdd(false); setNewTag(''); }} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300">Cancelar</button>
+        </div>
+      );
+    }
+
+    return (
+      <select
+        value={value || ''}
+        onChange={handleChange}
+        className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-slate-100 focus:outline-none focus:border-teal-500/50 cursor-pointer"
+      >
+        <option value="">—</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+        <option value="__add_new__">+ Añadir nueva {label}</option>
+      </select>
+    );
+  }
+
   return (
     <div>
       <div className="mb-6 space-y-4">
@@ -578,11 +709,22 @@ export default function DatabasePage() {
               </button>
             )}
 
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-100 pr-12">{selectedTask.title}</h2>
-              <button onClick={closeDetail} className="p-1 hover:bg-slate-700 rounded text-slate-400">
-                <X size={20} />
-              </button>
+            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between z-10">
+              <div className="flex-1 pr-4">
+                <InlineTextField value={selectedTask.title} field="title" taskId={selectedTask.id} />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => deleteTask(selectedTask.id)}
+                  className="p-2 hover:bg-red-600/20 hover:text-red-400 rounded text-slate-400 transition-colors"
+                  title="Eliminar tarea"
+                >
+                  <Trash2 size={18} />
+                </button>
+                <button onClick={closeDetail} className="p-1 hover:bg-slate-700 rounded text-slate-400">
+                  <X size={20} />
+                </button>
+              </div>
             </div>
             <div className="p-4 space-y-4">
               {detailImageUrl && (
@@ -609,40 +751,38 @@ export default function DatabasePage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Fase</div>
-                  <div className="text-sm font-medium text-teal-400">{selectedTask.phase}</div>
+                  <InlineSelectField value={selectedTask.phase} field="phase" taskId={selectedTask.id} options={tags.phase} label="fase" />
                 </div>
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Categoría</div>
-                  <div className="text-sm font-medium text-teal-400">{selectedTask.category}</div>
+                  <InlineSelectField value={selectedTask.category} field="category" taskId={selectedTask.id} options={tags.category} label="categoría" />
                 </div>
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Situación</div>
-                  <div className="text-sm font-medium text-teal-400">{selectedTask.situation || '-'}</div>
+                  <InlineSelectField value={selectedTask.situation} field="situation" taskId={selectedTask.id} options={tags.situation} label="situación" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Tiempo</div>
-                  <div className="text-sm font-medium text-slate-200">{selectedTask.time || '-'}</div>
+                  <InlineTextField value={selectedTask.time} field="time" taskId={selectedTask.id} />
                 </div>
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Repeticiones</div>
-                  <div className="text-sm font-medium text-slate-200">{selectedTask.reps || '-'}</div>
+                  <InlineTextField value={selectedTask.reps} field="reps" taskId={selectedTask.id} />
                 </div>
               </div>
-              {selectedTask.subtitle && (
-                <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">Contenido</div>
-                  <div className="text-sm font-medium text-slate-200">{selectedTask.subtitle}</div>
-                </div>
-              )}
+              <div className="bg-slate-900 p-3 rounded-lg">
+                <div className="text-xs text-slate-500 mb-1">Contenido</div>
+                <InlineTextField value={selectedTask.subtitle} field="subtitle" taskId={selectedTask.id} />
+              </div>
               <div className="bg-slate-900 p-3 rounded-lg">
                 <div className="text-xs text-slate-500 mb-1">Foco</div>
-                <div className="text-sm font-medium text-slate-200">{selectedTask.focus || '-'}</div>
+                <InlineTextField value={selectedTask.focus} field="focus" taskId={selectedTask.id} />
               </div>
               <div className="bg-slate-900 p-3 rounded-lg">
                 <div className="text-xs text-slate-500 mb-1">Descripción</div>
-                <div className="text-sm text-slate-300 whitespace-pre-wrap">{safeDesc(selectedTask.description) || '-'}</div>
+                <InlineTextField value={safeDesc(selectedTask.description)} field="description" taskId={selectedTask.id} multiline />
               </div>
 
               <div className="bg-slate-900 p-3 rounded-lg">
@@ -705,12 +845,6 @@ export default function DatabasePage() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => navigate(`/editor/${selectedTask.id}`)}
-                  className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-500 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  <Eye size={16} /> Editar
-                </button>
                 <button
                   onClick={() => downloadImage(selectedTask)}
                   className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 font-medium transition-colors flex items-center justify-center gap-2"
