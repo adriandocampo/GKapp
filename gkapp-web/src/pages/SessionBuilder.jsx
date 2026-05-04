@@ -266,6 +266,7 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
     }
     data.id = targetId;
     data.createdAt = data.createdAt || new Date();
+    data.updatedAt = new Date();
     await db.sessions.put(data);
 
     const today = todayISO();
@@ -298,6 +299,7 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
         await db.tasks.update(taskId, {
           usageCount: counts[taskId] || task.usageCount || 0,
           lastUsedDate: lastDates[taskId] || task.lastUsedDate,
+          updatedAt: new Date(),
         });
       }
     }
@@ -308,9 +310,9 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
 
   async function handleDelete() {
     if (!session?.id) return;
-    const ok = await confirm('¿Eliminar esta sesión? Podrás deshacerlo desde el panel de administración durante 4 días.', { title: 'Eliminar sesión' });
+    const ok = await confirm('¿Eliminar esta sesión? Podrás deshacerlo desde el panel de administración durante 7 días.', { title: 'Eliminar sesión' });
     if (!ok) return;
-    await db.sessions.update(session.id, { deletedAt: new Date() });
+    await db.sessions.update(session.id, { deletedAt: new Date(), updatedAt: new Date() });
     onDelete(session.id);
     addToast('Sesión eliminada', 'success');
   }
@@ -404,14 +406,14 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
 
   async function saveTaskFeedback() {
     if (!selectedTask) return;
-    await db.tasks.update(selectedTask.id, { feedback: taskFeedback });
+    await db.tasks.update(selectedTask.id, { feedback: taskFeedback, updatedAt: new Date() });
     setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, feedback: taskFeedback } : t));
     addToast('Feedback guardado', 'success');
   }
 
   async function updateTaskRating(rating) {
     if (!selectedTask) return;
-    await db.tasks.update(selectedTask.id, { rating });
+    await db.tasks.update(selectedTask.id, { rating, updatedAt: new Date() });
     setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, rating } : t));
   }
 
@@ -1075,21 +1077,21 @@ export default function SessionBuilder() {
     const name = await prompt('Nombre de la temporada:', { placeholder: defaultName, defaultValue: defaultName, required: true });
     if (!name) return;
     const newId = crypto.randomUUID();
-    await db.seasons.add({ id: newId, name, createdAt: new Date() });
+    await db.seasons.add({ id: newId, name, createdAt: new Date(), updatedAt: new Date() });
     await loadSeasons();
     setSelectedSeason({ id: newId, name, createdAt: new Date() });
     addToast('Temporada creada', 'success');
   }
 
   async function deleteSeason(season) {
-    const ok = await confirm(`¿Eliminar la temporada "${season.name}" y todas sus sesiones? Podrás deshacerlo desde el panel de administración durante 4 días.`, { title: 'Eliminar temporada' });
+    const ok = await confirm(`¿Eliminar la temporada "${season.name}" y todas sus sesiones? Podrás deshacerlo desde el panel de administración durante 7 días.`, { title: 'Eliminar temporada' });
     if (!ok) return;
     const seasonSessions = await db.sessions.where('seasonId').equals(season.id).toArray();
     for (const s of seasonSessions) {
-      await db.sessions.update(s.id, { deletedAt: new Date() });
+      await db.sessions.update(s.id, { deletedAt: new Date(), updatedAt: new Date() });
     }
 
-    await db.seasons.update(season.id, { deletedAt: new Date() });
+    await db.seasons.update(season.id, { deletedAt: new Date(), updatedAt: new Date() });
     await loadSeasons();
     if (selectedSeason?.id === season.id) {
       setSelectedSeason(null);

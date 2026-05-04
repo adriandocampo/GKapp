@@ -1,7 +1,7 @@
 import {
   collection, doc, getDocs, getDoc,
   setDoc, updateDoc, deleteDoc,
-  writeBatch,
+  writeBatch, serverTimestamp,
 } from 'firebase/firestore';
 import { firestore } from '../firebase';
 
@@ -81,10 +81,11 @@ export async function getUserDocument(uid, table, docId) {
 export async function updateUserDocument(uid, table, docId, data) {
   const ref = userDocRef(uid, table, docId);
   const snap = await getDoc(ref);
+  const payload = { ...data, updatedAt: serverTimestamp() };
   if (snap.exists()) {
-    await updateDoc(ref, data);
+    await updateDoc(ref, payload);
   } else {
-    await setDoc(ref, data);
+    await setDoc(ref, payload);
   }
 }
 

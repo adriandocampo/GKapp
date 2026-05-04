@@ -340,6 +340,7 @@ export default function DatabasePage() {
     await db.tasks.update(taskToAdd.id, {
       usageCount: (taskToAdd.usageCount || 0) + 1,
       lastUsedDate: todayISO(),
+      updatedAt: new Date(),
     });
     setShowSessionPicker(false);
     setTaskToAdd(null);
@@ -376,6 +377,7 @@ export default function DatabasePage() {
     await db.tasks.update(taskToAdd.id, {
       usageCount: (taskToAdd.usageCount || 0) + 1,
       lastUsedDate: todayISO(),
+      updatedAt: new Date(),
     });
     setShowSessionPicker(false);
     setTaskToAdd(null);
@@ -384,7 +386,7 @@ export default function DatabasePage() {
   }
 
   async function updateTaskRating(taskId, rating) {
-    await db.tasks.update(taskId, { rating });
+    await db.tasks.update(taskId, { rating, updatedAt: new Date() });
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, rating } : t));
     if (selectedTask?.id === taskId) {
       setSelectedTask(prev => ({ ...prev, rating }));
@@ -393,7 +395,7 @@ export default function DatabasePage() {
 
   async function saveFeedback() {
     if (!selectedTask) return;
-    await db.tasks.update(selectedTask.id, { feedback });
+    await db.tasks.update(selectedTask.id, { feedback, updatedAt: new Date() });
     setSelectedTask(prev => ({ ...prev, feedback }));
     addToast('Feedback guardado', 'success');
   }
@@ -473,7 +475,7 @@ export default function DatabasePage() {
   };
 
   async function updateTaskField(taskId, field, value) {
-    await db.tasks.update(taskId, { [field]: value });
+    await db.tasks.update(taskId, { [field]: value, updatedAt: new Date() });
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t));
     if (selectedTask?.id === taskId) {
       setSelectedTask(prev => ({ ...prev, [field]: value }));
@@ -481,9 +483,9 @@ export default function DatabasePage() {
   }
 
   async function deleteTask(taskId) {
-    const ok = await confirm('¿Eliminar esta tarea? Podrás deshacerlo desde el panel de administración durante 4 días.', { title: 'Eliminar tarea' });
+    const ok = await confirm('¿Eliminar esta tarea? Podrás deshacerlo desde el panel de administración durante 7 días.', { title: 'Eliminar tarea' });
     if (!ok) return;
-    await db.tasks.update(taskId, { deletedAt: new Date() });
+    await db.tasks.update(taskId, { deletedAt: new Date(), updatedAt: new Date() });
     setTasks(prev => prev.filter(t => t.id !== taskId));
     closeDetail();
     addToast('Tarea eliminada', 'success');

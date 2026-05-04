@@ -207,9 +207,9 @@ export default function TaskEditor() {
   }
 
   async function deleteTask() {
-    const ok = await confirm('¿Eliminar esta tarea? Podrás deshacerlo desde el panel de administración durante 4 días.', { title: 'Eliminar tarea' });
+    const ok = await confirm('¿Eliminar esta tarea? Podrás deshacerlo desde el panel de administración durante 7 días.', { title: 'Eliminar tarea' });
     if (!ok) return;
-    await db.tasks.update(id, { deletedAt: new Date() });
+    await db.tasks.update(id, { deletedAt: new Date(), updatedAt: new Date() });
     setHasChanges(false);
     navigate('/');
     addToast('Tarea eliminada', 'success');

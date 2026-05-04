@@ -2,7 +2,7 @@
  * sync.js — Transparent Dexie ↔ Firestore synchronisation
  *
  * Strategy:
- *   • On login: download all user data from Firestore into local Dexie
+ *   • On login: bidirectional merge between local Dexie and Firestore
  *   • Dexie hooks intercept every write and mirror it to Firestore (background)
  *   • videoBlob is never sent to Firestore
  *   • imageBlob is compressed (max 1200px, JPEG 0.8) and sent as imageBase64
@@ -12,7 +12,7 @@ import {
   collection, doc,
   getDocs, setDoc, updateDoc, deleteDoc,
   serverTimestamp,
-  query, where, writeBatch,
+  writeBatch,
 } from 'firebase/firestore';
 import { firestore, isFirebaseEnabled } from './firebase';
 import { db } from './db';
@@ -21,9 +21,52 @@ import { db } from './db';
 
 let isSyncingFromFirestore = false;
 let hooksInstalled = false;
-let currentSyncUid = null;
+let activeSyncUid = null; // mutable, read by hooks at runtime (prevents cross-user leaks)
 
 const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings'];
+
+/** Deep clone preserving Date instances */
+function deepClone(obj) {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (obj instanceof Date) return new Date(obj.getTime());
+  if (Array.isArray(obj)) return obj.map(deepClone);
+  const result = {};
+  for (const key of Object.keys(obj)) {
+    result[key] = deepClone(obj[key]);
+  }
+  return result;
+}
+
+/** Convert Firestore Timestamps back to JS Date recursively */
+function convertTimestamps(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (obj.toDate && typeof obj.toDate === 'function') {
+    return obj.toDate();
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(convertTimestamps);
+  }
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    result[key] = convertTimestamps(value);
+  }
+  return result;
+}
+
+/** Normalize any date-like value to timestamp ms */
+function getTimestampMs(value) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+  if (typeof value === 'number') return value;
+  if (value.toDate && typeof value.toDate === 'function') {
+    return value.toDate().getTime();
+  }
+  return 0;
+}
 
 /** Strip videoBlob and compress imageBlob for Firestore */
 async function stripBlobs(obj) {
@@ -48,9 +91,8 @@ async function stripBlobs(obj) {
     }
   }
 
-  const result = JSON.parse(JSON.stringify(rest, (_, v) =>
-    v instanceof Date ? v.toISOString() : v
-  ));
+  // Preserve Date instances (Firestore converts them to Timestamps automatically)
+  const result = deepClone(rest);
 
   if (finalImageBase64 !== undefined) {
     result.imageBase64 = finalImageBase64;
@@ -134,11 +176,11 @@ export async function clearAllLocalData() {
 
 export function resetSyncHooks() {
   hooksInstalled = false;
-  currentSyncUid = null;
+  activeSyncUid = null;
   console.log('[sync] Hooks reset');
 }
 
-// ─── Initial sync: Firestore → Dexie ────────────────────────────────────────
+// ─── Initial sync: Bidirectional Firestore ↔ Dexie merge ────────────────────
 
 export async function syncFromFirestore(uid) {
   if (!isFirebaseEnabled || !uid) return;
@@ -154,13 +196,10 @@ export async function syncFromFirestore(uid) {
         const snap = await getDocs(userCol(uid, table));
         console.log(`[sync] Firestore table "${table}": ${snap.size} docs found`);
 
-        // Clear local table so it matches Firestore exactly for this user
-        await db.table(table).clear();
-
-        if (snap.empty) continue;
-
-        const rows = await Promise.all(snap.docs.map(async d => {
-          const data = d.data();
+        // Build remote map
+        const remoteMap = new Map();
+        snap.docs.forEach(d => {
+          const data = convertTimestamps(d.data());
           const rawId = d.id;
           const id = isNaN(rawId) ? rawId : Number(rawId);
 
@@ -174,16 +213,56 @@ export async function syncFromFirestore(uid) {
             delete data.imageBase64;
           }
 
-          return { ...data, id };
-        }));
+          remoteMap.set(String(id), { ...data, id });
+        });
 
-        await db.table(table).bulkPut(rows);
-        console.log(`[sync] Dexie table "${table}": ${rows.length} docs inserted`);
+        // Build local map
+        const localDocs = await db.table(table).toArray();
+        const localMap = new Map(localDocs.map(d => [String(d.id), d]));
+
+        // Process remotes: update local if remote is newer or missing
+        for (const [idStr, remoteDoc] of remoteMap) {
+          const localDoc = localMap.get(idStr);
+          const remoteTime = getTimestampMs(remoteDoc.updatedAt);
+          const localTime = localDoc ? getTimestampMs(localDoc.updatedAt) : 0;
+
+          if (!localDoc) {
+            // Only exists remotely → insert locally
+            await db.table(table).add(remoteDoc);
+          } else if (remoteTime > localTime) {
+            // Remote is newer → update local
+            await db.table(table).update(localDoc.id, remoteDoc);
+          } else if (localTime > remoteTime) {
+            // Local is newer → push to Firestore
+            const stripped = await stripBlobs(localDoc);
+            await setDoc(
+              userDoc(uid, table, localDoc.id),
+              { ...stripped, _syncedAt: serverTimestamp() },
+              { merge: true }
+            );
+          }
+          // If equal timestamps, do nothing
+        }
+
+        // Process locals that don't exist remotely → push to Firestore
+        for (const localDoc of localDocs) {
+          const idStr = String(localDoc.id);
+          if (!remoteMap.has(idStr)) {
+            const stripped = await stripBlobs(localDoc);
+            await setDoc(
+              userDoc(uid, table, localDoc.id),
+              { ...stripped, _syncedAt: serverTimestamp() },
+              { merge: true }
+            );
+          }
+        }
+
+        console.log(`[sync] Dexie table "${table}": merged ${snap.size} remote, ${localDocs.length} local`);
       } catch (tableErr) {
         console.error(`[sync] Error syncing table "${table}":`, tableErr);
       }
     }
-    console.log('[sync] Firestore → Dexie complete');
+    console.log('[sync] Firestore ↔ Dexie merge complete');
   } catch (err) {
     console.error('[sync] syncFromFirestore failed', err);
   } finally {
@@ -195,19 +274,20 @@ export async function syncFromFirestore(uid) {
 
 export function setupFirestoreSync(uid) {
   if (!isFirebaseEnabled || !uid) return;
-  if (hooksInstalled && currentSyncUid === uid) return;
+  if (hooksInstalled && activeSyncUid === uid) return;
 
   hooksInstalled = true;
-  currentSyncUid = uid;
+  activeSyncUid = uid;
 
   for (const table of TABLES) {
     const tbl = db.table(table);
 
     tbl.hook('creating', (primKey, obj) => {
       if (isSyncingFromFirestore) return;
+      if (!activeSyncUid) return;
       (async () => {
         const stripped = await stripBlobs(obj);
-        await setDoc(userDoc(uid, table, primKey), {
+        await setDoc(userDoc(activeSyncUid, table, primKey), {
           ...stripped,
           _syncedAt: serverTimestamp(),
         });
@@ -217,10 +297,11 @@ export function setupFirestoreSync(uid) {
 
     tbl.hook('updating', (mods, primKey, _obj, _trans) => {
       if (isSyncingFromFirestore) return;
+      if (!activeSyncUid) return;
       (async () => {
         const safe = await stripBlobs(mods);
         if (Object.keys(safe).length === 0) return;
-        await updateDoc(userDoc(uid, table, primKey), {
+        await updateDoc(userDoc(activeSyncUid, table, primKey), {
           ...safe,
           _syncedAt: serverTimestamp(),
         });
@@ -230,7 +311,8 @@ export function setupFirestoreSync(uid) {
 
     tbl.hook('deleting', (primKey) => {
       if (isSyncingFromFirestore) return;
-      deleteDoc(userDoc(uid, table, primKey))
+      if (!activeSyncUid) return;
+      deleteDoc(userDoc(activeSyncUid, table, primKey))
         .then(() => console.log(`[sync] Firestore delete success: ${table}/${primKey}`))
         .catch(err => console.warn('[sync] delete failed', table, primKey, err));
     });
@@ -280,26 +362,32 @@ export async function migrateGuestData(uid) {
 
 export async function cleanupOldDeletedFirestore(uid) {
   if (!isFirebaseEnabled || !uid) return;
-  const cutoff = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   for (const table of ['tasks', 'sessions', 'seasons']) {
     try {
       const col = userCol(uid, table);
-      const q = query(col, where('deletedAt', '<', cutoff));
-      const snap = await getDocs(q);
-      if (snap.empty) continue;
+      // Fetch all docs and filter in memory to avoid compound-index issues
+      const snap = await getDocs(col);
+      const toDelete = snap.docs.filter(d => {
+        const data = d.data();
+        if (!data.deletedAt) return false;
+        const deletedTime = getTimestampMs(data.deletedAt);
+        return deletedTime > 0 && deletedTime < cutoff.getTime();
+      });
+
+      if (toDelete.length === 0) continue;
 
       const BATCH_SIZE = 450;
-      const docs = snap.docs;
-      for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
         const batch = writeBatch(firestore);
-        const chunk = docs.slice(i, i + BATCH_SIZE);
+        const chunk = toDelete.slice(i, i + BATCH_SIZE);
         for (const d of chunk) {
           batch.delete(d.ref);
         }
         await batch.commit();
       }
-      console.log(`[sync] Cleaned up ${snap.size} old deleted ${table} from Firestore`);
+      console.log(`[sync] Cleaned up ${toDelete.length} old deleted ${table} from Firestore`);
     } catch (err) {
       console.warn(`[sync] Error cleaning up old deleted ${table}:`, err);
     }

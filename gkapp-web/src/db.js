@@ -348,8 +348,43 @@ db.version(16).stores({
   });
 });
 
-const RETENTION_DAYS = 4;
+// Version 17 — Add updatedAt for bidirectional sync & extend retention to 7 days
+db.version(17).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+}).upgrade(async trans => {
+  await trans.table('tasks').toCollection().modify(task => {
+    if (task.updatedAt === undefined) task.updatedAt = task.createdAt || new Date();
+  });
+  await trans.table('sessions').toCollection().modify(session => {
+    if (session.updatedAt === undefined) session.updatedAt = session.createdAt || new Date();
+  });
+  await trans.table('seasons').toCollection().modify(season => {
+    if (season.updatedAt === undefined) season.updatedAt = season.createdAt || new Date();
+  });
+});
+
+const RETENTION_DAYS = 7;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+/** Normalize any date-like value to timestamp ms */
+function getTimestampMs(value) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+  if (typeof value === 'number') return value;
+  if (value.toDate && typeof value.toDate === 'function') {
+    return value.toDate().getTime();
+  }
+  return 0;
+}
 
 export async function cleanupDeletedItems() {
   try {
@@ -358,7 +393,8 @@ export async function cleanupDeletedItems() {
     const affectedTaskIds = new Set();
 
     // Purge old deleted sessions (and their taskHistory)
-    const sessionsToDelete = await db.sessions.filter(s => s.deletedAt && s.deletedAt < cutoff).toArray();
+    const allSessions = await db.sessions.toArray();
+    const sessionsToDelete = allSessions.filter(s => getTimestampMs(s.deletedAt) > 0 && getTimestampMs(s.deletedAt) < cutoff);
     for (const session of sessionsToDelete) {
       for (const tid of (session.tasks || [])) {
         affectedTaskIds.add(tid);
@@ -369,7 +405,8 @@ export async function cleanupDeletedItems() {
     }
 
     // Purge old deleted tasks (and their taskHistory)
-    const tasksToDelete = await db.tasks.filter(t => t.deletedAt && t.deletedAt < cutoff).toArray();
+    const allTasks = await db.tasks.toArray();
+    const tasksToDelete = allTasks.filter(t => getTimestampMs(t.deletedAt) > 0 && getTimestampMs(t.deletedAt) < cutoff);
     for (const task of tasksToDelete) {
       await db.tasks.delete(task.id);
       await db.taskHistory.where('taskId').equals(task.id).delete();
@@ -378,7 +415,8 @@ export async function cleanupDeletedItems() {
     }
 
     // Purge old deleted seasons
-    const seasonsToDelete = await db.seasons.filter(s => s.deletedAt && s.deletedAt < cutoff).toArray();
+    const allSeasons = await db.seasons.toArray();
+    const seasonsToDelete = allSeasons.filter(s => getTimestampMs(s.deletedAt) > 0 && getTimestampMs(s.deletedAt) < cutoff);
     for (const season of seasonsToDelete) {
       await db.seasons.delete(season.id);
       totalCleaned++;
@@ -388,7 +426,7 @@ export async function cleanupDeletedItems() {
     for (const taskId of affectedTaskIds) {
       const remainingHistory = await db.taskHistory.where('taskId').equals(taskId).toArray();
       if (remainingHistory.length === 0) {
-        await db.tasks.update(taskId, { usageCount: 0, lastUsedDate: null });
+        await db.tasks.update(taskId, { usageCount: 0, lastUsedDate: null, updatedAt: new Date() });
       } else {
         let lastDate = null;
         for (const h of remainingHistory) {
@@ -396,7 +434,7 @@ export async function cleanupDeletedItems() {
             lastDate = h.date;
           }
         }
-        await db.tasks.update(taskId, { usageCount: remainingHistory.length, lastUsedDate: lastDate });
+        await db.tasks.update(taskId, { usageCount: remainingHistory.length, lastUsedDate: lastDate, updatedAt: new Date() });
       }
     }
 
@@ -487,6 +525,8 @@ export async function seedDatabase() {
       if (!VALID_PHASES.includes(task.phase)) task.phase = 'Activación';
       if (!VALID_CATEGORIES.includes(task.category)) task.category = 'Otro';
       if (!VALID_SITUATIONS.includes(task.situation)) task.situation = 'Otro';
+      task.createdAt = task.createdAt || new Date();
+      task.updatedAt = task.updatedAt || task.createdAt;
       await db.tasks.add(task);
     }
 
