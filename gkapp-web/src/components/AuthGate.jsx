@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 const provider = new GoogleAuthProvider();
 
-async function signInWithGoogle() {
+export async function signInWithGoogle() {
   await signInWithPopup(auth, provider);
 }
 
