@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, isFirebaseEnabled } from '../firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, firestore, isFirebaseEnabled, isAdmin as checkAdmin } from '../firebase';
 import { db } from '../db';
 
 const GUEST_KEY = 'gkapp_guest';
@@ -39,9 +40,10 @@ export async function clearGuestData() {
 
 export function AuthProvider({ children }) {
   // If Firebase is not configured (Electron mode), treat as always logged in
-  const [user, setUser]     = useState(isFirebaseEnabled ? undefined : null);
+  const [user, setUser]       = useState(isFirebaseEnabled ? undefined : null);
   const [loading, setLoading] = useState(isFirebaseEnabled);
   const [isGuest, setIsGuest] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!isFirebaseEnabled) return;
@@ -57,7 +59,22 @@ export function AuthProvider({ children }) {
 
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      setIsAdmin(checkAdmin(u));
       setLoading(false);
+
+      // Persist public profile for admin dashboard
+      if (u && firestore) {
+        setDoc(
+          doc(firestore, 'userProfiles', u.uid),
+          {
+            email: u.email,
+            displayName: u.displayName || null,
+            photoURL: u.photoURL || null,
+            lastSeenAt: serverTimestamp(),
+          },
+          { merge: true }
+        ).catch(err => console.warn('[auth] Failed to save user profile', err));
+      }
     });
     return unsubscribe;
   }, []);
@@ -79,7 +96,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isGuest, enterGuestMode, exitGuestMode }}>
+    <AuthContext.Provider value={{ user, loading, isGuest, isAdmin, enterGuestMode, exitGuestMode }}>
       {children}
     </AuthContext.Provider>
   );

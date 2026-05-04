@@ -13,6 +13,7 @@
     "dev": "electron-vite dev",
     "web:dev": "vite --config vite.config.js",
     "web:build": "cross-env GITHUB_PAGES=true vite build --config vite.config.js",
+    "emulators": "firebase emulators:start --only auth,firestore",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "electron:dev": "electron-vite dev",

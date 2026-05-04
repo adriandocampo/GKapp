@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,6 +20,13 @@ if (firebaseConfig.apiKey) {
   app       = initializeApp(firebaseConfig);
   auth      = getAuth(app);
   firestore = getFirestore(app);
+
+  // Connect to local emulators in development
+  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR) {
+    connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+    connectFirestoreEmulator(firestore, 'localhost', 8080);
+    console.log('[firebase] Connected to local emulators');
+  }
 }
 
 export { app, auth, firestore };
@@ -29,3 +36,11 @@ export const isElectron = Boolean(window.electronAPI);
 
 /** True when Firebase is configured (web deployment) */
 export const isFirebaseEnabled = Boolean(firebaseConfig.apiKey);
+
+/** Hardcoded admin emails */
+export const ADMIN_EMAILS = ['adriandocampo@gmail.com'];
+
+/** Check if a Firebase user has admin privileges */
+export function isAdmin(user) {
+  return Boolean(user?.email && ADMIN_EMAILS.includes(user.email));
+}

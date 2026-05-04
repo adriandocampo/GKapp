@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { Database, PlusCircle, ClipboardList, Settings, LogOut, User } from 'lucide-react';
+import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield } from 'lucide-react';
 import { db, initDatabase, seedDatabase } from './db';
 import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks } from './sync';
 import { isFirebaseEnabled } from './firebase';
@@ -11,13 +11,23 @@ import DatabasePage from './pages/Database';
 import TaskEditor from './pages/TaskEditor';
 import SessionBuilder from './pages/SessionBuilder';
 import SettingsPage from './pages/Settings';
+import AdminDashboard from './pages/AdminDashboard';
 import { ToastProvider } from './components/Toast';
 import { ModalProvider } from './components/Modal';
 import ErrorBoundary from './components/ErrorBoundary';
 
+function AdminRoute({ children }) {
+  const { isAdmin } = useAuth();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!isAdmin) navigate('/', { replace: true });
+  }, [isAdmin, navigate]);
+  return isAdmin ? children : null;
+}
+
 function Layout() {
   const [loading, setLoading] = useState(true);
-  const { user, isGuest, exitGuestMode } = useAuth();
+  const { user, isGuest, isAdmin, exitGuestMode } = useAuth();
 
   useEffect(() => {
     async function init() {
@@ -152,6 +162,20 @@ function Layout() {
                 </span>
               )}
 
+              {isAdmin && (
+                <NavLink
+                  to="/admin"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive ? 'bg-slate-700 text-indigo-400' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    }`
+                  }
+                >
+                  <Shield size={18} />
+                  <span>Admin</span>
+                </NavLink>
+              )}
+
               <NavLink
                 to="/settings"
                 className={({ isActive }) =>
@@ -202,6 +226,14 @@ function Layout() {
           <Route path="/sessions" element={<SessionBuilder />} />
           <Route path="/sessions/:id" element={<SessionBuilder />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminDashboard />
+              </AdminRoute>
+            }
+          />
         </Routes>
       </main>
     </div>

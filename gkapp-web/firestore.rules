@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only access their own data
+    // Admin (adriandocampo@gmail.com) can access any user's data
+    match /users/{uid}/{table}/{docId} {
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == uid || request.auth.token.email == 'adriandocampo@gmail.com');
+    }
+
+    // User profiles are readable by any authenticated user
+    // Writable by the owner or admin
+    match /userProfiles/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        (request.auth.uid == uid || request.auth.token.email == 'adriandocampo@gmail.com');
+    }
+  }
+}
