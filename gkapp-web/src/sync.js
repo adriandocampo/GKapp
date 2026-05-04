@@ -12,6 +12,7 @@ import {
   collection, doc,
   getDocs, setDoc, updateDoc, deleteDoc,
   serverTimestamp,
+  query, where, writeBatch,
 } from 'firebase/firestore';
 import { firestore, isFirebaseEnabled } from './firebase';
 import { db } from './db';
@@ -275,4 +276,32 @@ export async function migrateGuestData(uid) {
   localStorage.removeItem('gkapp_guest');
   console.log('[sync] Guest data migrated to uid:', uid);
   return true;
+}
+
+export async function cleanupOldDeletedFirestore(uid) {
+  if (!isFirebaseEnabled || !uid) return;
+  const cutoff = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+
+  for (const table of ['tasks', 'sessions', 'seasons']) {
+    try {
+      const col = userCol(uid, table);
+      const q = query(col, where('deletedAt', '<', cutoff));
+      const snap = await getDocs(q);
+      if (snap.empty) continue;
+
+      const BATCH_SIZE = 450;
+      const docs = snap.docs;
+      for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+        const batch = writeBatch(firestore);
+        const chunk = docs.slice(i, i + BATCH_SIZE);
+        for (const d of chunk) {
+          batch.delete(d.ref);
+        }
+        await batch.commit();
+      }
+      console.log(`[sync] Cleaned up ${snap.size} old deleted ${table} from Firestore`);
+    } catch (err) {
+      console.warn(`[sync] Error cleaning up old deleted ${table}:`, err);
+    }
+  }
 }

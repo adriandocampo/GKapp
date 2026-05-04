@@ -10,7 +10,7 @@ import { useConfirm, usePrompt } from '../components/Modal';
 import {
   Database, ClipboardList, Tag, Calendar, Settings, History,
   ChevronDown, ChevronUp, Trash2, Edit3, Plus, Upload,
-  Save, X, Loader2, FileJson, Search
+  Save, X, Loader2, FileJson, Search, RotateCcw
 } from 'lucide-react';
 
 const TABLE_META = {
@@ -116,6 +116,17 @@ export default function UserDataViewer({ uid }) {
       addToast('Eliminado', 'success');
     } catch (err) {
       addToast('Error eliminando: ' + err.message, 'error');
+    }
+  }
+
+  async function handleRestore(row) {
+    try {
+      const restored = { ...row, deletedAt: null };
+      await updateUserDocument(uid, activeTable, row.id, restored);
+      setRows(prev => prev.map(r => r.id === row.id ? restored : r));
+      addToast('Restaurado correctamente', 'success');
+    } catch (err) {
+      addToast('Error restaurando: ' + err.message, 'error');
     }
   }
 
@@ -225,8 +236,9 @@ export default function UserDataViewer({ uid }) {
           <div className="divide-y divide-slate-700/50">
             {filteredRows.map(row => {
               const isOpen = expandedId === row.id;
+              const isDeleted = !!row.deletedAt;
               return (
-                <div key={row.id} className="p-3">
+                <div key={row.id} className={`p-3 ${isDeleted ? 'opacity-50 bg-slate-900/40' : ''}`}>
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setExpandedId(isOpen ? null : row.id)}
@@ -240,13 +252,27 @@ export default function UserDataViewer({ uid }) {
                       </div>
                       <div className="text-xs text-slate-500 truncate">
                         {row.id}
+                        {isDeleted && (
+                          <span className="ml-2 text-red-400">
+                            Eliminado el {new Date(row.deletedAt).toLocaleDateString()}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {isDeleted && (
+                        <button
+                          onClick={() => handleRestore(row)}
+                          className="p-1.5 hover:bg-teal-900/30 rounded text-teal-400 hover:text-teal-300 transition-colors"
+                          title="Restaurar"
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDelete(row)}
                         className="p-1.5 hover:bg-red-900/30 rounded text-slate-400 hover:text-red-400 transition-colors"
-                        title="Eliminar"
+                        title="Eliminar permanentemente"
                       >
                         <Trash2 size={14} />
                       </button>

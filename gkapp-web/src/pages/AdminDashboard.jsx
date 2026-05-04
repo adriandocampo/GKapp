@@ -199,10 +199,10 @@ export default function AdminDashboard() {
                     </div>
                     <div className="text-xs text-slate-500 truncate">{u.email}</div>
                     <div className="mt-2 flex flex-wrap gap-3">
-                      <CountBadge icon={Database} label="Tareas" count={c.tasks} />
-                      <CountBadge icon={ClipboardList} label="Sesiones" count={c.sessions} />
+                      <CountBadge icon={Database} label="Tareas" count={`${c.tasksActive ?? 0}${c.tasksDeleted ? ` (${c.tasksDeleted} elim.)` : ''}`} />
+                      <CountBadge icon={ClipboardList} label="Sesiones" count={`${c.sessionsActive ?? 0}${c.sessionsDeleted ? ` (${c.sessionsDeleted} elim.)` : ''}`} />
                       <CountBadge icon={Tag} label="Tags" count={c.tags} />
-                      <CountBadge icon={Calendar} label="Temporadas" count={c.seasons} />
+                      <CountBadge icon={Calendar} label="Temporadas" count={`${c.seasonsActive ?? 0}${c.seasonsDeleted ? ` (${c.seasonsDeleted} elim.)` : ''}`} />
                       <CountBadge icon={Settings} label="Ajustes" count={c.settings} />
                     </div>
                   </div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield } from 'lucide-react';
 import { db, initDatabase, seedDatabase } from './db';
-import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, migrateGuestData } from './sync';
+import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, migrateGuestData, cleanupOldDeletedFirestore } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthGate, { handleSignOut, signInWithGoogle } from './components/AuthGate';
@@ -15,6 +15,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import { ToastProvider } from './components/Toast';
 import { ModalProvider } from './components/Modal';
 import ErrorBoundary from './components/ErrorBoundary';
+import { isDev } from './utils/env';
 
 function AdminRoute({ children }) {
   const { isAdmin } = useAuth();
@@ -28,6 +29,9 @@ function AdminRoute({ children }) {
 function Layout() {
   const [loading, setLoading] = useState(true);
   const { user, isGuest, isAdmin, exitGuestMode } = useAuth();
+
+  const navActive = isDev ? 'dev-nav-active' : 'bg-slate-700 text-teal-400';
+  const navActiveAdmin = isDev ? 'dev-nav-active' : 'bg-slate-700 text-indigo-400';
 
   useEffect(() => {
     async function init() {
@@ -45,6 +49,7 @@ function Layout() {
         resetSyncHooks();
 
         await syncFromFirestore(user.uid);
+        await cleanupOldDeletedFirestore(user.uid);
         setupFirestoreSync(user.uid);
 
         // Fallback: if Firestore had no tasks (first login), seed defaults
@@ -79,9 +84,9 @@ function Layout() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-200">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
+      <div className={`min-h-screen flex items-center justify-center text-slate-200 ${isDev ? 'dev-bg' : 'bg-slate-900'}`}>
+        <div className={`text-center ${isDev ? 'dev-page-enter' : ''}`}>
+          <div className={`animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4 ${isDev ? 'dev-spinner' : 'border-teal-500'}`}></div>
           <p className="text-lg">
             {isFirebaseEnabled ? 'Sincronizando datos...' : 'Cargando base de datos...'}
           </p>
@@ -91,17 +96,20 @@ function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
-      <nav className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+    <div className={`min-h-screen text-slate-100 flex flex-col ${isDev ? 'dev-bg dev-grid-pattern dev-scrollbar' : 'bg-slate-900'}`}>
+      <nav className={`sticky top-0 z-50 ${isDev ? 'dev-navbar' : 'bg-slate-800 border-b border-slate-700'}`}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
-              <span className="text-xl font-bold text-teal-400">GKApp</span>
+              <div className="flex items-center gap-2">
+                <span className={`text-xl font-bold ${isDev ? 'dev-gradient-text' : 'text-teal-400'}`}>GKApp</span>
+                {isDev && <span className="dev-badge">DEV</span>}
+              </div>
               <NavLink
                 to="/"
                 className={({ isActive }) =>
                   `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? 'bg-slate-700 text-teal-400' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    isActive ? navActive : 'text-slate-300 hover:bg-slate-700 hover:text-white'
                   }`
                 }
               >
@@ -112,7 +120,7 @@ function Layout() {
                 to="/editor"
                 className={({ isActive }) =>
                   `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? 'bg-slate-700 text-teal-400' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    isActive ? navActive : 'text-slate-300 hover:bg-slate-700 hover:text-white'
                   }`
                 }
               >
@@ -123,7 +131,7 @@ function Layout() {
                 to="/sessions"
                 className={({ isActive }) =>
                   `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? 'bg-slate-700 text-teal-400' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    isActive ? navActive : 'text-slate-300 hover:bg-slate-700 hover:text-white'
                   }`
                 }
               >
@@ -145,7 +153,7 @@ function Layout() {
                   to="/admin"
                   className={({ isActive }) =>
                     `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isActive ? 'bg-slate-700 text-indigo-400' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                      isActive ? navActiveAdmin : 'text-slate-300 hover:bg-slate-700 hover:text-white'
                     }`
                   }
                 >
@@ -158,7 +166,7 @@ function Layout() {
                 to="/settings"
                 className={({ isActive }) =>
                   `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? 'bg-slate-700 text-teal-400' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    isActive ? navActive : 'text-slate-300 hover:bg-slate-700 hover:text-white'
                   }`
                 }
               >
@@ -211,7 +219,7 @@ function Layout() {
           </div>
         </div>
       </nav>
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+      <main className={`flex-1 max-w-7xl w-full mx-auto px-4 py-6 ${isDev ? 'dev-page-enter' : ''}`}>
         <Routes>
           <Route path="/" element={<DatabasePage />} />
           <Route path="/editor" element={<TaskEditor />} />

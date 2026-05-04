@@ -31,7 +31,19 @@ export async function getUserDataCounts(uid) {
   const counts = {};
   for (const table of TABLES) {
     const snap = await getDocs(userCol(uid, table));
-    counts[table] = snap.size;
+    if (table === 'tasks' || table === 'sessions' || table === 'seasons') {
+      let active = 0, deleted = 0;
+      snap.forEach(doc => {
+        const data = doc.data();
+        if (data.deletedAt) deleted++;
+        else active++;
+      });
+      counts[table] = active + deleted;
+      counts[`${table}Active`] = active;
+      counts[`${table}Deleted`] = deleted;
+    } else {
+      counts[table] = snap.size;
+    }
   }
   return counts;
 }

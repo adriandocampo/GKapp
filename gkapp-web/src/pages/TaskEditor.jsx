@@ -50,7 +50,7 @@ export default function TaskEditor() {
 
   const loadTask = async (taskId) => {
     const t = await db.tasks.get(taskId || id);
-    if (t) {
+    if (t && !t.deletedAt) {
       setTask(t);
       if (t.imageBlob) setPreviewUrl(URL.createObjectURL(t.imageBlob));
       else if (t.imagePath) setPreviewUrl(t.imagePath);
@@ -69,6 +69,9 @@ export default function TaskEditor() {
       } else {
         setVideoUrl(null);
       }
+    } else {
+      addToast('Tarea no encontrada', 'error');
+      navigate('/');
     }
   };
 
@@ -204,9 +207,9 @@ export default function TaskEditor() {
   }
 
   async function deleteTask() {
-    const ok = await confirm('¿Eliminar esta tarea permanentemente?', { title: 'Eliminar tarea' });
+    const ok = await confirm('¿Eliminar esta tarea? Podrás deshacerlo desde el panel de administración durante 4 días.', { title: 'Eliminar tarea' });
     if (!ok) return;
-    await db.tasks.delete(id);
+    await db.tasks.update(id, { deletedAt: new Date() });
     setHasChanges(false);
     navigate('/');
     addToast('Tarea eliminada', 'success');

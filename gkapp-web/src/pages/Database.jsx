@@ -215,7 +215,7 @@ export default function DatabasePage() {
     const addToSession = params.get('addToSession');
     if (taskId) {
       db.tasks.get(taskId).then(t => {
-        if (t) {
+        if (t && !t.deletedAt) {
           openDetail(t);
           if (addToSession === 'true') {
             setTimeout(() => {
@@ -231,13 +231,14 @@ export default function DatabasePage() {
 
   async function loadTasks() {
     const all = await db.tasks.toArray();
-    const sorted = all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    const active = all.filter(t => !t.deletedAt);
+    const sorted = active.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     setTasks(sorted);
   }
 
   async function loadSessions() {
     const all = await db.sessions.toArray();
-    setSessions(all);
+    setSessions(all.filter(s => !s.deletedAt));
   }
 
   const filteredTasks = useMemo(() => {
@@ -283,7 +284,7 @@ export default function DatabasePage() {
     const allSessions = await db.sessions.toArray();
     const sessionMap = {};
     for (const s of allSessions) {
-      sessionMap[s.id] = s.name;
+      if (!s.deletedAt) sessionMap[s.id] = s.name;
     }
     const validHist = hist.filter(h => Object.hasOwn(sessionMap, h.sessionId));
     const enrichedHist = validHist.map(h => ({
@@ -320,7 +321,7 @@ export default function DatabasePage() {
   async function addToSession(sessionId) {
     if (!taskToAdd) return;
     const session = await db.sessions.get(sessionId);
-    if (!session) return;
+    if (!session || session.deletedAt) return;
     const currentTasks = session.tasks || [];
     if (currentTasks.includes(taskToAdd.id)) {
       await alert('Esta tarea ya está en la sesión');
@@ -349,13 +350,14 @@ export default function DatabasePage() {
   async function createSessionAndAdd() {
     if (!taskToAdd) return;
     const allSeasons = await db.seasons.toArray();
-    if (allSeasons.length === 0) {
+    const activeSeasons = allSeasons.filter(s => !s.deletedAt);
+    if (activeSeasons.length === 0) {
       addToast('Crea una temporada primero en la sección de Sesiones', 'warning');
       return;
     }
     const name = await prompt('Nombre de la nueva sesión:', { placeholder: 'Mi sesión', required: true });
     if (!name) return;
-    const lastSeason = allSeasons[allSeasons.length - 1];
+    const lastSeason = activeSeasons[activeSeasons.length - 1];
     const date = todayISO();
     const newId = await db.sessions.add({
       name,
@@ -413,7 +415,14 @@ export default function DatabasePage() {
     const allTags = await db.tags.toArray();
     const allHistory = await db.taskHistory.toArray();
     const allSeasons = await db.seasons.toArray();
-    const data = { tasks: allTasks, sessions: allSessions, tags: allTags, taskHistory: allHistory, seasons: allSeasons, exportDate: new Date().toISOString() };
+    const data = {
+      tasks: allTasks.filter(t => !t.deletedAt),
+      sessions: allSessions.filter(s => !s.deletedAt),
+      tags: allTags,
+      taskHistory: allHistory,
+      seasons: allSeasons.filter(s => !s.deletedAt),
+      exportDate: new Date().toISOString()
+    };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -472,10 +481,9 @@ export default function DatabasePage() {
   }
 
   async function deleteTask(taskId) {
-    const ok = await confirm('¿Eliminar esta tarea? Esta acción no se puede deshacer.', { title: 'Eliminar tarea' });
+    const ok = await confirm('¿Eliminar esta tarea? Podrás deshacerlo desde el panel de administración durante 4 días.', { title: 'Eliminar tarea' });
     if (!ok) return;
-    await db.tasks.delete(taskId);
-    await db.taskHistory.where('taskId').equals(taskId).delete();
+    await db.tasks.update(taskId, { deletedAt: new Date() });
     setTasks(prev => prev.filter(t => t.id !== taskId));
     closeDetail();
     addToast('Tarea eliminada', 'success');

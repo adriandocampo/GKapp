@@ -308,27 +308,9 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
 
   async function handleDelete() {
     if (!session?.id) return;
-    const ok = await confirm('¿Eliminar esta sesión?', { title: 'Eliminar sesión' });
+    const ok = await confirm('¿Eliminar esta sesión? Podrás deshacerlo desde el panel de administración durante 4 días.', { title: 'Eliminar sesión' });
     if (!ok) return;
-    const taskIds = session.tasks || [];
-    await db.sessions.delete(session.id);
-    await db.taskHistory.where('sessionId').equals(session.id).delete();
-
-    for (const taskId of taskIds) {
-      const remainingHistory = await db.taskHistory.where('taskId').equals(taskId).toArray();
-      if (remainingHistory.length === 0) {
-        await db.tasks.update(taskId, { usageCount: 0, lastUsedDate: null });
-      } else {
-        let lastDate = null;
-        for (const h of remainingHistory) {
-          if (!lastDate || h.date > lastDate) {
-            lastDate = h.date;
-          }
-        }
-        await db.tasks.update(taskId, { usageCount: remainingHistory.length, lastUsedDate: lastDate });
-      }
-    }
-
+    await db.sessions.update(session.id, { deletedAt: new Date() });
     onDelete(session.id);
     addToast('Sesión eliminada', 'success');
   }
@@ -1068,21 +1050,22 @@ export default function SessionBuilder() {
 
   async function loadSeasons() {
     const all = await db.seasons.toArray();
-    setSeasons(all);
-    if (all.length > 0 && !selectedSeason) {
-      setSelectedSeason(all[all.length - 1]);
+    const active = all.filter(s => !s.deletedAt);
+    setSeasons(active);
+    if (active.length > 0 && !selectedSeason) {
+      setSelectedSeason(active[active.length - 1]);
     }
   }
 
   async function loadSessionsForSeason(seasonId) {
     const all = await db.sessions.toArray();
-    const filtered = all.filter(s => s.seasonId === seasonId);
+    const filtered = all.filter(s => s.seasonId === seasonId && !s.deletedAt);
     setSessions(filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
   }
 
   async function loadAllTasks() {
     const all = await db.tasks.toArray();
-    setAllTasks(all);
+    setAllTasks(all.filter(t => !t.deletedAt));
   }
 
   async function addSeason() {
@@ -1099,34 +1082,14 @@ export default function SessionBuilder() {
   }
 
   async function deleteSeason(season) {
-    const ok = await confirm(`¿Eliminar la temporada "${season.name}" y todas sus sesiones?`, { title: 'Eliminar temporada' });
+    const ok = await confirm(`¿Eliminar la temporada "${season.name}" y todas sus sesiones? Podrás deshacerlo desde el panel de administración durante 4 días.`, { title: 'Eliminar temporada' });
     if (!ok) return;
     const seasonSessions = await db.sessions.where('seasonId').equals(season.id).toArray();
-    const allTaskIds = new Set();
     for (const s of seasonSessions) {
-      for (const tid of (s.tasks || [])) {
-        allTaskIds.add(tid);
-      }
-      await db.sessions.delete(s.id);
-      await db.taskHistory.where('sessionId').equals(s.id).delete();
+      await db.sessions.update(s.id, { deletedAt: new Date() });
     }
 
-    for (const taskId of allTaskIds) {
-      const remainingHistory = await db.taskHistory.where('taskId').equals(taskId).toArray();
-      if (remainingHistory.length === 0) {
-        await db.tasks.update(taskId, { usageCount: 0, lastUsedDate: null });
-      } else {
-        let lastDate = null;
-        for (const h of remainingHistory) {
-          if (!lastDate || h.date > lastDate) {
-            lastDate = h.date;
-          }
-        }
-        await db.tasks.update(taskId, { usageCount: remainingHistory.length, lastUsedDate: lastDate });
-      }
-    }
-
-    await db.seasons.delete(season.id);
+    await db.seasons.update(season.id, { deletedAt: new Date() });
     await loadSeasons();
     if (selectedSeason?.id === season.id) {
       setSelectedSeason(null);
@@ -1138,7 +1101,7 @@ export default function SessionBuilder() {
   async function openSession(session) {
     setSelectedSession(session);
     const tasks = await db.tasks.where('id').anyOf(session.tasks || []).toArray();
-    const ordered = (session.tasks || []).map(tid => tasks.find(t => t.id === tid)).filter(Boolean);
+    const ordered = (session.tasks || []).map(tid => tasks.find(t => t.id === tid && !t.deletedAt)).filter(Boolean);
     setSelectedSessionTasks(ordered);
   }
 
@@ -1168,10 +1131,10 @@ export default function SessionBuilder() {
       await loadSessionsForSeason(selectedSeason.id);
     }
     const freshSession = await db.sessions.get(updatedSession.id);
-    if (freshSession) {
+    if (freshSession && !freshSession.deletedAt) {
       setSelectedSession(freshSession);
       const tasks = await db.tasks.where('id').anyOf(freshSession.tasks || []).toArray();
-      const ordered = (freshSession.tasks || []).map(tid => tasks.find(t => t.id === tid)).filter(Boolean);
+      const ordered = (freshSession.tasks || []).map(tid => tasks.find(t => t.id === tid && !t.deletedAt)).filter(Boolean);
       setSelectedSessionTasks(ordered);
     }
   }

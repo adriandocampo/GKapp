@@ -328,6 +328,86 @@ db.version(15).stores({
   });
 });
 
+// Version 16 — Soft delete support (retain deleted items for 4 days)
+db.version(16).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+}).upgrade(async trans => {
+  await trans.table('tasks').toCollection().modify(task => {
+    if (task.deletedAt === undefined) task.deletedAt = null;
+  });
+  await trans.table('sessions').toCollection().modify(session => {
+    if (session.deletedAt === undefined) session.deletedAt = null;
+  });
+  await trans.table('seasons').toCollection().modify(season => {
+    if (season.deletedAt === undefined) season.deletedAt = null;
+  });
+});
+
+const RETENTION_DAYS = 4;
+const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+export async function cleanupDeletedItems() {
+  try {
+    const cutoff = Date.now() - RETENTION_MS;
+    let totalCleaned = 0;
+    const affectedTaskIds = new Set();
+
+    // Purge old deleted sessions (and their taskHistory)
+    const sessionsToDelete = await db.sessions.filter(s => s.deletedAt && s.deletedAt < cutoff).toArray();
+    for (const session of sessionsToDelete) {
+      for (const tid of (session.tasks || [])) {
+        affectedTaskIds.add(tid);
+      }
+      await db.sessions.delete(session.id);
+      await db.taskHistory.where('sessionId').equals(session.id).delete();
+      totalCleaned++;
+    }
+
+    // Purge old deleted tasks (and their taskHistory)
+    const tasksToDelete = await db.tasks.filter(t => t.deletedAt && t.deletedAt < cutoff).toArray();
+    for (const task of tasksToDelete) {
+      await db.tasks.delete(task.id);
+      await db.taskHistory.where('taskId').equals(task.id).delete();
+      affectedTaskIds.delete(task.id);
+      totalCleaned++;
+    }
+
+    // Purge old deleted seasons
+    const seasonsToDelete = await db.seasons.filter(s => s.deletedAt && s.deletedAt < cutoff).toArray();
+    for (const season of seasonsToDelete) {
+      await db.seasons.delete(season.id);
+      totalCleaned++;
+    }
+
+    // Recalculate usage counts for affected tasks
+    for (const taskId of affectedTaskIds) {
+      const remainingHistory = await db.taskHistory.where('taskId').equals(taskId).toArray();
+      if (remainingHistory.length === 0) {
+        await db.tasks.update(taskId, { usageCount: 0, lastUsedDate: null });
+      } else {
+        let lastDate = null;
+        for (const h of remainingHistory) {
+          if (!lastDate || h.date > lastDate) {
+            lastDate = h.date;
+          }
+        }
+        await db.tasks.update(taskId, { usageCount: remainingHistory.length, lastUsedDate: lastDate });
+      }
+    }
+
+    if (totalCleaned > 0) {
+      console.log(`[db] Cleaned up ${totalCleaned} old deleted items`);
+    }
+  } catch (err) {
+    console.warn('[db] Error cleaning up deleted items:', err);
+  }
+}
+
 export async function initDatabase() {
   const count = await db.tasks.count();
   if (count === 0) {
@@ -335,6 +415,7 @@ export async function initDatabase() {
   }
   await ensureDefaultSettings();
   await cleanupOrphanTags();
+  await cleanupDeletedItems();
   localStorage.removeItem('shapePresets');
 }
 
@@ -354,9 +435,10 @@ export async function setSetting(key, value) {
 
 export async function cleanupOrphanTags() {
   const tasks = await db.tasks.toArray();
-  const usedPhases = new Set(tasks.map(t => t.phase).filter(Boolean));
-  const usedCategories = new Set(tasks.map(t => t.category).filter(Boolean));
-  const usedSituations = new Set(tasks.map(t => t.situation).filter(Boolean));
+  const activeTasks = tasks.filter(t => !t.deletedAt);
+  const usedPhases = new Set(activeTasks.map(t => t.phase).filter(Boolean));
+  const usedCategories = new Set(activeTasks.map(t => t.category).filter(Boolean));
+  const usedSituations = new Set(activeTasks.map(t => t.situation).filter(Boolean));
 
   const tags = await db.tags.toArray();
   for (const tag of tags) {
