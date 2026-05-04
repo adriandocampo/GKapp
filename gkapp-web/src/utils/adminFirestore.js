@@ -48,11 +48,27 @@ export async function getUserDataCounts(uid) {
   return counts;
 }
 
+/** Convert Firestore Timestamps to JS Dates recursively */
+function convertTimestamps(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (obj.toDate && typeof obj.toDate === 'function') {
+    return obj.toDate();
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(convertTimestamps);
+  }
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    result[key] = convertTimestamps(value);
+  }
+  return result;
+}
+
 /** Get all documents from one table for a user */
 export async function getUserCollection(uid, table) {
   if (!TABLES.includes(table)) throw new Error('Invalid table: ' + table);
   const snap = await getDocs(userCol(uid, table));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map(d => ({ id: d.id, ...convertTimestamps(d.data()) }));
 }
 
 /** Get a single document from a user's table */
