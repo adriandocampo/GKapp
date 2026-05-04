@@ -254,3 +254,25 @@ export async function pushToFirestore(uid) {
   }
   console.log('[sync] Local data pushed to Firestore');
 }
+
+/** Migrate local guest data to Firestore when a guest signs in.
+ *  Only runs if the user has no existing Firestore data.
+ */
+export async function migrateGuestData(uid) {
+  if (!isFirebaseEnabled || !uid) return false;
+
+  const guestKey = localStorage.getItem('gkapp_guest');
+  if (!guestKey) return false;
+
+  // Quick check: does user already have cloud data?
+  const tasksSnap = await getDocs(userCol(uid, 'tasks'));
+  if (!tasksSnap.empty) {
+    console.log('[sync] User already has Firestore data, skipping guest migration');
+    return false;
+  }
+
+  await pushToFirestore(uid);
+  localStorage.removeItem('gkapp_guest');
+  console.log('[sync] Guest data migrated to uid:', uid);
+  return true;
+}

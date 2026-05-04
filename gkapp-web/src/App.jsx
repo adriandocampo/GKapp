@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield } from 'lucide-react';
 import { db, initDatabase, seedDatabase } from './db';
-import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks } from './sync';
+import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, migrateGuestData } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthGate, { handleSignOut } from './components/AuthGate';
@@ -36,6 +36,9 @@ function Layout() {
 
       // 2. If Firebase is active and user is logged in, sync cloud → local
       if (isFirebaseEnabled && user?.uid) {
+        // If coming from guest mode, migrate local data to Firestore first
+        await migrateGuestData(user.uid);
+
         // Clean slate: wipe local data from previous user/session
         // and reset hooks so they install for the NEW uid.
         await clearAllLocalData();
