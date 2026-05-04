@@ -5,7 +5,6 @@ import { auth, firestore, isFirebaseEnabled, isAdmin as checkAdmin } from '../fi
 import { db } from '../db';
 
 const GUEST_KEY = 'gkapp_guest';
-const GUEST_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 const AuthContext = createContext(null);
 
@@ -15,12 +14,6 @@ function loadGuestState() {
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (!data?.startedAt) return null;
-    const elapsed = Date.now() - data.startedAt;
-    if (elapsed > GUEST_TTL_MS) {
-      console.log('[guest] Session expired, clearing data...');
-      localStorage.removeItem(GUEST_KEY);
-      return null;
-    }
     return data;
   } catch {
     localStorage.removeItem(GUEST_KEY);

@@ -74,31 +74,6 @@ function Layout() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [user?.uid]);
 
-  // Guest mode: check for expiration every minute while the app is open
-  useEffect(() => {
-    if (!isGuest) return;
-
-    const interval = setInterval(() => {
-      try {
-        const raw = localStorage.getItem('gkapp_guest');
-        if (!raw) {
-          window.location.reload();
-          return;
-        }
-        const data = JSON.parse(raw);
-        const elapsed = Date.now() - data.startedAt;
-        if (elapsed > 6 * 60 * 60 * 1000) {
-          console.log('[guest] Session expired during use, reloading...');
-          window.location.reload();
-        }
-      } catch {
-        window.location.reload();
-      }
-    }, 60_000);
-
-    return () => clearInterval(interval);
-  }, [isGuest]);
-
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-200">
