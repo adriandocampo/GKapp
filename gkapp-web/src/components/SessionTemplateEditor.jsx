@@ -136,7 +136,8 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
   }
 
   function handlePrint() {
-    window.print();
+    setShowPreview(true);
+    setTimeout(() => window.print(), 100);
   }
 
   const porteroClass = (active) =>
@@ -334,7 +335,11 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                       <span>CONTENIDOS</span>
                     </div>
                     {fields.contenidos.map((line, i) => (
-                      <input key={i} type="text" value={line} onChange={e => updateArrayItem('contenidos', i, e.target.value)} className={lineInputClass} placeholder="..." readOnly={showPreview} />
+                      showPreview ? (
+                        <div key={i} className="w-full text-[11px] text-gray-700 border-b border-dotted border-gray-300 py-1.5 leading-tight break-words">{line}</div>
+                      ) : (
+                        <input key={i} type="text" value={line} onChange={e => updateArrayItem('contenidos', i, e.target.value)} className={lineInputClass} placeholder="..." />
+                      )
                     ))}
                   </div>
 
@@ -345,7 +350,11 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                       <span>OBJETIVOS</span>
                     </div>
                     {fields.objetivos.map((line, i) => (
-                      <input key={i} type="text" value={line} onChange={e => updateArrayItem('objetivos', i, e.target.value)} className={lineInputClass} placeholder="..." readOnly={showPreview} />
+                      showPreview ? (
+                        <div key={i} className="w-full text-[11px] text-gray-700 border-b border-dotted border-gray-300 py-1.5 leading-tight break-words">{line}</div>
+                      ) : (
+                        <input key={i} type="text" value={line} onChange={e => updateArrayItem('objetivos', i, e.target.value)} className={lineInputClass} placeholder="..." />
+                      )
                     ))}
                   </div>
 
@@ -357,7 +366,11 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                     </div>
                     <div className="flex-1 flex flex-col">
                       {fields.focos.map((line, i) => (
-                        <input key={i} type="text" value={line} onChange={e => updateArrayItem('focos', i, e.target.value)} className={lineInputClass} placeholder="..." readOnly={showPreview} />
+                        showPreview ? (
+                          <div key={i} className="w-full text-[11px] text-gray-700 border-b border-dotted border-gray-300 py-1.5 leading-tight break-words">{line}</div>
+                        ) : (
+                          <input key={i} type="text" value={line} onChange={e => updateArrayItem('focos', i, e.target.value)} className={lineInputClass} placeholder="..." />
+                        )
                       ))}
                     </div>
                   </div>
