@@ -88,7 +88,7 @@ function LoginScreen() {
           </button>
 
           <p className="text-xs text-slate-500 text-center leading-relaxed">
-            Modo invitado: tus datos se guardan solo en este dispositivo y se borran automáticamente a las 6 horas.
+            Modo invitado: tus datos se guardan solo en este dispositivo y se perderán si cierras sesión o borras los datos del navegador.
           </p>
 
           {error && (

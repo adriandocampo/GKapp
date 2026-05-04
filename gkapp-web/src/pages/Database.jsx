@@ -8,6 +8,39 @@ import { useToast } from '../components/Toast';
 import { useConfirm, usePrompt, useAlert } from '../components/Modal';
 import { formatDateDDMMYY, todayISO } from '../utils/date';
 
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [meta, base64] = dataUrl.split(',');
+  const mimeMatch = meta.match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+  const byteChars = atob(base64);
+  const byteArr = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+  return new Blob([byteArr], { type: mime });
+}
+
+function deserializeBlobs(items, blobFields) {
+  return items.map(item => {
+    const clone = { ...item };
+    for (const field of blobFields) {
+      if (typeof clone[field] === 'string' && clone[field].startsWith('data:')) {
+        try {
+          clone[field] = dataUrlToBlob(clone[field]);
+        } catch { /* leave as-is if conversion fails */ }
+      }
+    }
+    return clone;
+  });
+}
+
 function useTaskImageUrls(tasks) {
   const [urls, setUrls] = useState({});
   const [videoUrls, setVideoUrls] = useState({});
@@ -417,12 +450,29 @@ export default function DatabasePage() {
     const allTags = await db.tags.toArray();
     const allHistory = await db.taskHistory.toArray();
     const allSeasons = await db.seasons.toArray();
+    const allSettings = await db.settings.toArray();
+
+    const serializeBlobs = async (items, blobFields) => {
+      const result = [];
+      for (const item of items) {
+        const clone = { ...item };
+        for (const field of blobFields) {
+          if (clone[field] instanceof Blob) {
+            clone[field] = await blobToDataUrl(clone[field]);
+          }
+        }
+        result.push(clone);
+      }
+      return result;
+    };
+
     const data = {
-      tasks: allTasks.filter(t => !t.deletedAt),
-      sessions: allSessions.filter(s => !s.deletedAt),
+      tasks: await serializeBlobs(allTasks.filter(t => !t.deletedAt), ['imageBlob', 'videoBlob']),
+      sessions: await serializeBlobs(allSessions.filter(s => !s.deletedAt), ['videoBlob']),
       tags: allTags,
       taskHistory: allHistory,
       seasons: allSeasons.filter(s => !s.deletedAt),
+      settings: allSettings,
       exportDate: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -454,11 +504,13 @@ export default function DatabasePage() {
         await db.tags.clear();
         await db.taskHistory.clear();
         await db.seasons.clear();
-        if (data.tasks?.length) await db.tasks.bulkAdd(data.tasks);
-        if (data.sessions?.length) await db.sessions.bulkAdd(data.sessions);
+        await db.settings.clear();
+        if (data.tasks?.length) await db.tasks.bulkAdd(deserializeBlobs(data.tasks, ['imageBlob', 'videoBlob']));
+        if (data.sessions?.length) await db.sessions.bulkAdd(deserializeBlobs(data.sessions, ['videoBlob']));
         if (data.tags?.length) await db.tags.bulkAdd(data.tags);
         if (data.taskHistory?.length) await db.taskHistory.bulkAdd(data.taskHistory);
         if (data.seasons?.length) await db.seasons.bulkAdd(data.seasons);
+        if (data.settings?.length) await db.settings.bulkAdd(data.settings);
         await loadTasks();
         await loadSessions();
         addToast('Datos importados correctamente', 'success');

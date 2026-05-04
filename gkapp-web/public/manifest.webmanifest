@@ -1,0 +1,16 @@
+{
+  "name": "GKApp",
+  "short_name": "GKApp",
+  "description": "Gestión de porteros · Análisis táctico",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#14b8a6",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

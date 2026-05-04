@@ -51,6 +51,17 @@ body {
   animation: slide-in 0.3s ease-out;
 }
 
+/* ── Base utility keyframes (classes applied only in dev via JS) ── */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
+  50%      { box-shadow: 0 0 0 8px rgba(139, 92, 246, 0); }
+}
+
 @media print {
   @page {
     size: landscape;

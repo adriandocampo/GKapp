@@ -447,6 +447,15 @@ export async function cleanupDeletedItems() {
 }
 
 export async function initDatabase() {
+  if (navigator.storage && navigator.storage.persist) {
+    try {
+      const granted = await navigator.storage.persist();
+      console.log('[db] Storage persist:', granted ? 'granted' : 'denied');
+    } catch (err) {
+      console.warn('[db] navigator.storage.persist() failed:', err);
+    }
+  }
+
   const count = await db.tasks.count();
   if (count === 0) {
     await seedDatabase();

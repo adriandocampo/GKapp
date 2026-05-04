@@ -42,6 +42,9 @@ jobs:
           VITE_YOUTUBE_CLIENT_ID:           ${{ secrets.VITE_YOUTUBE_CLIENT_ID }}
         run: npm run web:build
 
+      - name: Create 404.html for SPA routing
+        run: cp dist-web/index.html dist-web/404.html
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield } from 'lucide-react';
 import { db, initDatabase, seedDatabase } from './db';
-import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, migrateGuestData, cleanupOldDeletedFirestore } from './sync';
+import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthGate, { handleSignOut, signInWithGoogle } from './components/AuthGate';
@@ -38,19 +38,32 @@ function Layout() {
       // 1. Ensure local DB schema is up to date
       await initDatabase();
 
-      // 2. If Firebase is active and user is logged in, sync cloud → local
+      // 2. If Firebase is active and user is logged in, sync cloud ↔ local
       if (isFirebaseEnabled && user?.uid) {
-        // If coming from guest mode, migrate local data to Firestore first
-        await migrateGuestData(user.uid);
+        const wasGuest = !!localStorage.getItem('gkapp_guest');
+        const lastUid = localStorage.getItem('gkapp_last_uid');
+        const isUserChange = !wasGuest && lastUid && lastUid !== user.uid;
 
-        // Clean slate: wipe local data from previous user/session
-        // and reset hooks so they install for the NEW uid.
-        await clearAllLocalData();
+        if (isUserChange) {
+          // Different user on same device: clear previous user's local data
+          await clearAllLocalData();
+        }
+
         resetSyncHooks();
 
-        await syncFromFirestore(user.uid);
+        // Bidirectional merge preserves local data (including guest data)
+        // and downloads any newer remote changes from Firestore
+        try {
+          await syncFromFirestore(user.uid);
+        } catch (err) {
+          console.error('[app] Firestore sync failed:', err);
+        }
+
         await cleanupOldDeletedFirestore(user.uid);
         setupFirestoreSync(user.uid);
+
+        localStorage.setItem('gkapp_last_uid', user.uid);
+        localStorage.removeItem('gkapp_guest');
 
         // Fallback: if Firestore had no tasks (first login), seed defaults
         const taskCount = await db.tasks.count();

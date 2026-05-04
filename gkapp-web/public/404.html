@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script>
+    // SPA redirect: convert path-based URL to hash-based URL for HashRouter
+    var path = window.location.pathname;
+    var base = '/GKapp/';
+    if (path.startsWith(base)) {
+      var route = path.slice(base.length);
+      window.location.replace(window.location.origin + base + '#/' + route + window.location.search);
+    } else {
+      window.location.replace(window.location.origin + base);
+    }
+  </script>
+  <title>GKApp</title>
+</head>
+<body>
+  <p>Redirigiendo...</p>
+</body>
+</html>
