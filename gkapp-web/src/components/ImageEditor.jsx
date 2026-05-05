@@ -483,9 +483,9 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
       const styleTag = document.createElement('style');
       styleTag.id = 'capture-override';
       styleTag.textContent = `
-        * { box-shadow: none !important; outline: none !important; border: none !important; }
+        * { box-shadow: none !important; outline: none !important; }
         img { background: transparent !important; padding: 0 !important; margin: 0 !important; }
-        .ring-2, .ring-teal-500 { box-shadow: none !important; outline: none !important; }
+        .ring-2, .ring-teal-500 { box-shadow: none !important; outline: none !important; border: none !important; }
       `;
       el.appendChild(styleTag);
 
@@ -786,34 +786,37 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
               const isSelected = selectedIds.includes(el.id);
               if (el.type === 'arrow') {
                 const box = getArrowBox(el);
+                const dx = el.x2 - el.x1;
+                const dy = el.y2 - el.y1;
+                const angle = Math.atan2(dy, dx);
+                const hs = el.headSize || 4;
+                const sx = el.x1 - box.x;
+                const sy = el.y1 - box.y;
+                const ex = el.x2 - box.x;
+                const ey = el.y2 - box.y;
+                const arrowHead = (x, y, dir) => {
+                  const a = dir + Math.PI;
+                  const p1x = x + hs * Math.cos(a - Math.PI / 6);
+                  const p1y = y + hs * Math.sin(a - Math.PI / 6);
+                  const p2x = x + hs * Math.cos(a + Math.PI / 6);
+                  const p2y = y + hs * Math.sin(a + Math.PI / 6);
+                  if (el.headStyle === 'round') {
+                    return <circle cx={x} cy={y} r={hs * 0.4} fill={el.stroke} />;
+                  }
+                  return <polygon points={`${p1x},${p1y} ${x},${y} ${p2x},${p2y}`} fill={el.stroke} />;
+                };
                 return (
                   <div key={el.id} className="absolute" style={{ left: box.x, top: box.y, width: box.w, height: box.h, zIndex: el.zIndex, transform: `scaleX(${el.flipH ? -1 : 1})` }}>
                     <svg width="100%" height="100%" viewBox={`0 0 ${box.w} ${box.h}`} className="pointer-events-none overflow-visible">
-                      <defs>
-                        <marker id={`aend-${el.id}`} markerWidth={el.headSize || 4} markerHeight={el.headSize || 4} refX={(el.headSize || 4) * 0.8} refY={(el.headSize || 4) / 2} orient="auto">
-                          {el.headStyle === 'round' ? (
-                            <circle cx={(el.headSize || 4) / 2} cy={(el.headSize || 4) / 2} r={(el.headSize || 4) * 0.4} fill={el.stroke} />
-                          ) : (
-                            <polygon points={`0 0, ${el.headSize || 4} ${(el.headSize || 4) / 2}, 0 ${el.headSize || 4}`} fill={el.stroke} />
-                          )}
-                        </marker>
-                        {el.doubleHead && (
-                          <marker id={`astart-${el.id}`} markerWidth={el.headSize || 4} markerHeight={el.headSize || 4} refX={(el.headSize || 4) * 0.2} refY={(el.headSize || 4) / 2} orient="auto">
-                            {el.headStyle === 'round' ? (
-                              <circle cx={(el.headSize || 4) / 2} cy={(el.headSize || 4) / 2} r={(el.headSize || 4) * 0.4} fill={el.stroke} />
-                            ) : (
-                              <polygon points={`${el.headSize || 4} 0, 0 ${(el.headSize || 4) / 2}, ${el.headSize || 4} ${el.headSize || 4}`} fill={el.stroke} />
-                            )}
-                          </marker>
-                        )}
-                      </defs>
-                      <line x1={el.x1 - box.x} y1={el.y1 - box.y} x2={el.x2 - box.x} y2={el.y2 - box.y} stroke={el.stroke} strokeWidth={el.strokeWidth} strokeDasharray={el.strokeStyle === 'dashed' ? '8 6' : undefined} markerEnd={`url(#aend-${el.id})`} markerStart={el.doubleHead ? `url(#astart-${el.id})` : undefined} />
+                      <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={el.stroke} strokeWidth={el.strokeWidth} strokeDasharray={el.strokeStyle === 'dashed' ? '8 6' : undefined} />
+                      {arrowHead(ex, ey, angle)}
+                      {el.doubleHead && arrowHead(sx, sy, angle + Math.PI)}
                     </svg>
                     <div className="absolute inset-0" style={{ cursor: 'move' }} onMouseDown={(e) => onMouseDownEl(e, el)} onClick={(e) => handleSelect(el.id, e)} />
                     {isSelected && (
                       <>
-                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: el.x1 - box.x, top: el.y1 - box.y }} onMouseDown={(e) => onMouseDownEl(e, el)} onClick={(e) => handleSelect(el.id, e)} />
-                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: el.x2 - box.x, top: el.y2 - box.y }} onMouseDown={(e) => onMouseDownEl(e, el)} onClick={(e) => handleSelect(el.id, e)} />
+                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: sx, top: sy }} onMouseDown={(e) => onMouseDownEl(e, el)} onClick={(e) => handleSelect(el.id, e)} />
+                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: ex, top: ey }} onMouseDown={(e) => onMouseDownEl(e, el)} onClick={(e) => handleSelect(el.id, e)} />
                       </>
                     )}
                   </div>

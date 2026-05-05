@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLeft, ChevronRight, ImageIcon, Download, Upload, Star, ArrowUpDown, Video, Pencil, Trash2 } from 'lucide-react';
+import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLeft, ChevronRight, ImageIcon, Download, Upload, Star, ArrowUpDown, Video, Pencil, Trash2, Paintbrush } from 'lucide-react';
 import { db } from '../db';
 import { extractYouTubeId, youtubeEmbedUrl } from '../hooks/useYouTubeUpload';
 import { useTags } from '../hooks/useTags';
@@ -155,7 +155,7 @@ function formatRelativeDate(dateStr) {
   return `${prefix} ${diffMonths} meses y ${remainingDays} días`;
 }
 
-const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick }) {
+const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddToSession }) {
   return (
     <div
       className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hover:border-teal-500/50 transition-all cursor-pointer group relative"
@@ -178,6 +178,15 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick }) {
             <Video size={14} className="text-white" />
           </div>
         ) : null}
+        {onAddToSession && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAddToSession(task); }}
+            className="absolute top-2 right-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
+            title="Añadir a sesión"
+          >
+            <ClipboardList size={16} />
+          </button>
+        )}
       </div>
       <div className="p-4">
         <h3 className="font-semibold text-slate-100 text-sm mb-1 line-clamp-2">{task.title}</h3>
@@ -744,6 +753,7 @@ export default function DatabasePage() {
             task={task}
             imageUrl={getUrl(task)}
             onClick={openDetail}
+            onAddToSession={openSessionPicker}
           />
         ))}
       </div>
@@ -790,7 +800,16 @@ export default function DatabasePage() {
             </div>
             <div className="p-4 space-y-4">
               {detailImageUrl && (
-                <img src={detailImageUrl} alt={selectedTask.title} className="w-full rounded-lg border border-slate-700" />
+                <div className="relative">
+                  <img src={detailImageUrl} alt={selectedTask.title} className="w-full rounded-lg border border-slate-700" />
+                  <button
+                    onClick={() => navigate(`/editor/${selectedTask.id}`)}
+                    className="absolute top-2 right-2 px-3 py-1.5 bg-slate-900/80 hover:bg-teal-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 backdrop-blur-sm"
+                    title="Editar imagen"
+                  >
+                    <Paintbrush size={14} /> Editar imagen
+                  </button>
+                </div>
               )}
               {/* Video section — supports local blob and YouTube embed */}
               {selectedTask.videoType === 'youtube' && selectedTask.youtubeUrl && extractYouTubeId(selectedTask.youtubeUrl) ? (
