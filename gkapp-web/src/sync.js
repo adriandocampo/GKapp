@@ -225,16 +225,27 @@ export async function syncFromFirestore(uid) {
           const localDoc = localMap.get(idStr);
           const remoteTime = getTimestampMs(remoteDoc.updatedAt);
           const localTime = localDoc ? getTimestampMs(localDoc.updatedAt) : 0;
+          const remoteDeleted = !!remoteDoc.deletedAt;
+          const localDeleted = localDoc ? !!localDoc.deletedAt : false;
 
           if (!localDoc) {
             // Only exists remotely → insert locally
             await db.table(table).add(remoteDoc);
+          } else if (remoteDeleted && !localDeleted) {
+            // Remote is deleted but local is alive → local wins, resurrect remote
+            const stripped = await stripBlobs(localDoc);
+            await setDoc(
+              userDoc(uid, table, localDoc.id),
+              { ...stripped, deletedAt: null, _syncedAt: serverTimestamp() },
+              { merge: true }
+            );
           } else if (remoteTime > localTime) {
             // Remote is newer → update local
             await db.table(table).update(localDoc.id, remoteDoc);
           } else if (localTime > remoteTime) {
             // Local is newer → push to Firestore
             const stripped = await stripBlobs(localDoc);
+            if (!stripped.deletedAt) stripped.deletedAt = null;
             await setDoc(
               userDoc(uid, table, localDoc.id),
               { ...stripped, _syncedAt: serverTimestamp() },
@@ -287,6 +298,7 @@ export function setupFirestoreSync(uid) {
       if (!activeSyncUid) return;
       (async () => {
         const stripped = await stripBlobs(obj);
+        if (!stripped.deletedAt) stripped.deletedAt = null;
         await setDoc(userDoc(activeSyncUid, table, primKey), {
           ...stripped,
           _syncedAt: serverTimestamp(),
@@ -301,6 +313,11 @@ export function setupFirestoreSync(uid) {
       (async () => {
         const safe = await stripBlobs(mods);
         if (Object.keys(safe).length === 0) return;
+        // If the local document is alive and this update is not a soft-delete,
+        // explicitly clear deletedAt in Firestore to resurrect the doc if needed.
+        if (!_obj.deletedAt && !('deletedAt' in safe)) {
+          safe.deletedAt = null;
+        }
         await updateDoc(userDoc(activeSyncUid, table, primKey), {
           ...safe,
           _syncedAt: serverTimestamp(),

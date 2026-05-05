@@ -14,10 +14,24 @@ function userDocRef(uid, table, id) {
   return doc(firestore, 'users', uid, table, String(id));
 }
 
-/** List all registered user profiles */
+/** List all registered user profiles and discover users with data but no profile */
 export async function listUserProfiles() {
-  const snap = await getDocs(collection(firestore, 'userProfiles'));
-  return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  const profilesSnap = await getDocs(collection(firestore, 'userProfiles'));
+  const profiles = new Map(profilesSnap.docs.map(d => [d.id, { uid: d.id, ...d.data() }]));
+
+  // Discover UIDs that have data in Firestore sub-collections but no profile
+  try {
+    const usersSnap = await getDocs(collection(firestore, 'users'));
+    for (const d of usersSnap.docs) {
+      if (!profiles.has(d.id)) {
+        profiles.set(d.id, { uid: d.id, email: null, displayName: 'Usuario sin perfil', photoURL: null });
+      }
+    }
+  } catch (err) {
+    console.warn('[admin] Error discovering users:', err);
+  }
+
+  return Array.from(profiles.values());
 }
 
 /** Get a single user profile */
@@ -144,4 +158,85 @@ export async function purgeUserData(uid) {
   }
   // Optionally remove user profile as well
   await deleteDoc(doc(firestore, 'userProfiles', uid));
+}
+
+const DEFAULT_PHASES = ['Activación', 'Parte Principal'];
+const DEFAULT_CATEGORIES = ['Agarres', 'Desvíos', '1c1', 'Coberturas', 'Juego ofensivo', 'Velocidad de reacción'];
+const DEFAULT_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
+
+/** Restore missing default tags for a user in Firestore */
+export async function restoreDefaultTagsForUser(uid) {
+  const snap = await getDocs(userCol(uid, 'tags'));
+  const existingSet = new Set(snap.docs.map(d => `${d.data().type}:${d.data().name}`));
+
+  let count = 0;
+  for (const name of DEFAULT_PHASES) {
+    if (!existingSet.has(`phase:${name}`)) {
+      await setDoc(doc(firestore, 'users', uid, 'tags', `phase_${name}`), { type: 'phase', name });
+      count++;
+    }
+  }
+  for (const name of DEFAULT_CATEGORIES) {
+    if (!existingSet.has(`category:${name}`)) {
+      await setDoc(doc(firestore, 'users', uid, 'tags', `category_${name}`), { type: 'category', name });
+      count++;
+    }
+  }
+  for (const name of DEFAULT_SITUATIONS) {
+    if (!existingSet.has(`situation:${name}`)) {
+      await setDoc(doc(firestore, 'users', uid, 'tags', `situation_${name}`), { type: 'situation', name });
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Restore default (seed) tasks for a user in Firestore.
+ *  Uses merge:true and forces deletedAt=null so previously deleted seed tasks are resurrected.
+ */
+export async function restoreDefaultTasksForUser(uid) {
+  const base = import.meta.env.BASE_URL ?? './';
+  const response = await fetch(`${base}seed_data.json`);
+  if (!response.ok) throw new Error('Failed to load seed_data.json');
+  const tasks = await response.json();
+
+  const VALID_PHASES = ['Activación', 'Parte Principal'];
+  const VALID_CATEGORIES = ['Agarres', 'Desvíos', '1c1', 'Coberturas', 'Juego ofensivo', 'Velocidad de reacción'];
+  const VALID_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
+
+  const BATCH_SIZE = 450;
+  let totalRestored = 0;
+
+  for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
+    const batch = writeBatch(firestore);
+    const chunk = tasks.slice(i, i + BATCH_SIZE);
+    let chunkCount = 0;
+
+    for (const task of chunk) {
+      const normalized = { ...task };
+      if (normalized.imagePath && normalized.imagePath.startsWith('/')) normalized.imagePath = normalized.imagePath.substring(1);
+      if (normalized.videoPath && normalized.videoPath.startsWith('/')) normalized.videoPath = normalized.videoPath.substring(1);
+      if (VALID_SITUATIONS.includes(normalized.category)) {
+        normalized.situation = normalized.category;
+        normalized.category = 'Otro';
+      }
+      if (!VALID_PHASES.includes(normalized.phase)) normalized.phase = 'Activación';
+      if (!VALID_CATEGORIES.includes(normalized.category)) normalized.category = 'Otro';
+      if (!VALID_SITUATIONS.includes(normalized.situation)) normalized.situation = 'Otro';
+      normalized.createdAt = normalized.createdAt || new Date();
+      normalized.updatedAt = normalized.updatedAt || normalized.createdAt;
+      normalized.deletedAt = null;
+
+      const ref = userDocRef(uid, 'tasks', normalized.id);
+      batch.set(ref, normalized, { merge: true });
+      chunkCount++;
+    }
+
+    if (chunkCount > 0) {
+      await batch.commit();
+      totalRestored += chunkCount;
+    }
+  }
+
+  return totalRestored;
 }

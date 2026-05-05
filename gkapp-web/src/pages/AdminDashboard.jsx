@@ -5,6 +5,8 @@ import {
   getUserDataCounts,
   exportAllUserData,
   purgeUserData,
+  restoreDefaultTagsForUser,
+  restoreDefaultTasksForUser,
 } from '../utils/adminFirestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
@@ -12,7 +14,7 @@ import { useConfirm, useAlert } from '../components/Modal';
 import {
   Shield, Users, Download, Trash2, Eye, ArrowLeft,
   Database, ClipboardList, Tag, Calendar, Settings,
-  Loader2, Search, FileJson
+  Loader2, Search, FileJson, RotateCcw
 } from 'lucide-react';
 import UserDataViewer from '../components/UserDataViewer';
 
@@ -126,6 +128,24 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleRestoreDefaults(uid, displayName) {
+    const ok = await confirm(
+      `¿Restaurar tareas predefinidas y etiquetas estándar para "${displayName || uid}"? Esto no afectará sus tareas o etiquetas personalizadas.`,
+      { title: 'Restaurar datos por defecto', confirmText: 'Restaurar' }
+    );
+    if (!ok) return;
+    try {
+      const tasksCount = await restoreDefaultTasksForUser(uid);
+      const tagsCount = await restoreDefaultTagsForUser(uid);
+      addToast(`Restauradas ${tasksCount} tareas y ${tagsCount} etiquetas`, 'success');
+      // Refresh counts
+      const newCounts = await getUserDataCounts(uid);
+      setCounts(prev => ({ ...prev, [uid]: newCounts }));
+    } catch (err) {
+      addToast('Error restaurando: ' + err.message, 'error');
+    }
+  }
+
   if (selectedUid) {
     return (
       <div className="space-y-4">
@@ -220,6 +240,13 @@ export default function AdminDashboard() {
                       className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-teal-400 transition-colors"
                     >
                       <Download size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleRestoreDefaults(u.uid, u.displayName)}
+                      title="Restaurar tareas y etiquetas por defecto"
+                      className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-amber-400 transition-colors"
+                    >
+                      <RotateCcw size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(u.uid, u.displayName)}

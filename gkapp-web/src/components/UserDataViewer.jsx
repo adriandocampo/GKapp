@@ -70,12 +70,12 @@ export default function UserDataViewer({ uid }) {
     setLoading(true);
     try {
       const data = await getUserCollection(uid, table);
-      // Sort by id or createdAt if available
+      // Sort by createdAt/date desc (newest first)
       data.sort((a, b) => {
         const da = a.createdAt || a.date || a.id;
         const db_ = b.createdAt || b.date || b.id;
-        if (typeof da === 'string' && typeof db_ === 'string') return db_.localeCompare(da);
-        return (db_ || 0) - (da || 0);
+        if (typeof da === 'string' && typeof db_ === 'string') return da.localeCompare(db_);
+        return (da || 0) - (db_ || 0);
       });
       setRows(data);
     } catch (err) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield } from 'lucide-react';
-import { db, initDatabase, seedDatabase } from './db';
+import { db, initDatabase, ensureSeedTasks, ensureDefaultTags } from './db';
 import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -65,12 +65,11 @@ function Layout() {
         localStorage.setItem('gkapp_last_uid', user.uid);
         localStorage.removeItem('gkapp_guest');
 
-        // Fallback: if Firestore had no tasks (first login), seed defaults
-        const taskCount = await db.tasks.count();
-        if (taskCount === 0) {
-          console.log('[app] No tasks after sync, re-seeding...');
-          await seedDatabase();
-        }
+        // Ensure default tags and seed tasks are present after every sync.
+        // This resurrects any seed tasks that were incorrectly soft-deleted in Firestore
+        // and recreates standard tags that may have been purged locally.
+        await ensureDefaultTags();
+        await ensureSeedTasks();
       }
 
       setLoading(false);
