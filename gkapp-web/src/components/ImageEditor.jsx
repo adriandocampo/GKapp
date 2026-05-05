@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Square, Circle, ArrowRight, Type, Trash2, RotateCw, ChevronUp, ChevronDown, RotateCcw, Paintbrush, LayoutTemplate, AlignLeft, AlignCenter, AlignRight, AlignVerticalSpaceAround, AlignHorizontalSpaceAround, Triangle, Hash, Link, Clipboard, Plus, Save, Star } from 'lucide-react';
-import { FIELDS, OBJECTS } from '../data/imageAssets.js';
+import { Square, Circle, ArrowRight, Type, Trash2, RotateCw, ChevronUp, ChevronDown, ChevronRight, RotateCcw, Paintbrush, LayoutTemplate, AlignLeft, AlignCenter, AlignRight, AlignVerticalSpaceAround, AlignHorizontalSpaceAround, Triangle, Hash, Link, Clipboard, Plus, Save, Star } from 'lucide-react';
+import { FIELDS, OBJECTS_BY_CATEGORY } from '../data/imageAssets.js';
 
 function uid() { return Math.random().toString(36).substr(2, 9); }
 
@@ -18,6 +18,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   const [elements, setElements] = useState(initialElements || []);
   const [selectedIds, setSelectedIds] = useState([]);
   const [toolTab, setToolTab] = useState('fields');
+  const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const [dragging, setDragging] = useState(null);
   const [resizing, setResizing] = useState(null);
   const [rotating, setRotating] = useState(null);
@@ -724,12 +725,37 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                 <div className="p-2">
                   <button onClick={() => setShowAddObjectModal(true)} className="w-full p-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white font-medium flex items-center justify-center gap-2"><Plus size={16} /> Añadir objeto</button>
                 </div>
-                {OBJECTS.map(o => (
-                  <button key={o.id} onClick={() => addElement('object', { src: o.src })} className="w-full text-left p-2 rounded hover:bg-slate-700 transition-colors">
-                    <img src={o.src} alt={o.name} className="w-full h-16 object-contain bg-transparent rounded mb-1" style={{ border: 'none', background: 'transparent' }} />
-                    <div className="text-xs text-slate-300">{o.name}</div>
-                  </button>
-                ))}
+                {OBJECTS_BY_CATEGORY.map(cat => {
+                  const isExpanded = expandedCategories.has(cat.key);
+                  return (
+                    <div key={cat.key} className="mb-1">
+                      <button
+                        onClick={() => {
+                          setExpandedCategories(prev => {
+                            const next = new Set(prev);
+                            if (next.has(cat.key)) next.delete(cat.key);
+                            else next.add(cat.key);
+                            return next;
+                          });
+                        }}
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-slate-700/60 transition-colors text-xs font-semibold text-slate-200 uppercase tracking-wide"
+                      >
+                        <span>{cat.label}</span>
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </button>
+                      {isExpanded && (
+                        <div className="space-y-1 px-1 pt-1">
+                          {cat.items.map(o => (
+                            <button key={o.id} onClick={() => addElement('object', { src: o.src })} className="w-full text-left p-2 rounded hover:bg-slate-700 transition-colors">
+                              <img src={o.src} alt={o.name} className="w-full h-16 object-contain bg-transparent rounded mb-1" style={{ border: 'none', background: 'transparent' }} />
+                              <div className="text-xs text-slate-300 capitalize">{o.name}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </>
             )}
             {toolTab === 'shapes' && (

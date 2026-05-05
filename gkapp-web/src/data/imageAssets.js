@@ -24,325 +24,483 @@ export const FIELDS = [
   }
 ];
 
+export const OBJECTS_BY_CATEGORY = [
+  {
+    "key": "fichas",
+    "label": "Fichas",
+    "items": [
+      {
+        "id": "ficha amarilla",
+        "src": "images/templates/objects/fichas/ficha amarilla.webp",
+        "name": "ficha amarilla"
+      },
+      {
+        "id": "ficha azul",
+        "src": "images/templates/objects/fichas/ficha azul.webp",
+        "name": "ficha azul"
+      },
+      {
+        "id": "ficha gris",
+        "src": "images/templates/objects/fichas/ficha gris.webp",
+        "name": "ficha gris"
+      },
+      {
+        "id": "ficha roja",
+        "src": "images/templates/objects/fichas/ficha roja.webp",
+        "name": "ficha roja"
+      },
+      {
+        "id": "ficha_brazos_amarilla",
+        "src": "images/templates/objects/fichas/ficha_brazos_amarilla.webp",
+        "name": "ficha_brazos_amarilla"
+      },
+      {
+        "id": "ficha_brazos_azul",
+        "src": "images/templates/objects/fichas/ficha_brazos_azul.webp",
+        "name": "ficha_brazos_azul"
+      },
+      {
+        "id": "ficha_brazos_gris",
+        "src": "images/templates/objects/fichas/ficha_brazos_gris.webp",
+        "name": "ficha_brazos_gris"
+      },
+      {
+        "id": "ficha_brazos_roja",
+        "src": "images/templates/objects/fichas/ficha_brazos_roja.webp",
+        "name": "ficha_brazos_roja"
+      }
+    ]
+  },
+  {
+    "key": "balones",
+    "label": "Balones",
+    "items": [
+      {
+        "id": "balón 1rfef",
+        "src": "images/templates/objects/balones/balón 1rfef.webp",
+        "name": "balón 1rfef"
+      }
+    ]
+  },
+  {
+    "key": "chinos",
+    "label": "Chinos",
+    "items": [
+      {
+        "id": "chino amarillo",
+        "src": "images/templates/objects/chinos/chino amarillo.webp",
+        "name": "chino amarillo"
+      },
+      {
+        "id": "chino naranja",
+        "src": "images/templates/objects/chinos/chino naranja.webp",
+        "name": "chino naranja"
+      },
+      {
+        "id": "cono rojo",
+        "src": "images/templates/objects/chinos/cono rojo.webp",
+        "name": "cono rojo"
+      },
+      {
+        "id": "cono",
+        "src": "images/templates/objects/chinos/cono.webp",
+        "name": "cono"
+      },
+      {
+        "id": "seta amarilla",
+        "src": "images/templates/objects/chinos/seta amarilla.webp",
+        "name": "seta amarilla"
+      },
+      {
+        "id": "seta azul",
+        "src": "images/templates/objects/chinos/seta azul.webp",
+        "name": "seta azul"
+      },
+      {
+        "id": "seta roja",
+        "src": "images/templates/objects/chinos/seta roja.webp",
+        "name": "seta roja"
+      }
+    ]
+  },
+  {
+    "key": "muñecos",
+    "label": "Muñecos",
+    "items": [
+      {
+        "id": "hinchable",
+        "src": "images/templates/objects/muñecos/hinchable.webp",
+        "name": "hinchable"
+      },
+      {
+        "id": "muñeco amarillo",
+        "src": "images/templates/objects/muñecos/muñeco amarillo.webp",
+        "name": "muñeco amarillo"
+      },
+      {
+        "id": "muñeco azul",
+        "src": "images/templates/objects/muñecos/muñeco azul.webp",
+        "name": "muñeco azul"
+      },
+      {
+        "id": "muñeco rojo",
+        "src": "images/templates/objects/muñecos/muñeco rojo.webp",
+        "name": "muñeco rojo"
+      }
+    ]
+  },
+  {
+    "key": "picas",
+    "label": "Picas",
+    "items": [
+      {
+        "id": "pica amarilla",
+        "src": "images/templates/objects/picas/pica amarilla.webp",
+        "name": "pica amarilla"
+      },
+      {
+        "id": "pica azul",
+        "src": "images/templates/objects/picas/pica azul.webp",
+        "name": "pica azul"
+      },
+      {
+        "id": "pica con base",
+        "src": "images/templates/objects/picas/pica con base.webp",
+        "name": "pica con base"
+      },
+      {
+        "id": "pica roja",
+        "src": "images/templates/objects/picas/pica roja.webp",
+        "name": "pica roja"
+      }
+    ]
+  },
+  {
+    "key": "porterías",
+    "label": "Porterías",
+    "items": [
+      {
+        "id": "mini atrás",
+        "src": "images/templates/objects/porterías/mini atrás.webp",
+        "name": "mini atrás"
+      },
+      {
+        "id": "mini",
+        "src": "images/templates/objects/porterías/mini.webp",
+        "name": "mini"
+      },
+      {
+        "id": "portería grande",
+        "src": "images/templates/objects/porterías/portería grande.webp",
+        "name": "portería grande"
+      }
+    ]
+  },
+  {
+    "key": "escaleras y aros",
+    "label": "Escaleras y Aros",
+    "items": [
+      {
+        "id": "aro amarillo",
+        "src": "images/templates/objects/escaleras y aros/aro amarillo.webp",
+        "name": "aro amarillo"
+      },
+      {
+        "id": "aro azul",
+        "src": "images/templates/objects/escaleras y aros/aro azul.webp",
+        "name": "aro azul"
+      },
+      {
+        "id": "aro rojo",
+        "src": "images/templates/objects/escaleras y aros/aro rojo.webp",
+        "name": "aro rojo"
+      }
+    ]
+  },
+  {
+    "key": "vista",
+    "label": "Vista",
+    "items": [
+      {
+        "id": "derecha",
+        "src": "images/templates/objects/vista/derecha.webp",
+        "name": "derecha"
+      },
+      {
+        "id": "frente",
+        "src": "images/templates/objects/vista/frente.webp",
+        "name": "frente"
+      },
+      {
+        "id": "izquierda",
+        "src": "images/templates/objects/vista/izquierda.webp",
+        "name": "izquierda"
+      }
+    ]
+  },
+  {
+    "key": "varios",
+    "label": "Varios",
+    "items": [
+      {
+        "id": "bosu",
+        "src": "images/templates/objects/varios/bosu.webp",
+        "name": "bosu"
+      },
+      {
+        "id": "cajón",
+        "src": "images/templates/objects/varios/cajón.webp",
+        "name": "cajón"
+      },
+      {
+        "id": "choque",
+        "src": "images/templates/objects/varios/choque.webp",
+        "name": "choque"
+      },
+      {
+        "id": "escalera",
+        "src": "images/templates/objects/varios/escalera.webp",
+        "name": "escalera"
+      },
+      {
+        "id": "fitball",
+        "src": "images/templates/objects/varios/fitball.webp",
+        "name": "fitball"
+      },
+      {
+        "id": "rebounder1",
+        "src": "images/templates/objects/varios/rebounder1.webp",
+        "name": "rebounder1"
+      },
+      {
+        "id": "rebounder2",
+        "src": "images/templates/objects/varios/rebounder2.webp",
+        "name": "rebounder2"
+      },
+      {
+        "id": "saltos",
+        "src": "images/templates/objects/varios/saltos.webp",
+        "name": "saltos"
+      },
+      {
+        "id": "step",
+        "src": "images/templates/objects/varios/step.webp",
+        "name": "step"
+      }
+    ]
+  }
+];
+
+// Flat array for backward compatibility
 export const OBJECTS = [
   {
-    "id": "ficha_amarilla",
-    "src": "images/templates/objects/extracted/ficha_amarilla.webp",
-    "name": "ficha_amarilla"
+    "id": "balón 1rfef",
+    "src": "images/templates/objects/balones/balón 1rfef.webp",
+    "name": "balón 1rfef"
   },
   {
-    "id": "ficha_azul",
-    "src": "images/templates/objects/extracted/ficha_azul.webp",
-    "name": "ficha_azul"
+    "id": "chino amarillo",
+    "src": "images/templates/objects/chinos/chino amarillo.webp",
+    "name": "chino amarillo"
   },
   {
-    "id": "ficha_gris",
-    "src": "images/templates/objects/extracted/ficha_gris.webp",
-    "name": "ficha_gris"
+    "id": "chino naranja",
+    "src": "images/templates/objects/chinos/chino naranja.webp",
+    "name": "chino naranja"
   },
   {
-    "id": "ficha_roja",
-    "src": "images/templates/objects/extracted/ficha_roja.webp",
-    "name": "ficha_roja"
+    "id": "cono rojo",
+    "src": "images/templates/objects/chinos/cono rojo.webp",
+    "name": "cono rojo"
   },
   {
-    "id": "object_000",
-    "src": "images/templates/objects/extracted/object_000.webp",
-    "name": "object_000"
+    "id": "cono",
+    "src": "images/templates/objects/chinos/cono.webp",
+    "name": "cono"
   },
   {
-    "id": "object_001",
-    "src": "images/templates/objects/extracted/object_001.webp",
-    "name": "object_001"
+    "id": "seta amarilla",
+    "src": "images/templates/objects/chinos/seta amarilla.webp",
+    "name": "seta amarilla"
   },
   {
-    "id": "object_002",
-    "src": "images/templates/objects/extracted/object_002.webp",
-    "name": "object_002"
+    "id": "seta azul",
+    "src": "images/templates/objects/chinos/seta azul.webp",
+    "name": "seta azul"
   },
   {
-    "id": "object_003",
-    "src": "images/templates/objects/extracted/object_003.webp",
-    "name": "object_003"
+    "id": "seta roja",
+    "src": "images/templates/objects/chinos/seta roja.webp",
+    "name": "seta roja"
   },
   {
-    "id": "object_004",
-    "src": "images/templates/objects/extracted/object_004.webp",
-    "name": "object_004"
+    "id": "aro amarillo",
+    "src": "images/templates/objects/escaleras y aros/aro amarillo.webp",
+    "name": "aro amarillo"
   },
   {
-    "id": "object_005",
-    "src": "images/templates/objects/extracted/object_005.webp",
-    "name": "object_005"
+    "id": "aro azul",
+    "src": "images/templates/objects/escaleras y aros/aro azul.webp",
+    "name": "aro azul"
   },
   {
-    "id": "object_006",
-    "src": "images/templates/objects/extracted/object_006.webp",
-    "name": "object_006"
+    "id": "aro rojo",
+    "src": "images/templates/objects/escaleras y aros/aro rojo.webp",
+    "name": "aro rojo"
   },
   {
-    "id": "object_007",
-    "src": "images/templates/objects/extracted/object_007.webp",
-    "name": "object_007"
+    "id": "ficha amarilla",
+    "src": "images/templates/objects/fichas/ficha amarilla.webp",
+    "name": "ficha amarilla"
   },
   {
-    "id": "object_008",
-    "src": "images/templates/objects/extracted/object_008.webp",
-    "name": "object_008"
+    "id": "ficha azul",
+    "src": "images/templates/objects/fichas/ficha azul.webp",
+    "name": "ficha azul"
   },
   {
-    "id": "object_009",
-    "src": "images/templates/objects/extracted/object_009.webp",
-    "name": "object_009"
+    "id": "ficha gris",
+    "src": "images/templates/objects/fichas/ficha gris.webp",
+    "name": "ficha gris"
   },
   {
-    "id": "object_010",
-    "src": "images/templates/objects/extracted/object_010.webp",
-    "name": "object_010"
+    "id": "ficha roja",
+    "src": "images/templates/objects/fichas/ficha roja.webp",
+    "name": "ficha roja"
   },
   {
-    "id": "object_011",
-    "src": "images/templates/objects/extracted/object_011.webp",
-    "name": "object_011"
+    "id": "ficha_brazos_amarilla",
+    "src": "images/templates/objects/fichas/ficha_brazos_amarilla.webp",
+    "name": "ficha_brazos_amarilla"
   },
   {
-    "id": "object_012",
-    "src": "images/templates/objects/extracted/object_012.webp",
-    "name": "object_012"
+    "id": "ficha_brazos_azul",
+    "src": "images/templates/objects/fichas/ficha_brazos_azul.webp",
+    "name": "ficha_brazos_azul"
   },
   {
-    "id": "object_013",
-    "src": "images/templates/objects/extracted/object_013.webp",
-    "name": "object_013"
+    "id": "ficha_brazos_gris",
+    "src": "images/templates/objects/fichas/ficha_brazos_gris.webp",
+    "name": "ficha_brazos_gris"
   },
   {
-    "id": "object_014",
-    "src": "images/templates/objects/extracted/object_014.webp",
-    "name": "object_014"
+    "id": "ficha_brazos_roja",
+    "src": "images/templates/objects/fichas/ficha_brazos_roja.webp",
+    "name": "ficha_brazos_roja"
   },
   {
-    "id": "object_015",
-    "src": "images/templates/objects/extracted/object_015.webp",
-    "name": "object_015"
+    "id": "hinchable",
+    "src": "images/templates/objects/muñecos/hinchable.webp",
+    "name": "hinchable"
   },
   {
-    "id": "object_016",
-    "src": "images/templates/objects/extracted/object_016.webp",
-    "name": "object_016"
+    "id": "muñeco amarillo",
+    "src": "images/templates/objects/muñecos/muñeco amarillo.webp",
+    "name": "muñeco amarillo"
   },
   {
-    "id": "object_017",
-    "src": "images/templates/objects/extracted/object_017.webp",
-    "name": "object_017"
+    "id": "muñeco azul",
+    "src": "images/templates/objects/muñecos/muñeco azul.webp",
+    "name": "muñeco azul"
   },
   {
-    "id": "object_018",
-    "src": "images/templates/objects/extracted/object_018.webp",
-    "name": "object_018"
+    "id": "muñeco rojo",
+    "src": "images/templates/objects/muñecos/muñeco rojo.webp",
+    "name": "muñeco rojo"
   },
   {
-    "id": "object_019",
-    "src": "images/templates/objects/extracted/object_019.webp",
-    "name": "object_019"
+    "id": "pica amarilla",
+    "src": "images/templates/objects/picas/pica amarilla.webp",
+    "name": "pica amarilla"
   },
   {
-    "id": "object_020",
-    "src": "images/templates/objects/extracted/object_020.webp",
-    "name": "object_020"
+    "id": "pica azul",
+    "src": "images/templates/objects/picas/pica azul.webp",
+    "name": "pica azul"
   },
   {
-    "id": "object_021",
-    "src": "images/templates/objects/extracted/object_021.webp",
-    "name": "object_021"
+    "id": "pica con base",
+    "src": "images/templates/objects/picas/pica con base.webp",
+    "name": "pica con base"
   },
   {
-    "id": "object_022",
-    "src": "images/templates/objects/extracted/object_022.webp",
-    "name": "object_022"
+    "id": "pica roja",
+    "src": "images/templates/objects/picas/pica roja.webp",
+    "name": "pica roja"
   },
   {
-    "id": "object_023",
-    "src": "images/templates/objects/extracted/object_023.webp",
-    "name": "object_023"
+    "id": "mini atrás",
+    "src": "images/templates/objects/porterías/mini atrás.webp",
+    "name": "mini atrás"
   },
   {
-    "id": "object_024",
-    "src": "images/templates/objects/extracted/object_024.webp",
-    "name": "object_024"
+    "id": "mini",
+    "src": "images/templates/objects/porterías/mini.webp",
+    "name": "mini"
   },
   {
-    "id": "object_025",
-    "src": "images/templates/objects/extracted/object_025.webp",
-    "name": "object_025"
+    "id": "portería grande",
+    "src": "images/templates/objects/porterías/portería grande.webp",
+    "name": "portería grande"
   },
   {
-    "id": "object_026",
-    "src": "images/templates/objects/extracted/object_026.webp",
-    "name": "object_026"
+    "id": "bosu",
+    "src": "images/templates/objects/varios/bosu.webp",
+    "name": "bosu"
   },
   {
-    "id": "object_027",
-    "src": "images/templates/objects/extracted/object_027.webp",
-    "name": "object_027"
+    "id": "cajón",
+    "src": "images/templates/objects/varios/cajón.webp",
+    "name": "cajón"
   },
   {
-    "id": "object_028",
-    "src": "images/templates/objects/extracted/object_028.webp",
-    "name": "object_028"
+    "id": "choque",
+    "src": "images/templates/objects/varios/choque.webp",
+    "name": "choque"
   },
   {
-    "id": "object_029",
-    "src": "images/templates/objects/extracted/object_029.webp",
-    "name": "object_029"
+    "id": "escalera",
+    "src": "images/templates/objects/varios/escalera.webp",
+    "name": "escalera"
   },
   {
-    "id": "object_030",
-    "src": "images/templates/objects/extracted/object_030.webp",
-    "name": "object_030"
+    "id": "fitball",
+    "src": "images/templates/objects/varios/fitball.webp",
+    "name": "fitball"
   },
   {
-    "id": "object_031",
-    "src": "images/templates/objects/extracted/object_031.webp",
-    "name": "object_031"
+    "id": "rebounder1",
+    "src": "images/templates/objects/varios/rebounder1.webp",
+    "name": "rebounder1"
   },
   {
-    "id": "object_032",
-    "src": "images/templates/objects/extracted/object_032.webp",
-    "name": "object_032"
+    "id": "rebounder2",
+    "src": "images/templates/objects/varios/rebounder2.webp",
+    "name": "rebounder2"
   },
   {
-    "id": "object_033",
-    "src": "images/templates/objects/extracted/object_033.webp",
-    "name": "object_033"
+    "id": "saltos",
+    "src": "images/templates/objects/varios/saltos.webp",
+    "name": "saltos"
   },
   {
-    "id": "object_034",
-    "src": "images/templates/objects/extracted/object_034.webp",
-    "name": "object_034"
+    "id": "step",
+    "src": "images/templates/objects/varios/step.webp",
+    "name": "step"
   },
   {
-    "id": "object_035",
-    "src": "images/templates/objects/extracted/object_035.webp",
-    "name": "object_035"
+    "id": "derecha",
+    "src": "images/templates/objects/vista/derecha.webp",
+    "name": "derecha"
   },
   {
-    "id": "object_036",
-    "src": "images/templates/objects/extracted/object_036.webp",
-    "name": "object_036"
+    "id": "frente",
+    "src": "images/templates/objects/vista/frente.webp",
+    "name": "frente"
   },
   {
-    "id": "object_037",
-    "src": "images/templates/objects/extracted/object_037.webp",
-    "name": "object_037"
-  },
-  {
-    "id": "object_038",
-    "src": "images/templates/objects/extracted/object_038.webp",
-    "name": "object_038"
-  },
-  {
-    "id": "object_039",
-    "src": "images/templates/objects/extracted/object_039.webp",
-    "name": "object_039"
-  },
-  {
-    "id": "object_040",
-    "src": "images/templates/objects/extracted/object_040.webp",
-    "name": "object_040"
-  },
-  {
-    "id": "object_041",
-    "src": "images/templates/objects/extracted/object_041.webp",
-    "name": "object_041"
-  },
-  {
-    "id": "object_042",
-    "src": "images/templates/objects/extracted/object_042.webp",
-    "name": "object_042"
-  },
-  {
-    "id": "object_043",
-    "src": "images/templates/objects/extracted/object_043.webp",
-    "name": "object_043"
-  },
-  {
-    "id": "object_044",
-    "src": "images/templates/objects/extracted/object_044.webp",
-    "name": "object_044"
-  },
-  {
-    "id": "object_045",
-    "src": "images/templates/objects/extracted/object_045.webp",
-    "name": "object_045"
-  },
-  {
-    "id": "object_046",
-    "src": "images/templates/objects/extracted/object_046.webp",
-    "name": "object_046"
-  },
-  {
-    "id": "object_047",
-    "src": "images/templates/objects/extracted/object_047.webp",
-    "name": "object_047"
-  },
-  {
-    "id": "object_048",
-    "src": "images/templates/objects/extracted/object_048.webp",
-    "name": "object_048"
-  },
-  {
-    "id": "object_049",
-    "src": "images/templates/objects/extracted/object_049.webp",
-    "name": "object_049"
-  },
-  {
-    "id": "object_050",
-    "src": "images/templates/objects/extracted/object_050.webp",
-    "name": "object_050"
-  },
-  {
-    "id": "object_051",
-    "src": "images/templates/objects/extracted/object_051.webp",
-    "name": "object_051"
-  },
-  {
-    "id": "object_052",
-    "src": "images/templates/objects/extracted/object_052.webp",
-    "name": "object_052"
-  },
-  {
-    "id": "object_053",
-    "src": "images/templates/objects/extracted/object_053.webp",
-    "name": "object_053"
-  },
-  {
-    "id": "object_054",
-    "src": "images/templates/objects/extracted/object_054.webp",
-    "name": "object_054"
-  },
-  {
-    "id": "object_055",
-    "src": "images/templates/objects/extracted/object_055.webp",
-    "name": "object_055"
-  },
-  {
-    "id": "object_056",
-    "src": "images/templates/objects/extracted/object_056.webp",
-    "name": "object_056"
-  },
-  {
-    "id": "object_057",
-    "src": "images/templates/objects/extracted/object_057.webp",
-    "name": "object_057"
-  },
-  {
-    "id": "object_058",
-    "src": "images/templates/objects/extracted/object_058.webp",
-    "name": "object_058"
-  },
-  {
-    "id": "object_059",
-    "src": "images/templates/objects/extracted/object_059.webp",
-    "name": "object_059"
+    "id": "izquierda",
+    "src": "images/templates/objects/vista/izquierda.webp",
+    "name": "izquierda"
   }
 ];
