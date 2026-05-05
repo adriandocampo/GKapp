@@ -3,11 +3,6 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
-// Dev-only visual theme: completely excluded from production builds
-if (import.meta.env.DEV) {
-  import('./styles/dev-theme.css')
-}
-
 // Register service worker for offline support on GitHub Pages
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', function () {

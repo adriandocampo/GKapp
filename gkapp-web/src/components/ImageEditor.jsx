@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { flushSync } from 'react-dom';
 import { Square, Circle, ArrowRight, Type, Trash2, RotateCw, ChevronUp, ChevronDown, ChevronRight, RotateCcw, Paintbrush, LayoutTemplate, AlignLeft, AlignCenter, AlignRight, AlignVerticalSpaceAround, AlignHorizontalSpaceAround, Triangle, Hash, Link, Clipboard, Plus, Save, Star } from 'lucide-react';
 import { FIELDS, OBJECTS_BY_CATEGORY } from '../data/imageAssets.js';
 
@@ -13,13 +12,18 @@ function getArrowBox(el) {
   return { x: minX, y: minY, w: Math.max(10, maxX - minX), h: Math.max(10, maxY - minY) };
 }
 
+function normalizeRotation(rot) {
+  while (rot > 180) rot -= 360;
+  while (rot <= -180) rot += 360;
+  return rot;
+}
+
 export default function ImageEditor({ onSave, onCancel, taskData = {}, initialElements = null }) {
   const canvasRef = useRef(null);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
   const [elements, setElements] = useState(initialElements || []);
   const [selectedIds, setSelectedIds] = useState([]);
   const [toolTab, setToolTab] = useState('fields');
-  const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const [dragging, setDragging] = useState(null);
   const [resizing, setResizing] = useState(null);
   const [rotating, setRotating] = useState(null);
@@ -33,8 +37,9 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   const [objectUrl, setObjectUrl] = useState('');
   const [showTextInputModal, setShowTextInputModal] = useState(false);
   const [textInputValue, setTextInputValue] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const [shapePresets, setShapePresets] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('shapePresets') || '{"rect":[],"circle":[],"triangle":[]}'); } catch { return { rect: [], circle: [], triangle: [] }; }
+    try { return JSON.parse(localStorage.getItem('shapePresets') || '{"rect":[],"circle":[],"triangle":[],"arrow":[]}'); } catch { return { rect: [], circle: [], triangle: [], arrow: [] }; }
   });
   const [showPresetName, setShowPresetName] = useState(false);
   const [presetName, setPresetName] = useState('');
@@ -126,35 +131,35 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: 30, y: 10, w: canvasSize.w * 0.22, h: 22,
         text: String(subtitle).toUpperCase(), fontSize: 12, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'left', padding: 2, noStroke: true, zIndex: baseZ + 1,
+        bgColor: 'transparent', textAlign: 'left', padding: 2, zIndex: baseZ + 1,
       }]);
     }
     if (focus) {
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: canvasSize.w * 0.58, y: 10, w: canvasSize.w * 0.22, h: 22,
         text: String(focus).toUpperCase(), fontSize: 12, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'left', padding: 2, noStroke: true, zIndex: baseZ + 2,
+        bgColor: 'transparent', textAlign: 'left', padding: 2, zIndex: baseZ + 2,
       }]);
     }
     if (time) {
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: 60, y: 56, w: 60, h: 18,
         text: String(time).toUpperCase(), fontSize: 11, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'left', padding: 2, noStroke: true, zIndex: baseZ + 3,
+        bgColor: 'transparent', textAlign: 'left', padding: 2, zIndex: baseZ + 3,
       }]);
     }
     if (reps) {
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: 60, y: 76, w: 60, h: 18,
         text: String(reps).toUpperCase(), fontSize: 11, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'left', padding: 2, noStroke: true, zIndex: baseZ + 4,
+        bgColor: 'transparent', textAlign: 'left', padding: 2, zIndex: baseZ + 4,
       }]);
     }
     if (description) {
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: 20, y: canvasSize.h - 40, w: canvasSize.w - 40, h: 36,
         text: String(description).toUpperCase(), fontSize: 13, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'center', padding: 2, noStroke: true, zIndex: baseZ + 5,
+        bgColor: 'transparent', textAlign: 'center', padding: 2, zIndex: baseZ + 5,
       }]);
     }
   };
@@ -469,35 +474,29 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
 
   const capture = async () => {
     try {
-      // Force synchronous re-render so selection classes are removed from the DOM
-      // before dom-to-image-more clones it.
-      flushSync(() => {
-        setSelectedIds([]);
-        setEditingTextId(null);
-        setSelectBox(null);
-      });
+      setSelectedIds([]);
+      setEditingTextId(null);
+      setSelectBox(null);
       document.activeElement?.blur();
 
-      // Give the browser one paint cycle to flush the visual changes.
-      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise(resolve => {
+        requestAnimationFrame(() => setTimeout(resolve, 80));
+      });
 
       const el = canvasRef.current;
       if (!el) return;
-
-      // Remove selection rings from the DOM clone target manually instead of
-      // injecting CSS that nukes CSS borders (border: none breaks rect/circle).
-      const rings = el.querySelectorAll('.ring-2.ring-teal-500');
-      rings.forEach(node => {
-        node.classList.remove('ring-2', 'ring-teal-500');
-      });
 
       const styleTag = document.createElement('style');
       styleTag.id = 'capture-override';
       styleTag.textContent = `
         * { box-shadow: none !important; outline: none !important; }
+        *:not(.preserve-border) { border: none !important; }
         img { background: transparent !important; padding: 0 !important; margin: 0 !important; }
+        .ring-2, .ring-teal-500 { box-shadow: none !important; outline: none !important; }
       `;
       el.appendChild(styleTag);
+
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const domtoimage = await import('dom-to-image-more');
       const dataUrl = await domtoimage.toPng(el, {
@@ -510,10 +509,6 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
       });
 
       styleTag.remove();
-      // Restore the classes we stripped so the editor stays interactive.
-      rings.forEach(node => {
-        node.classList.add('ring-2', 'ring-teal-500');
-      });
 
       const res = await fetch(dataUrl);
       const blob = await res.blob();
@@ -592,19 +587,33 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   };
 
   const saveShapePreset = () => {
-    if (!primarySelected || !['rect', 'circle', 'triangle'].includes(primarySelected.type)) return;
+    if (!primarySelected || !['rect', 'circle', 'triangle', 'arrow'].includes(primarySelected.type)) return;
     const shapeType = primarySelected.type;
     const name = presetName.trim() || `Preset ${shapePresets[shapeType].length + 1}`;
-    const preset = {
-      id: uid(),
-      name,
-      stroke: primarySelected.stroke,
-      strokeWidth: primarySelected.strokeWidth,
-      strokeStyle: primarySelected.strokeStyle,
-      fill: primarySelected.fill,
-      fillType: primarySelected.fillType,
-      fillOpacity: primarySelected.fillOpacity,
-    };
+    let preset;
+    if (shapeType === 'arrow') {
+      preset = {
+        id: uid(),
+        name,
+        stroke: primarySelected.stroke,
+        strokeWidth: primarySelected.strokeWidth,
+        strokeStyle: primarySelected.strokeStyle,
+        headStyle: primarySelected.headStyle,
+        doubleHead: primarySelected.doubleHead,
+        headSize: primarySelected.headSize,
+      };
+    } else {
+      preset = {
+        id: uid(),
+        name,
+        stroke: primarySelected.stroke,
+        strokeWidth: primarySelected.strokeWidth,
+        strokeStyle: primarySelected.strokeStyle,
+        fill: primarySelected.fill,
+        fillType: primarySelected.fillType,
+        fillOpacity: primarySelected.fillOpacity,
+      };
+    }
     const updated = { ...shapePresets, [shapeType]: [...shapePresets[shapeType], preset] };
     setShapePresets(updated);
     localStorage.setItem('shapePresets', JSON.stringify(updated));
@@ -613,30 +622,41 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   };
 
   const loadShapePreset = (preset) => {
-    if (!primarySelected || !['rect', 'circle', 'triangle'].includes(primarySelected.type)) return;
-    updateSelected({
-      stroke: preset.stroke,
-      strokeWidth: preset.strokeWidth,
-      strokeStyle: preset.strokeStyle,
-      fill: preset.fill,
-      fillType: preset.fillType,
-      fillOpacity: preset.fillOpacity,
-    });
+    if (!primarySelected || !['rect', 'circle', 'triangle', 'arrow'].includes(primarySelected.type)) return;
+    if (primarySelected.type === 'arrow') {
+      updateSelected({
+        stroke: preset.stroke,
+        strokeWidth: preset.strokeWidth,
+        strokeStyle: preset.strokeStyle,
+        headStyle: preset.headStyle,
+        doubleHead: preset.doubleHead,
+        headSize: preset.headSize,
+      });
+    } else {
+      updateSelected({
+        stroke: preset.stroke,
+        strokeWidth: preset.strokeWidth,
+        strokeStyle: preset.strokeStyle,
+        fill: preset.fill,
+        fillType: preset.fillType,
+        fillOpacity: preset.fillOpacity,
+      });
+    }
   };
 
   const deleteShapePreset = (id) => {
-    if (!primarySelected || !['rect', 'circle', 'triangle'].includes(primarySelected.type)) return;
+    if (!primarySelected || !['rect', 'circle', 'triangle', 'arrow'].includes(primarySelected.type)) return;
     const shapeType = primarySelected.type;
     const updated = { ...shapePresets, [shapeType]: shapePresets[shapeType].filter(p => p.id !== id) };
     setShapePresets(updated);
     localStorage.setItem('shapePresets', JSON.stringify(updated));
   };
 
-  const stripedStyle = (color, opacity = 0.2) => {
+  const stripedStyle = (color, opacity = 0.15) => {
     const hexOpacity = Math.round(opacity * 255).toString(16).padStart(2, '0');
-    const lightOpacity = Math.round(opacity * 0.5 * 255).toString(16).padStart(2, '0');
+    const lightOpacity = Math.round(opacity * 0.3 * 255).toString(16).padStart(2, '0');
     return {
-      background: `repeating-linear-gradient(45deg, ${color}${hexOpacity}, ${color}${hexOpacity} 10px, ${color}${lightOpacity} 10px, ${color}${lightOpacity} 20px)`,
+      background: `repeating-linear-gradient(-45deg, ${color}${hexOpacity}, ${color}${hexOpacity} 6px, ${color}${lightOpacity} 6px, ${color}${lightOpacity} 12px)`,
     };
   };
 
@@ -815,38 +835,36 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
               const isSelected = selectedIds.includes(el.id);
               if (el.type === 'arrow') {
                 const box = getArrowBox(el);
-                const dx = el.x2 - el.x1;
-                const dy = el.y2 - el.y1;
-                const angle = Math.atan2(dy, dx);
-                const hs = (el.headSize || 4) * (el.strokeWidth || 4) * 1.5;
-                const pad = hs * 2;
-                const sx = el.x1 - box.x + pad;
-                const sy = el.y1 - box.y + pad;
-                const ex = el.x2 - box.x + pad;
-                const ey = el.y2 - box.y + pad;
-                const arrowHead = (x, y, dir) => {
-                  const a = dir + Math.PI;
-                  const p1x = x + hs * Math.cos(a - Math.PI / 6);
-                  const p1y = y + hs * Math.sin(a - Math.PI / 6);
-                  const p2x = x + hs * Math.cos(a + Math.PI / 6);
-                  const p2y = y + hs * Math.sin(a + Math.PI / 6);
-                  if (el.headStyle === 'round') {
-                    return <circle cx={x} cy={y} r={hs * 0.4} fill={el.stroke} />;
-                  }
-                  return <polygon points={`${p1x},${p1y} ${x},${y} ${p2x},${p2y}`} fill={el.stroke} />;
-                };
+                const headSizeVal = el.headSize || 4;
+                const padding = headSizeVal * 3;
                 return (
-                  <div key={el.id} className="absolute" style={{ left: box.x - pad, top: box.y - pad, width: box.w + pad * 2, height: box.h + pad * 2, zIndex: el.zIndex, transform: `scaleX(${el.flipH ? -1 : 1})` }}>
-                    <svg width="100%" height="100%" viewBox={`${-pad} ${-pad} ${box.w + pad * 2} ${box.h + pad * 2}`} className="pointer-events-none overflow-visible">
-                      <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={el.stroke} strokeWidth={el.strokeWidth} strokeDasharray={el.strokeStyle === 'dashed' ? '8 6' : undefined} />
-                      {arrowHead(ex, ey, angle)}
-                      {el.doubleHead && arrowHead(sx, sy, angle + Math.PI)}
+                  <div key={el.id} className="absolute" style={{ left: box.x - padding, top: box.y - padding, width: box.w + padding * 2, height: box.h + padding * 2, zIndex: el.zIndex, transform: `scaleX(${el.flipH ? -1 : 1})` }}>
+                    <svg width="100%" height="100%" viewBox={`${-padding} ${-padding} ${box.w + padding * 2} ${box.h + padding * 2}`} className="pointer-events-none overflow-visible">
+                      <defs>
+                        <marker id={`aend-${el.id}`} markerWidth={headSizeVal} markerHeight={headSizeVal} refX={headSizeVal * 0.8} refY={headSizeVal / 2} orient="auto">
+                          {el.headStyle === 'round' ? (
+                            <circle cx={headSizeVal / 2} cy={headSizeVal / 2} r={headSizeVal * 0.4} fill={el.stroke} />
+                          ) : (
+                            <polygon points={`0 0, ${headSizeVal} ${headSizeVal / 2}, 0 ${headSizeVal}`} fill={el.stroke} />
+                          )}
+                        </marker>
+                        {el.doubleHead && (
+                          <marker id={`astart-${el.id}`} markerWidth={headSizeVal} markerHeight={headSizeVal} refX={headSizeVal * 0.2} refY={headSizeVal / 2} orient="auto">
+                            {el.headStyle === 'round' ? (
+                              <circle cx={headSizeVal / 2} cy={headSizeVal / 2} r={headSizeVal * 0.4} fill={el.stroke} />
+                            ) : (
+                              <polygon points={`${headSizeVal} 0, 0 ${headSizeVal / 2}, ${headSizeVal} ${headSizeVal}`} fill={el.stroke} />
+                            )}
+                          </marker>
+                        )}
+                      </defs>
+                      <line x1={el.x1 - box.x} y1={el.y1 - box.y} x2={el.x2 - box.x} y2={el.y2 - box.y} stroke={el.stroke} strokeWidth={el.strokeWidth} strokeDasharray={el.strokeStyle === 'dashed' ? '8 6' : undefined} markerEnd={`url(#aend-${el.id})`} markerStart={el.doubleHead ? `url(#astart-${el.id})` : undefined} />
                     </svg>
                     <div className="absolute inset-0" style={{ cursor: 'move' }} onMouseDown={(e) => onMouseDownEl(e, el)} onClick={(e) => handleSelect(el.id, e)} />
                     {isSelected && (
                       <>
-                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: sx, top: sy }} onMouseDown={(e) => onMouseDownEl(e, el)} onClick={(e) => handleSelect(el.id, e)} />
-                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: ex, top: ey }} onMouseDown={(e) => onMouseDownEl(e, el)} onClick={(e) => handleSelect(el.id, e)} />
+                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: el.x1 - box.x + padding, top: el.y1 - box.y + padding }} onMouseDown={(e) => { e.stopPropagation(); setDragging({ id: el.id, type: 'arrow-start' }); }} />
+                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: el.x2 - box.x + padding, top: el.y2 - box.y + padding }} onMouseDown={(e) => { e.stopPropagation(); setDragging({ id: el.id, type: 'arrow-end' }); }} />
                       </>
                     )}
                   </div>
@@ -857,7 +875,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                 <div
                   key={el.id}
                   className={`absolute ${isSelected && el.type !== 'field' ? 'ring-2 ring-teal-500' : ''}`}
-                  style={{ left: el.x, top: el.y, width: el.type === 'field' ? canvasSize.w : el.w, height: el.type === 'field' ? canvasSize.h : el.h, transform: el.type !== 'field' ? `rotate(${el.rotation || 0}deg) scaleX(${el.flipH ? -1 : 1})` : undefined, opacity: el.opacity, zIndex: el.zIndex, cursor: el.type === 'field' ? 'default' : 'move' }}
+                  style={{ left: el.x, top: el.y, width: el.w, height: el.h, transform: el.type !== 'field' ? `rotate(${el.rotation || 0}deg) scaleX(${el.flipH ? -1 : 1})` : undefined, opacity: el.opacity, zIndex: el.zIndex, cursor: el.type === 'field' ? 'default' : 'move' }}
                   onMouseDown={(e) => onMouseDownEl(e, el)}
                   onClick={(e) => handleSelect(el.id, e)}
                   onDoubleClick={(e) => { if (el.type === 'text') { e.stopPropagation(); setEditingTextId(el.id); } }}
@@ -866,14 +884,14 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                   {el.type === 'object' && <img src={el.src} alt="" className="w-full h-full object-contain pointer-events-none" draggable={false} style={{ border: 'none', background: 'transparent' }} />}
                   {el.type === 'image' && <img src={el.src} alt="" className="w-full h-full object-contain pointer-events-none" draggable={false} style={{ border: 'none', background: 'transparent' }} />}
                   {el.type === 'rect' && (
-                    <div className="w-full h-full" style={{
+                    <div className="w-full h-full preserve-border" style={{
                       ...(el.fillType === 'striped' ? stripedStyle(el.fill !== 'transparent' ? el.fill : el.stroke, el.fillOpacity) :
                         el.fillType === 'solid' ? { backgroundColor: el.fill } : { backgroundColor: 'transparent' }),
                       border: `${el.strokeWidth}px ${el.strokeStyle === 'dashed' ? 'dashed' : 'solid'} ${el.stroke}`,
                     }} />
                   )}
                   {el.type === 'circle' && (
-                    <div className="w-full h-full rounded-full" style={{
+                    <div className="w-full h-full rounded-full preserve-border" style={{
                       ...(el.fillType === 'striped' ? stripedStyle(el.fill !== 'transparent' ? el.fill : el.stroke, el.fillOpacity) :
                         el.fillType === 'solid' ? { backgroundColor: el.fill } : { backgroundColor: 'transparent' }),
                       border: `${el.strokeWidth}px ${el.strokeStyle === 'dashed' ? 'dashed' : 'solid'} ${el.stroke}`,
@@ -910,14 +928,14 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                         backgroundColor: el.bgColor || 'transparent', padding: el.padding || 4,
                         whiteSpace: 'pre-wrap', wordBreak: 'break-word', textAlign: el.textAlign || 'left',
                         justifyContent: el.textAlign === 'center' ? 'center' : el.textAlign === 'right' ? 'flex-end' : 'flex-start',
-                        ...(el.noStroke !== false ? {} : { border: `${el.strokeWidth}px solid ${el.stroke}`, borderRadius: 4 }),
+                        ...(el.noStroke ? {} : { border: `${el.strokeWidth}px solid ${el.stroke}`, borderRadius: 4 }),
                       }}>
                         {el.text}
                       </div>
                     )
                   )}
                   {el.type === 'number' && (
-                    <div className="w-full h-full rounded-full flex items-center justify-center pointer-events-none" style={{
+                    <div className="w-full h-full rounded-full flex items-center justify-center pointer-events-none preserve-border" style={{
                       ...(el.bgColor !== 'transparent' ? { backgroundColor: el.bgColor } : {}),
                       ...(el.noStroke ? {} : { border: `${el.strokeWidth}px solid ${el.stroke}` }),
                     }}>
@@ -1002,10 +1020,24 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                       <label className="block text-xs text-slate-400 mb-1.5">Rotación ({Math.round(primarySelected.rotation || 0)}°)</label>
                       <input type="range" min="-180" max="180" value={primarySelected.rotation || 0} onChange={e => updateSelected({ rotation: Number(e.target.value) })} className="w-full accent-teal-500" />
                     </div>
+                    {(primarySelected.type === 'object' || primarySelected.type === 'image') && (
+                      <div className="flex gap-2">
+                        <button onClick={() => updateSelected({ rotation: normalizeRotation((primarySelected.rotation || 0) - 45) })} className="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-xs text-slate-300 transition-colors">⟲ -45°</button>
+                        <button onClick={() => updateSelected({ rotation: 0 })} className="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-xs text-slate-300 transition-colors">0°</button>
+                        <button onClick={() => updateSelected({ rotation: normalizeRotation((primarySelected.rotation || 0) + 45) })} className="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-xs text-slate-300 transition-colors">⟳ +45°</button>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs text-slate-400 mb-1.5">Opacidad</label>
                       <input type="range" min="0.1" max="1" step="0.05" value={primarySelected.opacity ?? 1} onChange={e => updateSelected({ opacity: Number(e.target.value) })} className="w-full accent-teal-500" />
                     </div>
+                    {(primarySelected.type === 'object' || primarySelected.type === 'image') && (
+                      <div className="flex gap-2">
+                        <button onClick={() => updateSelected({ flipH: !primarySelected.flipH })} className={`flex-1 px-3 py-2 rounded-lg text-xs transition-colors ${primarySelected.flipH ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>
+                          ↔ Voltear horizontal
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -1071,7 +1103,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                         <button onClick={() => updateSelected({ doubleHead: !primarySelected.doubleHead })} className={`px-2.5 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.doubleHead ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{primarySelected.doubleHead ? 'Doble' : 'Simple'}</button>
                         <label className="text-[10px] text-slate-500">Tamaño ({primarySelected.headSize || 4})</label>
                       </div>
-                      <input type="range" min="0.5" max="3" step="0.1" value={primarySelected.headSize || 1} onChange={e => updateSelected({ headSize: Number(e.target.value) })} className="w-full mt-1.5 accent-teal-500" />
+                      <input type="range" min="1" max="6" value={primarySelected.headSize || 4} onChange={e => updateSelected({ headSize: Number(e.target.value) })} className="w-full mt-1.5 accent-teal-500" />
                     </div>
                   </>
                 )}
@@ -1146,7 +1178,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                   </>
                 )}
 
-                {(primarySelected.type === 'rect' || primarySelected.type === 'circle' || primarySelected.type === 'triangle') && (
+                {(primarySelected.type === 'rect' || primarySelected.type === 'circle' || primarySelected.type === 'triangle' || primarySelected.type === 'arrow') && (
                   <div className="border-t border-slate-700/50 pt-3 mt-1">
                     <label className="block text-xs text-slate-400 mb-2">Presets</label>
                     {(shapePresets[primarySelected.type] || []).length > 0 && (

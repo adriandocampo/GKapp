@@ -7,8 +7,12 @@ export function useTags() {
   const loadTags = useCallback(async () => {
     const all = await db.tags.toArray();
     const grouped = { phase: [], category: [], situation: [] };
+    const seen = { phase: new Set(), category: new Set(), situation: new Set() };
     all.forEach(t => {
-      if (grouped[t.type]) grouped[t.type].push(t.name);
+      if (grouped[t.type] && !seen[t.type].has(t.name)) {
+        grouped[t.type].push(t.name);
+        seen[t.type].add(t.name);
+      }
     });
     setTags(grouped);
   }, []);
