@@ -126,35 +126,35 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: 30, y: 10, w: canvasSize.w * 0.22, h: 22,
         text: String(subtitle).toUpperCase(), fontSize: 12, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'left', padding: 2, zIndex: baseZ + 1,
+        bgColor: 'transparent', textAlign: 'left', padding: 2, noStroke: true, zIndex: baseZ + 1,
       }]);
     }
     if (focus) {
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: canvasSize.w * 0.58, y: 10, w: canvasSize.w * 0.22, h: 22,
         text: String(focus).toUpperCase(), fontSize: 12, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'left', padding: 2, zIndex: baseZ + 2,
+        bgColor: 'transparent', textAlign: 'left', padding: 2, noStroke: true, zIndex: baseZ + 2,
       }]);
     }
     if (time) {
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: 60, y: 56, w: 60, h: 18,
         text: String(time).toUpperCase(), fontSize: 11, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'left', padding: 2, zIndex: baseZ + 3,
+        bgColor: 'transparent', textAlign: 'left', padding: 2, noStroke: true, zIndex: baseZ + 3,
       }]);
     }
     if (reps) {
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: 60, y: 76, w: 60, h: 18,
         text: String(reps).toUpperCase(), fontSize: 11, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'left', padding: 2, zIndex: baseZ + 4,
+        bgColor: 'transparent', textAlign: 'left', padding: 2, noStroke: true, zIndex: baseZ + 4,
       }]);
     }
     if (description) {
       setElements(prev => [...prev, {
         id: uid(), type: 'text', x: 20, y: canvasSize.h - 40, w: canvasSize.w - 40, h: 36,
         text: String(description).toUpperCase(), fontSize: 13, color: '#000000', fontWeight: 'bold',
-        bgColor: 'transparent', textAlign: 'center', padding: 2, zIndex: baseZ + 5,
+        bgColor: 'transparent', textAlign: 'center', padding: 2, noStroke: true, zIndex: baseZ + 5,
       }]);
     }
   };
@@ -525,22 +525,40 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     }
   };
 
+  const addImageWithSize = (type, src) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 120;
+      let nw, nh;
+      if (img.naturalWidth > img.naturalHeight) {
+        nw = maxDim;
+        nh = Math.round(maxDim * img.naturalHeight / img.naturalWidth);
+      } else {
+        nh = maxDim;
+        nw = Math.round(maxDim * img.naturalWidth / img.naturalHeight);
+      }
+      addElement(type, { src, w: nw, h: nh });
+    };
+    img.onerror = () => addElement(type, { src });
+    img.src = src;
+  };
+
   const handleUpload = (e) => {
     const file = e.target.files[0]; if (!file) return;
     const url = URL.createObjectURL(file);
-    addElement('image', { src: url });
+    addImageWithSize('image', url);
   };
 
   const handleAddObjectFromFile = (e) => {
     const file = e.target.files[0]; if (!file) return;
     const url = URL.createObjectURL(file);
-    addElement('image', { src: url });
+    addImageWithSize('image', url);
     setShowAddObjectModal(false);
   };
 
   const handleAddObjectFromUrl = () => {
     if (!objectUrl.trim()) return;
-    addElement('image', { src: objectUrl.trim() });
+    addImageWithSize('image', objectUrl.trim());
     setShowAddObjectModal(false);
     setObjectUrl('');
   };
@@ -553,7 +571,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
           if (type.startsWith('image/')) {
             const blob = await item.getType(type);
             const url = URL.createObjectURL(blob);
-            addElement('image', { src: url });
+            addImageWithSize('image', url);
             setShowAddObjectModal(false);
             return;
           }
@@ -757,7 +775,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                       {isExpanded && (
                         <div className="space-y-1 px-1 pt-1">
                           {cat.items.map(o => (
-                            <button key={o.id} onClick={() => addElement('object', { src: o.src })} className="w-full text-left p-2 rounded hover:bg-slate-700 transition-colors">
+                            <button key={o.id} onClick={() => addImageWithSize('object', o.src)} className="w-full text-left p-2 rounded hover:bg-slate-700 transition-colors">
                               <img src={o.src} alt={o.name} className="w-full h-16 object-contain bg-transparent rounded mb-1" style={{ border: 'none', background: 'transparent' }} />
                               <div className="text-xs text-slate-300 capitalize">{o.name}</div>
                             </button>
@@ -800,11 +818,12 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                 const dx = el.x2 - el.x1;
                 const dy = el.y2 - el.y1;
                 const angle = Math.atan2(dy, dx);
-                const hs = el.headSize || 4;
-                const sx = el.x1 - box.x;
-                const sy = el.y1 - box.y;
-                const ex = el.x2 - box.x;
-                const ey = el.y2 - box.y;
+                const hs = (el.headSize || 4) * (el.strokeWidth || 4) * 1.5;
+                const pad = hs * 2;
+                const sx = el.x1 - box.x + pad;
+                const sy = el.y1 - box.y + pad;
+                const ex = el.x2 - box.x + pad;
+                const ey = el.y2 - box.y + pad;
                 const arrowHead = (x, y, dir) => {
                   const a = dir + Math.PI;
                   const p1x = x + hs * Math.cos(a - Math.PI / 6);
@@ -817,8 +836,8 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                   return <polygon points={`${p1x},${p1y} ${x},${y} ${p2x},${p2y}`} fill={el.stroke} />;
                 };
                 return (
-                  <div key={el.id} className="absolute" style={{ left: box.x, top: box.y, width: box.w, height: box.h, zIndex: el.zIndex, transform: `scaleX(${el.flipH ? -1 : 1})` }}>
-                    <svg width="100%" height="100%" viewBox={`0 0 ${box.w} ${box.h}`} className="pointer-events-none overflow-visible">
+                  <div key={el.id} className="absolute" style={{ left: box.x - pad, top: box.y - pad, width: box.w + pad * 2, height: box.h + pad * 2, zIndex: el.zIndex, transform: `scaleX(${el.flipH ? -1 : 1})` }}>
+                    <svg width="100%" height="100%" viewBox={`${-pad} ${-pad} ${box.w + pad * 2} ${box.h + pad * 2}`} className="pointer-events-none overflow-visible">
                       <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={el.stroke} strokeWidth={el.strokeWidth} strokeDasharray={el.strokeStyle === 'dashed' ? '8 6' : undefined} />
                       {arrowHead(ex, ey, angle)}
                       {el.doubleHead && arrowHead(sx, sy, angle + Math.PI)}
@@ -891,7 +910,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                         backgroundColor: el.bgColor || 'transparent', padding: el.padding || 4,
                         whiteSpace: 'pre-wrap', wordBreak: 'break-word', textAlign: el.textAlign || 'left',
                         justifyContent: el.textAlign === 'center' ? 'center' : el.textAlign === 'right' ? 'flex-end' : 'flex-start',
-                        ...(el.noStroke ? {} : { border: `${el.strokeWidth}px solid ${el.stroke}`, borderRadius: 4 }),
+                        ...(el.noStroke !== false ? {} : { border: `${el.strokeWidth}px solid ${el.stroke}`, borderRadius: 4 }),
                       }}>
                         {el.text}
                       </div>
@@ -1052,7 +1071,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                         <button onClick={() => updateSelected({ doubleHead: !primarySelected.doubleHead })} className={`px-2.5 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.doubleHead ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{primarySelected.doubleHead ? 'Doble' : 'Simple'}</button>
                         <label className="text-[10px] text-slate-500">Tamaño ({primarySelected.headSize || 4})</label>
                       </div>
-                      <input type="range" min="1" max="6" value={primarySelected.headSize || 4} onChange={e => updateSelected({ headSize: Number(e.target.value) })} className="w-full mt-1.5 accent-teal-500" />
+                      <input type="range" min="0.5" max="3" step="0.1" value={primarySelected.headSize || 1} onChange={e => updateSelected({ headSize: Number(e.target.value) })} className="w-full mt-1.5 accent-teal-500" />
                     </div>
                   </>
                 )}
