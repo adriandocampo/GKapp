@@ -523,7 +523,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   const addImageWithSize = (type, src) => {
     const img = new Image();
     img.onload = () => {
-      const maxDim = 120;
+      const maxDim = 20;
       let nw, nh;
       if (img.naturalWidth > img.naturalHeight) {
         nw = maxDim;
@@ -796,7 +796,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                         <div className="space-y-1 px-1 pt-1">
                           {cat.items.map(o => (
                             <button key={o.id} onClick={() => addImageWithSize('object', o.src)} className="w-full text-left p-2 rounded hover:bg-slate-700 transition-colors">
-                              <img src={o.src} alt={o.name} className="w-full h-16 object-contain bg-transparent rounded mb-1" style={{ border: 'none', background: 'transparent' }} />
+                              <img src={o.src} alt={o.name} className="w-full h-8 object-contain bg-transparent rounded mb-1" style={{ border: 'none', background: 'transparent' }} />
                               <div className="text-xs text-slate-300 capitalize">{o.name}</div>
                             </button>
                           ))}
