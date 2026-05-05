@@ -59,7 +59,6 @@ function Layout() {
           console.error('[app] Firestore sync failed:', err);
         }
 
-        await cleanupOldDeletedFirestore(user.uid);
         setupFirestoreSync(user.uid);
 
         localStorage.setItem('gkapp_last_uid', user.uid);
@@ -70,6 +69,14 @@ function Layout() {
         // and recreates standard tags that may have been purged locally.
         await ensureDefaultTags();
         await ensureSeedTasks();
+
+        // Housekeeping: clean up old soft-deleted docs from Firestore.
+        // Deferred so it doesn't block the initial loading spinner.
+        setTimeout(() => {
+          cleanupOldDeletedFirestore(user.uid).catch(err =>
+            console.error('[app] cleanupOldDeletedFirestore failed:', err)
+          );
+        }, 0);
       }
 
       setLoading(false);

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { Square, Circle, ArrowRight, Type, Trash2, RotateCw, ChevronUp, ChevronDown, ChevronRight, RotateCcw, Paintbrush, LayoutTemplate, AlignLeft, AlignCenter, AlignRight, AlignVerticalSpaceAround, AlignHorizontalSpaceAround, Triangle, Hash, Link, Clipboard, Plus, Save, Star } from 'lucide-react';
 import { FIELDS, OBJECTS_BY_CATEGORY } from '../data/imageAssets.js';
 
@@ -468,28 +469,35 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
 
   const capture = async () => {
     try {
-      setSelectedIds([]);
-      setEditingTextId(null);
-      setSelectBox(null);
+      // Force synchronous re-render so selection classes are removed from the DOM
+      // before dom-to-image-more clones it.
+      flushSync(() => {
+        setSelectedIds([]);
+        setEditingTextId(null);
+        setSelectBox(null);
+      });
       document.activeElement?.blur();
 
-      await new Promise(resolve => {
-        requestAnimationFrame(() => setTimeout(resolve, 80));
-      });
+      // Give the browser one paint cycle to flush the visual changes.
+      await new Promise(resolve => requestAnimationFrame(resolve));
 
       const el = canvasRef.current;
       if (!el) return;
+
+      // Remove selection rings from the DOM clone target manually instead of
+      // injecting CSS that nukes CSS borders (border: none breaks rect/circle).
+      const rings = el.querySelectorAll('.ring-2.ring-teal-500');
+      rings.forEach(node => {
+        node.classList.remove('ring-2', 'ring-teal-500');
+      });
 
       const styleTag = document.createElement('style');
       styleTag.id = 'capture-override';
       styleTag.textContent = `
         * { box-shadow: none !important; outline: none !important; }
         img { background: transparent !important; padding: 0 !important; margin: 0 !important; }
-        .ring-2, .ring-teal-500 { box-shadow: none !important; outline: none !important; border: none !important; }
       `;
       el.appendChild(styleTag);
-
-      await new Promise(resolve => setTimeout(resolve, 50));
 
       const domtoimage = await import('dom-to-image-more');
       const dataUrl = await domtoimage.toPng(el, {
@@ -502,6 +510,10 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
       });
 
       styleTag.remove();
+      // Restore the classes we stripped so the editor stays interactive.
+      rings.forEach(node => {
+        node.classList.add('ring-2', 'ring-teal-500');
+      });
 
       const res = await fetch(dataUrl);
       const blob = await res.blob();
@@ -607,7 +619,6 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     const lightOpacity = Math.round(opacity * 0.5 * 255).toString(16).padStart(2, '0');
     return {
       background: `repeating-linear-gradient(45deg, ${color}${hexOpacity}, ${color}${hexOpacity} 10px, ${color}${lightOpacity} 10px, ${color}${lightOpacity} 20px)`,
-      border: `2px solid ${color}`,
     };
   };
 

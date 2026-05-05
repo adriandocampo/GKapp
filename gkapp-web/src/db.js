@@ -1,6 +1,29 @@
 import Dexie from 'dexie';
+import { getTimestampMs } from './utils/date.js';
 
 export const db = new Dexie('GKAppDBv2');
+
+// ─── Seed data cache (avoids double fetch) ──────────────────────────────────
+
+let cachedSeedData = null;
+let cachedSeedFetch = null;
+
+async function fetchSeedData() {
+  if (cachedSeedData) return cachedSeedData;
+  if (cachedSeedFetch) return cachedSeedFetch;
+
+  cachedSeedFetch = (async () => {
+    const base = import.meta.env.BASE_URL ?? './';
+    const response = await fetch(`${base}seed_data.json`);
+    if (!response.ok) throw new Error('Failed to load seed data');
+    cachedSeedData = await response.json();
+    return cachedSeedData;
+  })();
+
+  return cachedSeedFetch;
+}
+
+// ─── Schema migrations ──────────────────────────────────────────────────────
 
 db.version(2).stores({
   tasks: '++id, pageNumber, phase, category, situation, title',
@@ -371,21 +394,6 @@ db.version(17).stores({
 const RETENTION_DAYS = 7;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
-/** Normalize any date-like value to timestamp ms */
-function getTimestampMs(value) {
-  if (!value) return 0;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === 'string') {
-    const d = new Date(value);
-    return isNaN(d.getTime()) ? 0 : d.getTime();
-  }
-  if (typeof value === 'number') return value;
-  if (value.toDate && typeof value.toDate === 'function') {
-    return value.toDate().getTime();
-  }
-  return 0;
-}
-
 export async function cleanupDeletedItems() {
   try {
     const cutoff = Date.now() - RETENTION_MS;
@@ -548,14 +556,20 @@ async function ensureDefaultSettings() {
 
 export async function ensureSeedTasks() {
   try {
-    const base = import.meta.env.BASE_URL ?? './';
-    const response = await fetch(`${base}seed_data.json`);
-    if (!response.ok) throw new Error('Failed to load seed data');
-    const tasks = await response.json();
+    const tasks = await fetchSeedData();
 
     const VALID_PHASES = ['Activación', 'Parte Principal'];
     const VALID_CATEGORIES = ['Agarres', 'Desvíos', '1c1', 'Coberturas', 'Juego ofensivo', 'Velocidad de reacción'];
     const VALID_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
+
+    // Single bulk load of local tasks, then build an in-memory map.
+    const localTasks = await db.tasks.toArray();
+    const existingMap = new Map();
+    for (const t of localTasks) {
+      existingMap.set(`${t.pageNumber}:${t.title}`, t);
+    }
+
+    const toAdd = [];
 
     for (const task of tasks) {
       if (task.imagePath && task.imagePath.startsWith('/')) task.imagePath = task.imagePath.substring(1);
@@ -573,14 +587,10 @@ export async function ensureSeedTasks() {
       task.updatedAt = task.updatedAt || task.createdAt;
       task.deletedAt = null; // Ensure seeded tasks are never soft-deleted
 
-      // Search by pageNumber+title to avoid duplicates from old numeric-ID tasks
-      const existing = await db.tasks
-        .where({ pageNumber: task.pageNumber })
-        .filter(t => t.title === task.title)
-        .first();
+      const existing = existingMap.get(`${task.pageNumber}:${task.title}`);
 
       if (!existing) {
-        await db.tasks.add(task);
+        toAdd.push(task);
       } else {
         // Merge: keep the seed ID, restore metadata, preserve user-added fields
         const merged = {
@@ -603,6 +613,11 @@ export async function ensureSeedTasks() {
         await db.tasks.update(existing.id, merged);
       }
     }
+
+    if (toAdd.length > 0) {
+      await db.tasks.bulkAdd(toAdd);
+      console.log(`[db] Added ${toAdd.length} seed tasks`);
+    }
   } catch (err) {
     console.error('Ensure seed tasks error:', err);
   }
@@ -610,10 +625,9 @@ export async function ensureSeedTasks() {
 
 export async function deduplicateSeedTasks() {
   try {
-    const response = await fetch(`${import.meta.env.BASE_URL ?? './'}seed_data.json`);
-    if (!response.ok) return;
-    const seedTasks = await response.json();
+    const seedTasks = await fetchSeedData();
     const seedTitles = new Set(seedTasks.map(t => `${t.pageNumber}:${t.title}`));
+    const seedMap = new Map(seedTasks.map(t => [`${t.pageNumber}:${t.title}`, t]));
 
     const allTasks = await db.tasks.toArray();
     // Group by pageNumber+title
@@ -643,13 +657,17 @@ export async function deduplicateSeedTasks() {
       });
 
       const keeper = tasks[0];
+      const idsToDelete = [];
       for (let i = 1; i < tasks.length; i++) {
-        await db.tasks.delete(tasks[i].id);
+        idsToDelete.push(tasks[i].id);
         removed++;
+      }
+      if (idsToDelete.length > 0) {
+        await db.tasks.bulkDelete(idsToDelete);
       }
 
       // If the keeper is missing proper tags, restore them from seed
-      const seed = seedTasks.find(t => t.pageNumber === keeper.pageNumber && t.title === keeper.title);
+      const seed = seedMap.get(key);
       if (seed) {
         const needsFix = !keeper.category || keeper.category === 'Otro' || !keeper.phase || keeper.phase === 'Otro';
         if (needsFix) {

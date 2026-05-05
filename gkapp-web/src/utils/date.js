@@ -17,3 +17,18 @@ export function tomorrowISO() {
   d.setDate(d.getDate() + 1);
   return d.toISOString().split('T')[0];
 }
+
+/** Normalize any date-like value to timestamp ms */
+export function getTimestampMs(value) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+  if (typeof value === 'number') return value;
+  if (value.toDate && typeof value.toDate === 'function') {
+    return value.toDate().getTime();
+  }
+  return 0;
+}
