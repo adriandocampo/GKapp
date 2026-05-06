@@ -7,6 +7,7 @@ import { useTags } from '../hooks/useTags';
 import { useToast } from '../components/Toast';
 import { useConfirm, usePrompt, useAlert } from '../components/Modal';
 import { formatDateDDMMYY, todayISO } from '../utils/date';
+import { useSyncRefresh } from '../contexts/SyncContext';
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -214,9 +215,9 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddTo
         <div className="mt-2 flex flex-wrap gap-1">
           <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">{task.phase}</span>
           <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">{task.category}</span>
-          {task.situation && task.situation !== 'Otro' && (
-            <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">{task.situation}</span>
-          )}
+          {Array.isArray(task.situation) && task.situation.length > 0 && task.situation.map(s => (
+            <span key={s} className="px-2 py-0.5 bg-teal-900/50 rounded text-xs text-teal-300">{s}</span>
+          ))}
         </div>
       </div>
     </div>
@@ -243,13 +244,15 @@ export default function DatabasePage() {
   const confirm = useConfirm();
   const prompt = usePrompt();
   const alert = useAlert();
+  const { refreshKey } = useSyncRefresh();
 
   const { getUrl, getVideoUrl } = useTaskImageUrls(tasks);
 
   useEffect(() => {
     loadTasks();
     loadSessions();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -273,7 +276,13 @@ export default function DatabasePage() {
 
   async function loadTasks() {
     const all = await db.tasks.toArray();
-    const active = all.filter(t => !t.deletedAt);
+    const active = all.filter(t => !t.deletedAt).map(t => {
+      if (typeof t.situation === 'string') {
+        t.situation = t.situation && t.situation !== 'Otro' ? [t.situation] : [];
+      }
+      if (!Array.isArray(t.situation)) t.situation = [];
+      return t;
+    });
     const sorted = active.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     setTasks(sorted);
   }
@@ -287,7 +296,7 @@ export default function DatabasePage() {
     let result = tasks.filter(t => {
       if (filters.phase && t.phase !== filters.phase) return false;
       if (filters.category && t.category !== filters.category) return false;
-      if (filters.situation && t.situation !== filters.situation) return false;
+      if (filters.situation && (!Array.isArray(t.situation) || !t.situation.includes(filters.situation))) return false;
       if (filters.search) {
         const s = filters.search.toLowerCase();
         return (
@@ -314,6 +323,10 @@ export default function DatabasePage() {
   }
 
   async function openDetail(task) {
+    if (typeof task.situation === 'string') {
+      task = { ...task, situation: task.situation && task.situation !== 'Otro' ? [task.situation] : [] };
+    }
+    if (!Array.isArray(task.situation)) task.situation = [];
     setSelectedTask(task);
     setFeedback(task.feedback || '');
     const idx = filteredTasks.findIndex(t => t.id === task.id);
@@ -840,7 +853,48 @@ export default function DatabasePage() {
                 </div>
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Situación</div>
-                  <InlineSelectField value={selectedTask.situation} field="situation" taskId={selectedTask.id} options={tags.situation} label="situación" />
+                  <div className="max-h-28 overflow-y-auto space-y-0.5">
+                    {tags.situation.length === 0 && (
+                      <p className="text-sm text-slate-500">Sin situaciones</p>
+                    )}
+                    {tags.situation.map(s => (
+                      <label key={s} className="flex items-center gap-1.5 px-1 py-0.5 hover:bg-slate-800 rounded cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={Array.isArray(selectedTask.situation) && selectedTask.situation.includes(s)}
+                          onChange={async () => {
+                            const sit = Array.isArray(selectedTask.situation) ? selectedTask.situation : [];
+                            const updated = sit.includes(s) ? sit.filter(x => x !== s) : [...sit, s];
+                            setSelectedTask(prev => ({ ...prev, situation: updated }));
+                            await db.tasks.update(selectedTask.id, { situation: updated, updatedAt: new Date() });
+                          }}
+                          className="rounded border-slate-600 bg-slate-700 text-teal-500 focus:ring-teal-500"
+                        />
+                        <span className="text-slate-300">{s}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const name = window.prompt('Nueva situación:');
+                      if (name && name.trim()) {
+                        (async () => {
+                          const trimmed = name.trim();
+                          await db.tags.add({ type: 'situation', name: trimmed });
+                          const sit = Array.isArray(selectedTask.situation) ? selectedTask.situation : [];
+                          if (!sit.includes(trimmed)) {
+                            const updated = [...sit, trimmed];
+                            setSelectedTask(prev => ({ ...prev, situation: updated }));
+                            await db.tasks.update(selectedTask.id, { situation: updated, updatedAt: new Date() });
+                          }
+                          window.dispatchEvent(new CustomEvent('tags-changed'));
+                        })();
+                      }
+                    }}
+                    className="mt-1 text-xs text-teal-400 hover:text-teal-300 cursor-pointer"
+                  >
+                    + Añadir situación
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

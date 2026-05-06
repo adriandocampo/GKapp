@@ -192,17 +192,13 @@ export async function restoreDefaultTagsForUser(uid) {
 }
 
 /** Restore default (seed) tasks for a user in Firestore.
- *  Uses merge:true and forces deletedAt=null so previously deleted seed tasks are resurrected.
+ *  Uses merge:true so existing user data is preserved; only writes seedId + label fields.
  */
 export async function restoreDefaultTasksForUser(uid) {
   const base = import.meta.env.BASE_URL ?? './';
   const response = await fetch(`${base}seed_data.json`);
   if (!response.ok) throw new Error('Failed to load seed_data.json');
   const tasks = await response.json();
-
-  const VALID_PHASES = ['Activación', 'Parte Principal'];
-  const VALID_CATEGORIES = ['Agarres', 'Desvíos', '1c1', 'Coberturas', 'Juego ofensivo', 'Velocidad de reacción'];
-  const VALID_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
 
   const BATCH_SIZE = 450;
   let totalRestored = 0;
@@ -216,13 +212,7 @@ export async function restoreDefaultTasksForUser(uid) {
       const normalized = { ...task };
       if (normalized.imagePath && normalized.imagePath.startsWith('/')) normalized.imagePath = normalized.imagePath.substring(1);
       if (normalized.videoPath && normalized.videoPath.startsWith('/')) normalized.videoPath = normalized.videoPath.substring(1);
-      if (VALID_SITUATIONS.includes(normalized.category)) {
-        normalized.situation = normalized.category;
-        normalized.category = 'Otro';
-      }
-      if (!VALID_PHASES.includes(normalized.phase)) normalized.phase = 'Activación';
-      if (!VALID_CATEGORIES.includes(normalized.category)) normalized.category = 'Otro';
-      if (!VALID_SITUATIONS.includes(normalized.situation)) normalized.situation = 'Otro';
+
       normalized.createdAt = normalized.createdAt || new Date();
       normalized.updatedAt = normalized.updatedAt || normalized.createdAt;
       normalized.deletedAt = null;

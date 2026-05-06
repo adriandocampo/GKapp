@@ -391,6 +391,39 @@ db.version(17).stores({
   });
 });
 
+// Version 18 — Add syncQueue for offline write persistence
+db.version(18).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+});
+
+// Version 19 — situation as array (multi-situation support) + seedId
+db.version(19).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+}).upgrade(async trans => {
+  await trans.table('tasks').toCollection().modify(task => {
+    if (typeof task.situation === 'string') {
+      if (task.situation === '' || task.situation === 'Otro') {
+        task.situation = [];
+      } else {
+        task.situation = [task.situation];
+      }
+    }
+    if (task.seedId === undefined) task.seedId = null;
+  });
+});
+
 const RETENTION_DAYS = 7;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
@@ -504,7 +537,7 @@ export async function cleanupOrphanTags() {
   const activeTasks = tasks.filter(t => !t.deletedAt);
   const usedPhases = new Set(activeTasks.map(t => t.phase).filter(Boolean));
   const usedCategories = new Set(activeTasks.map(t => t.category).filter(Boolean));
-  const usedSituations = new Set(activeTasks.map(t => t.situation).filter(Boolean));
+  const usedSituations = new Set(activeTasks.flatMap(t => Array.isArray(t.situation) ? t.situation : (t.situation ? [t.situation] : [])).filter(Boolean));
 
   const tags = await db.tags.toArray();
   for (const tag of tags) {
@@ -562,55 +595,58 @@ export async function ensureSeedTasks() {
     const VALID_CATEGORIES = ['Agarres', 'Desvíos', '1c1', 'Coberturas', 'Juego ofensivo', 'Velocidad de reacción'];
     const VALID_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
 
-    // Single bulk load of local tasks, then build an in-memory map.
     const localTasks = await db.tasks.toArray();
-    const existingMap = new Map();
+
+    // Build lookup maps
+    const localBySeedId = new Map();
+    const localByTitle = new Map();
     for (const t of localTasks) {
-      existingMap.set(`${t.pageNumber}:${t.title}`, t);
+      if (t.seedId) localBySeedId.set(t.seedId, t);
+      localByTitle.set(`${t.pageNumber}:${t.title}`, t);
     }
 
+    // Track which seedIds were processed (for cleanup of removed seed tasks later)
+    const processedIds = new Set();
     const toAdd = [];
 
     for (const task of tasks) {
       if (task.imagePath && task.imagePath.startsWith('/')) task.imagePath = task.imagePath.substring(1);
       if (task.videoPath && task.videoPath.startsWith('/')) task.videoPath = task.videoPath.substring(1);
 
-      if (VALID_SITUATIONS.includes(task.category)) {
-        task.situation = task.category;
-        task.category = 'Otro';
+      // Normalize situation to array
+      if (!Array.isArray(task.situation)) {
+        task.situation = task.situation ? [task.situation] : [];
       }
+      task.situation = task.situation.filter(s => VALID_SITUATIONS.includes(s));
 
       if (!VALID_PHASES.includes(task.phase)) task.phase = 'Activación';
       if (!VALID_CATEGORIES.includes(task.category)) task.category = 'Otro';
-      if (!VALID_SITUATIONS.includes(task.situation)) task.situation = 'Otro';
       task.createdAt = task.createdAt || new Date();
       task.updatedAt = task.updatedAt || task.createdAt;
-      task.deletedAt = null; // Ensure seeded tasks are never soft-deleted
+      task.deletedAt = null;
 
-      const existing = existingMap.get(`${task.pageNumber}:${task.title}`);
+      processedIds.add(task.seedId);
+
+      // Match by seedId first, fallback to pageNumber:title
+      let existing = task.seedId ? localBySeedId.get(task.seedId) : null;
+      if (!existing) {
+        existing = localByTitle.get(`${task.pageNumber}:${task.title}`);
+      }
 
       if (!existing) {
         toAdd.push(task);
       } else {
-        // Merge: keep the seed ID, restore metadata, preserve user-added fields
-        const merged = {
-          ...task,
-          id: existing.id, // keep local numeric ID to avoid breaking foreign keys
-          deletedAt: null,
-          createdAt: existing.createdAt || task.createdAt,
+        // Merge: only overwrite phase, category, situation, seedId from seed
+        const updateData = {
+          phase: task.phase,
+          category: task.category,
+          situation: task.situation,
           updatedAt: new Date(),
-          // Preserve user-added fields that don't exist in seed
-          imageBlob: existing.imageBlob ?? task.imageBlob,
-          imageBase64: existing.imageBase64 ?? task.imageBase64,
-          videoBlob: existing.videoBlob ?? task.videoBlob,
-          youtubeUrl: existing.youtubeUrl ?? task.youtubeUrl,
-          videoType: existing.videoType ?? task.videoType,
-          rating: existing.rating ?? task.rating ?? 0,
-          usageCount: existing.usageCount ?? task.usageCount ?? 0,
-          lastUsedDate: existing.lastUsedDate ?? task.lastUsedDate,
-          imageElements: existing.imageElements ?? task.imageElements,
         };
-        await db.tasks.update(existing.id, merged);
+        if (!existing.seedId && task.seedId) {
+          updateData.seedId = task.seedId;
+        }
+        await db.tasks.update(existing.id, updateData);
       }
     }
 
@@ -626,31 +662,31 @@ export async function ensureSeedTasks() {
 export async function deduplicateSeedTasks() {
   try {
     const seedTasks = await fetchSeedData();
-    const seedTitles = new Set(seedTasks.map(t => `${t.pageNumber}:${t.title}`));
-    const seedMap = new Map(seedTasks.map(t => [`${t.pageNumber}:${t.title}`, t]));
+    const seedById = new Map(seedTasks.filter(t => t.seedId).map(t => [t.seedId, t]));
+    const seedByTitle = new Map(seedTasks.map(t => [`${t.pageNumber}:${t.title}`, t]));
 
     const allTasks = await db.tasks.toArray();
-    // Group by pageNumber+title
+
+    // Group by seedId (preferred) or pageNumber:title (fallback)
     const groups = new Map();
     for (const task of allTasks) {
-      const key = `${task.pageNumber}:${task.title}`;
+      let key = task.seedId ? `seed:${task.seedId}` : `title:${task.pageNumber}:${task.title}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(task);
     }
 
     let removed = 0;
-    for (const [key, tasks] of groups) {
-      if (!seedTitles.has(key) || tasks.length <= 1) continue;
+    for (const [, tasks] of groups) {
+      if (tasks.length <= 1) continue;
 
-      // It's a seed task with duplicates. Decide which to keep.
       // Prefer: not deleted > has real tags > most recently updated
       tasks.sort((a, b) => {
         const aDel = a.deletedAt ? 1 : 0;
         const bDel = b.deletedAt ? 1 : 0;
         if (aDel !== bDel) return aDel - bDel;
 
-        const aGood = (a.category && a.category !== 'Otro') || (a.situation && a.situation !== 'Otro');
-        const bGood = (b.category && b.category !== 'Otro') || (b.situation && b.situation !== 'Otro');
+        const aGood = (a.category && a.category !== 'Otro') || (Array.isArray(a.situation) && a.situation.length > 0);
+        const bGood = (b.category && b.category !== 'Otro') || (Array.isArray(b.situation) && b.situation.length > 0);
         if (aGood !== bGood) return bGood - aGood;
 
         return getTimestampMs(b.updatedAt) - getTimestampMs(a.updatedAt);
@@ -666,17 +702,27 @@ export async function deduplicateSeedTasks() {
         await db.tasks.bulkDelete(idsToDelete);
       }
 
-      // If the keeper is missing proper tags, restore them from seed
-      const seed = seedMap.get(key);
+      // Restore proper tags from seed if missing
+      let seed = null;
+      if (keeper.seedId) {
+        seed = seedById.get(keeper.seedId);
+      }
+      if (!seed) {
+        seed = seedByTitle.get(`${keeper.pageNumber}:${keeper.title}`);
+      }
       if (seed) {
-        const needsFix = !keeper.category || keeper.category === 'Otro' || !keeper.phase || keeper.phase === 'Otro';
+        const needsFix = !keeper.category || keeper.category === 'Otro' || !keeper.phase || keeper.phase === 'Otro'
+          || !Array.isArray(keeper.situation) || keeper.situation.length === 0;
         if (needsFix) {
           await db.tasks.update(keeper.id, {
             phase: seed.phase,
             category: seed.category,
-            situation: seed.situation,
+            situation: Array.isArray(seed.situation) ? seed.situation : [],
             updatedAt: new Date(),
           });
+        }
+        if (!keeper.seedId && seed.seedId) {
+          await db.tasks.update(keeper.id, { seedId: seed.seedId });
         }
       }
     }

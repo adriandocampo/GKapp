@@ -8,6 +8,7 @@ import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Modal';
 import { useYouTubeUpload, extractYouTubeId, youtubeEmbedUrl } from '../hooks/useYouTubeUpload';
 import { isFirebaseEnabled } from '../firebase';
+import { useSyncRefresh } from '../contexts/SyncContext';
 
 export default function TaskEditor() {
   const { id } = useParams();
@@ -21,7 +22,7 @@ export default function TaskEditor() {
     subtitle: '',
     phase: '',
     category: '',
-    situation: '',
+    situation: [],
     time: '',
     reps: '',
     focus: '',
@@ -47,10 +48,15 @@ export default function TaskEditor() {
   const { tags, addTag: addTagHook } = useTags();
   const { addToast } = useToast();
   const confirm = useConfirm();
+  const { refreshKey } = useSyncRefresh();
 
   const loadTask = async (taskId) => {
     const t = await db.tasks.get(taskId || id);
     if (t && !t.deletedAt) {
+      if (typeof t.situation === 'string') {
+        t.situation = t.situation && t.situation !== 'Otro' ? [t.situation] : [];
+      }
+      if (!Array.isArray(t.situation)) t.situation = [];
       setTask(t);
       if (t.imageBlob) setPreviewUrl(URL.createObjectURL(t.imageBlob));
       else if (t.imagePath) setPreviewUrl(t.imagePath);
@@ -100,11 +106,23 @@ export default function TaskEditor() {
       loadTask(id);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, refreshKey]);
 
   function handleChange(e) {
     const { name, value } = e.target;
     setTask(prev => ({ ...prev, [name]: value }));
+    setHasChanges(true);
+  }
+
+  function toggleSituation(sit) {
+    setTask(prev => {
+      const current = Array.isArray(prev.situation) ? prev.situation : [];
+      if (current.includes(sit)) {
+        return { ...prev, situation: current.filter(s => s !== sit) };
+      } else {
+        return { ...prev, situation: [...current, sit] };
+      }
+    });
     setHasChanges(true);
   }
 
@@ -314,15 +332,22 @@ export default function TaskEditor() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-400 mb-2">Situación</label>
-            <select
-              name="situation"
-              value={task.situation}
-              onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
-            >
-              <option value="">Seleccionar...</option>
-              {tags.situation.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <div className="max-h-32 overflow-y-auto space-y-1 bg-slate-900 border border-slate-700 rounded-lg p-2">
+              {tags.situation.length === 0 && (
+                <p className="text-sm text-slate-500 px-2">Sin situaciones</p>
+              )}
+              {tags.situation.map(s => (
+                <label key={s} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-800 rounded cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Array.isArray(task.situation) && task.situation.includes(s)}
+                    onChange={() => toggleSituation(s)}
+                    className="rounded border-slate-600 bg-slate-700 text-teal-500 focus:ring-teal-500"
+                  />
+                  <span className="text-sm text-slate-300">{s}</span>
+                </label>
+              ))}
+            </div>
             <div className="flex gap-2 mt-2">
               <input
                 value={newTags.situation}

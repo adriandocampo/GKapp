@@ -9,6 +9,7 @@ import SessionTemplateEditor from '../components/SessionTemplateEditor';
 import { formatDateDDMMYY, todayISO, tomorrowISO } from '../utils/date';
 import { extractYouTubeId, youtubeEmbedUrl, useYouTubeUpload } from '../hooks/useYouTubeUpload';
 import { isFirebaseEnabled } from '../firebase';
+import { useSyncRefresh } from '../contexts/SyncContext';
 
 const defaultPorteros = [
   { name: 'MARC', active: true },
@@ -563,7 +564,7 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
                         >
                           {task.title}
                         </button>
-                        <div className="text-xs text-slate-500">{task.phase} • {task.situation} • {task.time || '-'}</div>
+                        <div className="text-xs text-slate-500">{task.phase} • {Array.isArray(task.situation) ? task.situation.join(' · ') : task.situation} • {task.time || '-'}</div>
                       </div>
                       <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
                         {videoUrls[task.id] && (
@@ -839,7 +840,7 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
                   >
                     <div>
                       <div className="text-sm font-medium text-slate-200">{task.title}</div>
-                      <div className="text-xs text-slate-500">{task.phase} • {task.situation}</div>
+                      <div className="text-xs text-slate-500">{task.phase} • {Array.isArray(task.situation) ? task.situation.join(' · ') : task.situation}</div>
                     </div>
                     <Plus size={16} className="text-teal-500" />
                   </div>
@@ -917,7 +918,7 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
                 </div>
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Situación</div>
-                  <div className="text-sm font-medium text-teal-400">{selectedTask.situation}</div>
+                  <div className="text-sm font-medium text-teal-400">{Array.isArray(selectedTask.situation) ? selectedTask.situation.join(' · ') : selectedTask.situation}</div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1038,11 +1039,13 @@ export default function SessionBuilder() {
   const { addToast } = useToast();
   const prompt = usePrompt();
   const confirm = useConfirm();
+  const { refreshKey } = useSyncRefresh();
 
   useEffect(() => {
     loadSeasons();
     loadAllTasks();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   useEffect(() => {
     if (selectedSeason) {
