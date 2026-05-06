@@ -3,7 +3,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, firestore, isFirebaseEnabled, isAdmin as checkAdmin } from '../firebase';
 import { db } from '../db';
-import { registerSession, teardownSessionGuard, resetSyncHooks, clearSyncQueue } from '../sync';
+import { registerSession, teardownSessionGuard, resetSyncHooks, clearSyncQueue, migrateGuestData } from '../sync';
 import { getBroadcastChannel } from './SyncContext';
 
 const GUEST_KEY = 'gkapp_guest';
@@ -65,14 +65,6 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!isFirebaseEnabled) return;
 
-    const guest = loadGuestState();
-    if (guest) {
-      setIsGuest(true);
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       setIsAdmin(checkAdmin(u));
@@ -80,6 +72,17 @@ export function AuthProvider({ children }) {
       kickedRef.current = false;
 
       if (u && firestore) {
+        // If user just signed in with Google but was previously a guest, migrate local data
+        if (localStorage.getItem(GUEST_KEY)) {
+          try {
+            await migrateGuestData(u.uid);
+          } catch (err) {
+            console.warn('[auth] Guest data migration failed:', err);
+          }
+          localStorage.removeItem(GUEST_KEY);
+        }
+        setIsGuest(false);
+
         try {
           await registerSession(u.uid);
         } catch (err) {
@@ -97,6 +100,8 @@ export function AuthProvider({ children }) {
           { merge: true }
         ).catch(err => console.warn('[auth] Failed to save user profile', err));
       } else {
+        // No Firebase user: guest only if key exists, otherwise logged out
+        setIsGuest(!!loadGuestState());
         localStorage.removeItem(SESSION_ID_KEY);
       }
     });
