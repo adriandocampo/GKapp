@@ -4,6 +4,10 @@ import { FIELDS, OBJECTS_BY_CATEGORY } from '../data/imageAssets.js';
 
 function uid() { return Math.random().toString(36).substr(2, 9); }
 
+function normalize(str) {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 function getArrowBox(el) {
   const minX = Math.min(el.x1, el.x2);
   const minY = Math.min(el.y1, el.y2);
@@ -24,19 +28,30 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   const [elements, setElements] = useState(initialElements || []);
   const [selectedIds, setSelectedIds] = useState([]);
   const [toolTab, setToolTab] = useState('fields');
-  const [dragging, setDragging] = useState(null);
-  const [resizing, setResizing] = useState(null);
-  const [rotating, setRotating] = useState(null);
+  const [dragging, setDragging] = useState(null); // eslint-disable-line no-unused-vars
+  const [resizing, setResizing] = useState(null); // eslint-disable-line no-unused-vars
+  const [rotating, setRotating] = useState(null); // eslint-disable-line no-unused-vars
   const [editingTextId, setEditingTextId] = useState(null);
   const [clipboard, setClipboard] = useState(null);
   const [pasteCount, setPasteCount] = useState(0);
   const [selectBox, setSelectBox] = useState(null);
+
+  const selectBoxRef = useRef(null);
+  const draggingRef = useRef(null);
+  const resizingRef = useRef(null);
+  const rotatingRef = useRef(null);
+  const elementsRef = useRef(elements);
+  const canvasSizeRef = useRef(canvasSize);
+
+  useEffect(() => { elementsRef.current = elements; }, [elements]);
+  useEffect(() => { canvasSizeRef.current = canvasSize; }, [canvasSize]);
   const fileInputRef = useRef();
   const objectFileInputRef = useRef();
   const [showAddObjectModal, setShowAddObjectModal] = useState(false);
   const [objectUrl, setObjectUrl] = useState('');
   const [showTextInputModal, setShowTextInputModal] = useState(false);
   const [textInputValue, setTextInputValue] = useState('');
+  const [objectSearch, setObjectSearch] = useState('');
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const [shapePresets, setShapePresets] = useState(() => {
     try { return JSON.parse(localStorage.getItem('shapePresets') || '{"rect":[],"circle":[],"triangle":[],"arrow":[]}'); } catch { return { rect: [], circle: [], triangle: [], arrow: [] }; }
@@ -173,25 +188,32 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     }
   };
 
-  const clearSelection = () => { setSelectedIds([]); setEditingTextId(null); };
+  const clearSelection = () => { setSelectedIds([]); setEditingTextId(null); }; // eslint-disable-line no-unused-vars
 
   const onMouseDownCanvas = (e) => {
     if (e.button !== 0) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const sx = canvasSize.w / rect.width;
-    const sy = canvasSize.h / rect.height;
+    const cs = canvasSizeRef.current;
+    const sx = cs.w / rect.width;
+    const sy = cs.h / rect.height;
     const x = (e.clientX - rect.left) * sx;
     const y = (e.clientY - rect.top) * sy;
-    setSelectBox({ startX: x, startY: y, currentX: x, currentY: y, ctrlKey: e.ctrlKey || e.metaKey });
+    const newBox = { startX: x, startY: y, currentX: x, currentY: y, ctrlKey: e.ctrlKey || e.metaKey };
+    selectBoxRef.current = newBox;
+    setSelectBox(newBox);
   };
 
   const onMouseDownEl = (e, el) => {
     if (el.type === 'field') return;
     e.stopPropagation();
     if (editingTextId === el.id) return;
+    if (e.button !== 0) return;
+    const sb = selectBoxRef.current;
+    if (sb && (Math.abs(sb.currentX - sb.startX) > 5 || Math.abs(sb.currentY - sb.startY) > 5)) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const sx = canvasSize.w / rect.width;
-    const sy = canvasSize.h / rect.height;
+    const cs = canvasSizeRef.current;
+    const sx = cs.w / rect.width;
+    const sy = cs.h / rect.height;
 
     if (el.type === 'arrow') {
       const clickX = (e.clientX - rect.left) * sx;
@@ -199,21 +221,26 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
       const dStart = Math.hypot(clickX - el.x1, clickY - el.y1);
       const dEnd = Math.hypot(clickX - el.x2, clickY - el.y2);
       if (dStart < 15 && selectedIds.includes(el.id)) {
-        setDragging({ id: el.id, type: 'arrow-start' });
+        const d = { id: el.id, type: 'arrow-start' };
+        draggingRef.current = d; setDragging(d);
         return;
       }
       if (dEnd < 15 && selectedIds.includes(el.id)) {
-        setDragging({ id: el.id, type: 'arrow-end' });
+        const d = { id: el.id, type: 'arrow-end' };
+        draggingRef.current = d; setDragging(d);
         return;
       }
-      setDragging({ id: el.id, type: 'arrow-move', ox: clickX, oy: clickY, sx: el.x1, sy: el.y1, ex: el.x2, ey: el.y2 });
+      const d = { id: el.id, type: 'arrow-move', ox: clickX, oy: clickY, sx: el.x1, sy: el.y1, ex: el.x2, ey: el.y2 };
+      draggingRef.current = d; setDragging(d);
       return;
     }
 
     if (selectedIds.length > 1 && selectedIds.includes(el.id)) {
-      setDragging({ id: el.id, type: 'group-move', ox: (e.clientX - rect.left) * sx, oy: (e.clientY - rect.top) * sy, initial: elements.filter(x => selectedIds.includes(x.id)).map(x => ({ id: x.id, x: x.x, y: x.y, x1: x.x1, y1: x.y1, x2: x.x2, y2: x.y2 })) });
+      const d = { id: el.id, type: 'group-move', ox: (e.clientX - rect.left) * sx, oy: (e.clientY - rect.top) * sy, initial: elements.filter(x => selectedIds.includes(x.id)).map(x => ({ id: x.id, x: x.x, y: x.y, x1: x.x1, y1: x.y1, x2: x.x2, y2: x.y2 })) };
+      draggingRef.current = d; setDragging(d);
     } else {
-      setDragging({ id: el.id, type: 'move', ox: (e.clientX - rect.left) * sx - el.x, oy: (e.clientY - rect.top) * sy - el.y });
+      const d = { id: el.id, type: 'move', ox: (e.clientX - rect.left) * sx - el.x, oy: (e.clientY - rect.top) * sy - el.y };
+      draggingRef.current = d; setDragging(d);
     }
   };
 
@@ -221,7 +248,8 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     e.stopPropagation();
     const el = elements.find(x => x.id === selectedIds[0]);
     if (!el || el.type === 'arrow') return;
-    setResizing({ id: el.id, handle, sx: e.clientX, sy: e.clientY, sw: el.w, sh: el.h, sl: el.x, st: el.y, fontSize: el.fontSize || 0 });
+    const r = { id: el.id, handle, sx: e.clientX, sy: e.clientY, sw: el.w, sh: el.h, sl: el.x, st: el.y, fontSize: el.fontSize || 0 };
+    resizingRef.current = r; setResizing(r);
   };
 
   const onMouseDownRotate = (e) => {
@@ -229,128 +257,158 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     const el = elements.find(x => x.id === selectedIds[0]);
     if (!el || el.type === 'arrow') return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const cx = rect.left + (el.x + el.w / 2) * (rect.width / canvasSize.w);
-    const cy = rect.top + (el.y + el.h / 2) * (rect.height / canvasSize.h);
-    setRotating({ id: el.id, cx, cy, startAngle: Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI, startRot: el.rotation || 0 });
+    const cs = canvasSizeRef.current;
+    const cx = rect.left + (el.x + el.w / 2) * (rect.width / cs.w);
+    const cy = rect.top + (el.y + el.h / 2) * (rect.height / cs.h);
+    const r = { id: el.id, cx, cy, startAngle: Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI, startRot: el.rotation || 0 };
+    rotatingRef.current = r; setRotating(r);
   };
 
   useEffect(() => {
     const onMove = (e) => {
-      if (selectBox) {
+      const sb = selectBoxRef.current;
+      if (sb) {
         const rect = canvasRef.current.getBoundingClientRect();
-        const sx = canvasSize.w / rect.width;
-        const sy = canvasSize.h / rect.height;
+        const cs = canvasSizeRef.current;
+        const sx = cs.w / rect.width;
+        const sy = cs.h / rect.height;
         const mx = (e.clientX - rect.left) * sx;
         const my = (e.clientY - rect.top) * sy;
-        setSelectBox(prev => prev ? { ...prev, currentX: mx, currentY: my } : null);
+        const updated = { ...sb, currentX: mx, currentY: my };
+        selectBoxRef.current = updated;
+        setSelectBox(updated);
       }
-      if (dragging) {
+      const dg = draggingRef.current;
+      if (dg) {
         const rect = canvasRef.current.getBoundingClientRect();
-        const sx = canvasSize.w / rect.width;
-        const sy = canvasSize.h / rect.height;
+        const cs = canvasSizeRef.current;
+        const sx = cs.w / rect.width;
+        const sy = cs.h / rect.height;
         const mx = (e.clientX - rect.left) * sx;
         const my = (e.clientY - rect.top) * sy;
 
-        if (dragging.type === 'move') {
-          setElements(prev => prev.map(el => el.id === dragging.id ? { ...el, x: mx - dragging.ox, y: my - dragging.oy } : el));
-        } else if (dragging.type === 'group-move') {
-          const dx = mx - dragging.ox;
-          const dy = my - dragging.oy;
+        if (dg.type === 'move') {
+          setElements(prev => prev.map(el => el.id === dg.id ? { ...el, x: mx - dg.ox, y: my - dg.oy } : el));
+        } else if (dg.type === 'group-move') {
+          const dx = mx - dg.ox;
+          const dy = my - dg.oy;
           setElements(prev => prev.map(el => {
-            const ini = dragging.initial.find(i => i.id === el.id);
+            const ini = dg.initial.find(i => i.id === el.id);
             if (!ini) return el;
             if (el.type === 'arrow') {
               return { ...el, x1: ini.x1 + dx, y1: ini.y1 + dy, x2: ini.x2 + dx, y2: ini.y2 + dy };
             }
             return { ...el, x: ini.x + dx, y: ini.y + dy };
           }));
-        } else if (dragging.type === 'arrow-start') {
-          setElements(prev => prev.map(el => el.id === dragging.id ? { ...el, x1: mx, y1: my } : el));
-        } else if (dragging.type === 'arrow-end') {
-          setElements(prev => prev.map(el => el.id === dragging.id ? { ...el, x2: mx, y2: my } : el));
-        } else if (dragging.type === 'arrow-move') {
-          const dx = mx - dragging.ox;
-          const dy = my - dragging.oy;
-          setElements(prev => prev.map(el => el.id === dragging.id ? { ...el, x1: dragging.sx + dx, y1: dragging.sy + dy, x2: dragging.ex + dx, y2: dragging.ey + dy } : el));
+        } else if (dg.type === 'arrow-start') {
+          setElements(prev => prev.map(el => el.id === dg.id ? { ...el, x1: mx, y1: my } : el));
+        } else if (dg.type === 'arrow-end') {
+          setElements(prev => prev.map(el => el.id === dg.id ? { ...el, x2: mx, y2: my } : el));
+        } else if (dg.type === 'arrow-move') {
+          const dx = mx - dg.ox;
+          const dy = my - dg.oy;
+          setElements(prev => prev.map(el => el.id === dg.id ? { ...el, x1: dg.sx + dx, y1: dg.sy + dy, x2: dg.ex + dx, y2: dg.ey + dy } : el));
         }
       }
-      if (resizing) {
+      const rs = resizingRef.current;
+      if (rs) {
         const rect = canvasRef.current.getBoundingClientRect();
-        const sc = canvasSize.w / rect.width;
-        const dx = (e.clientX - resizing.sx) * sc;
-        const dy = (e.clientY - resizing.sy) * sc;
+        const cs = canvasSizeRef.current;
+        const sc = cs.w / rect.width;
+        const dx = (e.clientX - rs.sx) * sc;
+        const dy = (e.clientY - rs.sy) * sc;
         setElements(prev => prev.map(el => {
-          if (el.id !== resizing.id) return el;
+          if (el.id !== rs.id) return el;
           let u = {};
           if (el.type === 'number') {
             const deltas = [];
-            if (resizing.handle.includes('e')) deltas.push(dx);
-            if (resizing.handle.includes('w')) deltas.push(-dx);
-            if (resizing.handle.includes('s')) deltas.push(dy);
-            if (resizing.handle.includes('n')) deltas.push(-dy);
+            if (rs.handle.includes('e')) deltas.push(dx);
+            if (rs.handle.includes('w')) deltas.push(-dx);
+            if (rs.handle.includes('s')) deltas.push(dy);
+            if (rs.handle.includes('n')) deltas.push(-dy);
             const delta = deltas.length > 0 ? Math.max(...deltas) : 0;
-            const newSize = Math.max(20, resizing.sw + delta);
-            const ratio = newSize / resizing.sw;
+            const newSize = Math.max(20, rs.sw + delta);
+            const ratio = newSize / rs.sw;
             u.w = newSize;
             u.h = newSize;
-            u.fontSize = Math.round(resizing.fontSize * ratio);
-            if (resizing.handle.includes('w')) u.x = resizing.sl + (resizing.sw - newSize);
-            if (resizing.handle.includes('n')) u.y = resizing.st + (resizing.sh - newSize);
+            u.fontSize = Math.round(rs.fontSize * ratio);
+            if (rs.handle.includes('w')) u.x = rs.sl + (rs.sw - newSize);
+            if (rs.handle.includes('n')) u.y = rs.st + (rs.sh - newSize);
           } else if (el.type === 'text') {
-            if (resizing.handle.includes('e')) u.w = Math.max(20, resizing.sw + dx);
-            if (resizing.handle.includes('w')) { u.w = Math.max(20, resizing.sw - dx); u.x = resizing.sl + (resizing.sw - u.w); }
-            if (resizing.handle.includes('s')) u.h = Math.max(20, resizing.sh + dy);
-            if (resizing.handle.includes('n')) { u.h = Math.max(20, resizing.sh - dy); u.y = resizing.st + (resizing.sh - u.h); }
+            if (rs.handle.includes('e')) u.w = Math.max(20, rs.sw + dx);
+            if (rs.handle.includes('w')) { u.w = Math.max(20, rs.sw - dx); u.x = rs.sl + (rs.sw - u.w); }
+            if (rs.handle.includes('s')) u.h = Math.max(20, rs.sh + dy);
+            if (rs.handle.includes('n')) { u.h = Math.max(20, rs.sh - dy); u.y = rs.st + (rs.sh - u.h); }
           } else {
-            if (resizing.handle.includes('e')) u.w = Math.max(20, resizing.sw + dx);
-            if (resizing.handle.includes('w')) { u.w = Math.max(20, resizing.sw - dx); u.x = resizing.sl + (resizing.sw - u.w); }
-            if (resizing.handle.includes('s')) u.h = Math.max(20, resizing.sh + dy);
-            if (resizing.handle.includes('n')) { u.h = Math.max(20, resizing.sh - dy); u.y = resizing.st + (resizing.sh - u.h); }
+            if (rs.handle.includes('e')) u.w = Math.max(20, rs.sw + dx);
+            if (rs.handle.includes('w')) { u.w = Math.max(20, rs.sw - dx); u.x = rs.sl + (rs.sw - u.w); }
+            if (rs.handle.includes('s')) u.h = Math.max(20, rs.sh + dy);
+            if (rs.handle.includes('n')) { u.h = Math.max(20, rs.sh - dy); u.y = rs.st + (rs.sh - u.h); }
           }
           return { ...el, ...u };
         }));
       }
-      if (rotating) {
-        const angle = Math.atan2(e.clientY - rotating.cy, e.clientX - rotating.cx) * 180 / Math.PI;
-        setElements(prev => prev.map(el => el.id === rotating.id ? { ...el, rotation: rotating.startRot + (angle - rotating.startAngle) } : el));
+      const rt = rotatingRef.current;
+      if (rt) {
+        const angle = Math.atan2(e.clientY - rt.cy, e.clientX - rt.cx) * 180 / Math.PI;
+        setElements(prev => prev.map(el => el.id === rt.id ? { ...el, rotation: rt.startRot + (angle - rt.startAngle) } : el));
       }
     };
     const onUp = () => {
-      if (selectBox) {
+      const sb = selectBoxRef.current;
+      if (sb) {
         const box = {
-          x: Math.min(selectBox.startX, selectBox.currentX),
-          y: Math.min(selectBox.startY, selectBox.currentY),
-          w: Math.abs(selectBox.currentX - selectBox.startX),
-          h: Math.abs(selectBox.currentY - selectBox.startY),
+          x: Math.min(sb.startX, sb.currentX),
+          y: Math.min(sb.startY, sb.currentY),
+          w: Math.abs(sb.currentX - sb.startX),
+          h: Math.abs(sb.currentY - sb.startY),
         };
         if (box.w > 5 && box.h > 5) {
+          const currentElements = elementsRef.current;
           const intersects = (el) => {
             let ex, ey, ew, eh;
             if (el.type === 'arrow') {
               const b = getArrowBox(el);
               ex = b.x; ey = b.y; ew = b.w; eh = b.h;
             } else {
-              ex = el.x; ey = el.y; ew = el.w; eh = el.h;
+              const rot = el.rotation || 0;
+              if (Math.abs(rot) > 0.5) {
+                const cx = el.x + el.w / 2;
+                const cy = el.y + el.h / 2;
+                const rad = rot * Math.PI / 180;
+                const cos = Math.abs(Math.cos(rad));
+                const sin = Math.abs(Math.sin(rad));
+                ew = el.w * cos + el.h * sin;
+                eh = el.w * sin + el.h * cos;
+                ex = cx - ew / 2;
+                ey = cy - eh / 2;
+              } else {
+                ex = el.x; ey = el.y; ew = el.w; eh = el.h;
+              }
             }
-            return !(ex + ew < box.x || ex > box.x + box.w || ey + eh < box.y || ey > box.y + box.h);
+            const margin = 4;
+            return !(ex + ew + margin < box.x || ex - margin > box.x + box.w || ey + eh + margin < box.y || ey - margin > box.y + box.h);
           };
-          const newSel = elements.filter(e => e.type !== 'field' && intersects(e)).map(e => e.id);
-          if (selectBox.ctrlKey) {
+          const newSel = currentElements.filter(e => e.type !== 'field' && intersects(e)).map(e => e.id);
+          if (sb.ctrlKey) {
             setSelectedIds(prev => [...new Set([...prev, ...newSel])]);
           } else {
             setSelectedIds(newSel);
           }
-        } else if (!selectBox.ctrlKey) {
-          clearSelection();
+        } else if (!sb.ctrlKey) {
+          setSelectedIds([]); setEditingTextId(null);
         }
+        selectBoxRef.current = null;
         setSelectBox(null);
       }
-      setDragging(null); setResizing(null); setRotating(null);
+      draggingRef.current = null; setDragging(null);
+      resizingRef.current = null; setResizing(null);
+      rotatingRef.current = null; setRotating(null);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-  }, [dragging, resizing, rotating, canvasSize, selectBox, elements]);
+  }, []);
 
   const updateSelected = (updates) => {
     setElements(prev => prev.map(el => selectedIds.includes(el.id) ? { ...el, ...updates } : el));
@@ -448,7 +506,8 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
 
   useEffect(() => {
     const onKey = (e) => {
-      if (editingTextId) return;
+      const tag = e.target?.tagName;
+      if (editingTextId || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
         e.preventDefault();
         copySelected();
@@ -520,10 +579,11 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     }
   };
 
-  const addImageWithSize = (type, src) => {
+  const LARGE_OBJECT_CATEGORIES = new Set(['muñecos', 'picas', 'porterías', 'varios']);
+
+  const addImageWithSize = (type, src, maxDim = 20) => {
     const img = new Image();
     img.onload = () => {
-      const maxDim = 20;
       let nw, nh;
       if (img.naturalWidth > img.naturalHeight) {
         nw = maxDim;
@@ -773,9 +833,26 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
               <>
                 <div className="p-2">
                   <button onClick={() => setShowAddObjectModal(true)} className="w-full p-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white font-medium flex items-center justify-center gap-2"><Plus size={16} /> Añadir objeto</button>
+                  <input
+                    type="text"
+                    value={objectSearch}
+                    onChange={e => setObjectSearch(e.target.value)}
+                    placeholder="Buscar objeto..."
+                    className="w-full mt-2 px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                  />
                 </div>
-                {OBJECTS_BY_CATEGORY.map(cat => {
-                  const isExpanded = expandedCategories.has(cat.key);
+                {OBJECTS_BY_CATEGORY
+                  .filter(cat => {
+                    if (!objectSearch.trim()) return true;
+                    const q = normalize(objectSearch);
+                    return normalize(cat.label).includes(q) || cat.items.some(o => normalize(o.name).includes(q));
+                  })
+                  .map(cat => {
+                  const isExpanded = expandedCategories.has(cat.key) || (objectSearch.trim() && cat.items.some(o => normalize(o.name).includes(normalize(objectSearch))));
+                  const catMaxDim = LARGE_OBJECT_CATEGORIES.has(cat.key) ? 120 : 20;
+                  const filteredItems = objectSearch.trim()
+                    ? cat.items.filter(o => normalize(o.name).includes(normalize(objectSearch)))
+                    : cat.items;
                   return (
                     <div key={cat.key} className="mb-1">
                       <button
@@ -794,9 +871,9 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                       </button>
                       {isExpanded && (
                         <div className="space-y-1 px-1 pt-1">
-                          {cat.items.map(o => (
-                            <button key={o.id} onClick={() => addImageWithSize('object', o.src)} className="w-full text-left p-2 rounded hover:bg-slate-700 transition-colors">
-                              <img src={o.src} alt={o.name} className="w-full h-8 object-contain bg-transparent rounded mb-1" style={{ border: 'none', background: 'transparent' }} />
+                          {filteredItems.map(o => (
+                            <button key={o.id} onClick={() => addImageWithSize('object', o.src, catMaxDim)} className="w-full text-left p-2 rounded hover:bg-slate-700 transition-colors">
+                              <img src={o.src} alt={o.name} className={`w-full ${catMaxDim > 20 ? 'h-16' : 'h-8'} object-contain bg-transparent rounded mb-1`} style={{ border: 'none', background: 'transparent' }} />
                               <div className="text-xs text-slate-300 capitalize">{o.name}</div>
                             </button>
                           ))}

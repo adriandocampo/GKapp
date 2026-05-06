@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Save, Trash2, ArrowLeft, Upload, X, Paintbrush, ClipboardList, Video, Link, CloudUpload, Loader2 } from 'lucide-react';
 import { db } from '../db';
 import ImageEditor from '../components/ImageEditor';
+import MultiSelectDropdown from '../components/MultiSelectDropdown';
 import { useTags } from '../hooks/useTags';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Modal';
@@ -332,31 +333,18 @@ export default function TaskEditor() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-400 mb-2">Situación</label>
-            <div className="max-h-32 overflow-y-auto space-y-1 bg-slate-900 border border-slate-700 rounded-lg p-2">
-              {tags.situation.length === 0 && (
-                <p className="text-sm text-slate-500 px-2">Sin situaciones</p>
-              )}
-              {tags.situation.map(s => (
-                <label key={s} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-800 rounded cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Array.isArray(task.situation) && task.situation.includes(s)}
-                    onChange={() => toggleSituation(s)}
-                    className="rounded border-slate-600 bg-slate-700 text-teal-500 focus:ring-teal-500"
-                  />
-                  <span className="text-sm text-slate-300">{s}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex gap-2 mt-2">
-              <input
-                value={newTags.situation}
-                onChange={e => setNewTags(prev => ({ ...prev, situation: e.target.value }))}
-                placeholder="Nueva situación"
-                className="flex-1 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-sm text-slate-100"
-              />
-              <button onClick={() => addTag('situation')} className="px-2 py-1 bg-teal-600 rounded text-xs text-white">Añadir</button>
-            </div>
+            <MultiSelectDropdown
+              options={tags.situation}
+              selected={Array.isArray(task.situation) ? task.situation : []}
+              onChange={(val) => { setTask(prev => ({ ...prev, situation: val })); setHasChanges(true); }}
+              placeholder="Seleccionar situaciones"
+              onAddNew={() => {
+                const name = window.prompt('Nueva situación:');
+                if (name && name.trim()) {
+                  addTag('situation', name.trim());
+                }
+              }}
+            />
           </div>
         </div>
 

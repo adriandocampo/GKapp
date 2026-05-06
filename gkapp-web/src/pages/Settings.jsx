@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, Upload, X, Trash2, ArrowLeft, Plus, GripVertical } from 'lucide-react';
-import { db, getSetting, setSetting, cleanupOrphanTags } from '../db';
+import { db, getSetting, setSetting } from '../db';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Modal';
+import { useSyncRefresh } from '../contexts/SyncContext';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function Settings() {
   const confirm = useConfirm();
   const crestInputRef = useRef();
   const secondaryInputRef = useRef();
+  const { refreshKey } = useSyncRefresh();
 
   const [teamName, setTeamName] = useState('Club Deportivo Lugo');
   const [teamCrest, setTeamCrest] = useState(null);
@@ -22,11 +24,6 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [draggedTag, setDraggedTag] = useState(null);
   const [draggedPorteroIdx, setDraggedPorteroIdx] = useState(null);
-
-  useEffect(() => {
-    loadSettings();
-    loadTags();
-  }, []);
 
   async function loadSettings() {
     const name = await getSetting('teamName');
@@ -42,11 +39,20 @@ export default function Settings() {
   async function loadTags() {
     const all = await db.tags.toArray();
     const grouped = { phase: [], category: [], situation: [] };
+    const seen = { phase: new Set(), category: new Set(), situation: new Set() };
     all.forEach(t => {
-      if (grouped[t.type]) grouped[t.type].push(t.name);
+      if (grouped[t.type] && !seen[t.type].has(t.name)) {
+        grouped[t.type].push(t.name);
+        seen[t.type].add(t.name);
+      }
     });
     setTags(grouped);
   }
+
+  useEffect(() => {
+    loadSettings();
+    loadTags();
+  }, [refreshKey]);
 
   function handleImageUpload(field, file) {
     if (!file) return;

@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Plus, ArrowUp, ArrowDown, Trash2, Save, X, Search, Calendar, Printer, LayoutTemplate, Eye, ArrowLeft, User, FolderOpen, ChevronLeft, ChevronRight, Star, Video, Play, BookOpen, Target, Eye as EyeIcon, Film, Link, CloudUpload, Loader2 } from 'lucide-react';
+import { Plus, ArrowUp, ArrowDown, Trash2, Save, X, Search, Calendar, Printer, LayoutTemplate, Eye, ArrowLeft, User, FolderOpen, ChevronLeft, ChevronRight, Star, Video, Play, BookOpen, Target, Eye as EyeIcon, Film, Link, CloudUpload, Loader2, BarChart3, Pencil } from 'lucide-react';
 import { db, getSetting } from '../db';
 import { useToast } from '../components/Toast';
 import { useConfirm, usePrompt } from '../components/Modal';
 import SessionTemplateEditor from '../components/SessionTemplateEditor';
+import RPEStatsModal from '../components/RPEStatsModal';
 import { formatDateDDMMYY, todayISO, tomorrowISO } from '../utils/date';
 import { extractYouTubeId, youtubeEmbedUrl, useYouTubeUpload } from '../hooks/useYouTubeUpload';
 import { isFirebaseEnabled } from '../firebase';
@@ -145,10 +146,12 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
   const [name, setName] = useState(session?.name || '');
   const [date, setDate] = useState(session?.date || todayISO());
   const [seasonId, setSeasonId] = useState(session?.seasonId || (seasons?.length > 0 ? seasons[seasons.length - 1].id : null));
+  const [microciclo, setMicrociclo] = useState(session?.templateFields?.microciclo || '');
+  const [tipoMD, setTipoMD] = useState(session?.templateFields?.tipoMD || '');
   const [tasks, setTasks] = useState(sessionTasks || []);
   const [porteros, setPorteros] = useState(() => {
     const saved = session?.templateFields?.porteros;
-    return saved && saved.length > 0 ? saved : [];
+    return saved && saved.length > 0 ? saved : defaultPorteros;
   });
   const [valoracionGeneral, setValoracionGeneral] = useState(session?.valoracionGeneral || 0);
   const [feedbackGeneral, setFeedbackGeneral] = useState(session?.feedbackGeneral || '');
@@ -258,6 +261,8 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
       contenidos,
       objetivos,
       focos,
+      microciclo,
+      tipoMD,
     };
     data.templateFields = mergedTemplateFields;
 
@@ -510,6 +515,26 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
                   >
                     Mañana
                   </button>
+                  <input
+                    type="text"
+                    value={microciclo}
+                    onChange={e => setMicrociclo(e.target.value)}
+                    placeholder="Microciclo"
+                    className="w-24 px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-teal-500/50 transition-colors text-center"
+                  />
+                  <select
+                    value={tipoMD}
+                    onChange={e => setTipoMD(e.target.value)}
+                    className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-teal-500/50 transition-colors cursor-pointer"
+                  >
+                    <option value="">Tipo MD</option>
+                    <option value="MD-5">MD-5</option>
+                    <option value="MD-4">MD-4</option>
+                    <option value="MD-3">MD-3</option>
+                    <option value="MD-2">MD-2</option>
+                    <option value="MD-1">MD-1</option>
+                    <option value="MD+1">MD+1</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -989,7 +1014,7 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
       {/* Template editor - rendered via portal for clean printing */}
       {showTemplate && createPortal(
         <SessionTemplateEditor
-          session={{ ...session, name, date }}
+          session={{ ...session, name, date, templateFields: { ...(session?.templateFields || {}), microciclo, tipoMD } }}
           sessionTasks={tasks}
           taskImageUrls={urls}
           porteros={porteros}
@@ -1035,6 +1060,9 @@ export default function SessionBuilder() {
   const [selectedSession, setSelectedSession] = useState(null);
   const [selectedSessionTasks, setSelectedSessionTasks] = useState([]);
   const [listVideoUrl, setListVideoUrl] = useState(null);
+  const [showRPEStats, setShowRPEStats] = useState(false);
+  const [editingSeasonId, setEditingSeasonId] = useState(null);
+  const [editSeasonName, setEditSeasonName] = useState('');
   const listVideoBlobRef = useRef(null);
   const { addToast } = useToast();
   const prompt = usePrompt();
@@ -1065,7 +1093,7 @@ export default function SessionBuilder() {
   async function loadSessionsForSeason(seasonId) {
     const all = await db.sessions.toArray();
     const filtered = all.filter(s => s.seasonId === seasonId && !s.deletedAt);
-    setSessions(filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
+    setSessions(filtered.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)));
   }
 
   async function loadAllTasks() {
@@ -1101,6 +1129,24 @@ export default function SessionBuilder() {
       setSessions([]);
     }
     addToast('Temporada eliminada', 'success');
+  }
+
+  function startEditSeason(season) {
+    setEditingSeasonId(season.id);
+    setEditSeasonName(season.name);
+  }
+
+  async function saveSeasonName(seasonId) {
+    const trimmed = editSeasonName.trim();
+    if (!trimmed) return;
+    await db.seasons.update(seasonId, { name: trimmed, updatedAt: new Date() });
+    setEditingSeasonId(null);
+    setEditSeasonName('');
+    await loadSeasons();
+    if (selectedSeason?.id === seasonId) {
+      setSelectedSeason(prev => ({ ...prev, name: trimmed }));
+    }
+    addToast('Temporada actualizada', 'success');
   }
 
   async function openSession(session) {
@@ -1193,7 +1239,26 @@ export default function SessionBuilder() {
               onClick={() => setSelectedSeason(s)}
             >
               <FolderOpen size={16} />
-              <span className="font-medium">{s.name}</span>
+              {editingSeasonId === s.id ? (
+                <input
+                  value={editSeasonName}
+                  onChange={e => setEditSeasonName(e.target.value)}
+                  onBlur={() => saveSeasonName(s.id)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveSeasonName(s.id); if (e.key === 'Escape') setEditingSeasonId(null); }}
+                  onClick={e => e.stopPropagation()}
+                  className="px-2 py-0.5 bg-slate-900 border border-teal-500 rounded text-sm text-slate-100 w-24 focus:outline-none"
+                  autoFocus
+                />
+              ) : (
+                <span className="font-medium">{s.name}</span>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); startEditSeason(s); }}
+                className="hover:text-teal-400 transition-colors"
+                title="Renombrar temporada"
+              >
+                <Pencil size={12} />
+              </button>
               {seasons.length > 1 && (
                 <button
                   onClick={(e) => { e.stopPropagation(); deleteSeason(s); }}
@@ -1213,12 +1278,20 @@ export default function SessionBuilder() {
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-slate-100">{selectedSeason.name}</h2>
-            <button
-              onClick={openNewSession}
-              className="px-4 py-2 bg-teal-600 hover:bg-teal-500 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
-            >
-              <Plus size={16} /> Nueva Sesión
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowRPEStats(true)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 font-medium transition-colors flex items-center gap-2"
+              >
+                <BarChart3 size={16} /> RPE
+              </button>
+              <button
+                onClick={openNewSession}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-500 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus size={16} /> Nueva Sesión
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -1275,6 +1348,15 @@ export default function SessionBuilder() {
             )}
           </div>
         </div>
+      )}
+
+      {/* RPE Stats modal */}
+      {showRPEStats && (
+        <RPEStatsModal
+          sessions={sessions}
+          seasonName={selectedSeason?.name || ''}
+          onClose={() => setShowRPEStats(false)}
+        />
       )}
 
       {/* Session detail modal */}

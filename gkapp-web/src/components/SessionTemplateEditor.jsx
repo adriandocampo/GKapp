@@ -22,6 +22,7 @@ const defaultTemplateFields = {
   temporada: '2025-26',
   fecha: '',
   microciclo: '',
+  tipoMD: '',
   instalacion: '',
   hora: '',
   tiempoSesion: '',
@@ -213,7 +214,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
 
                 {/* Info fields container */}
                 <div className="flex flex-1" style={{ minWidth: 0 }}>
-                  {/* Temporada */}
+                  {/* Temporada + Fecha */}
                   <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r border-red-600 flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0 }}>
                     <span className={labelClass}>Temporada</span>
                     {seasons && seasons.length > 1 ? (
@@ -224,13 +225,23 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                     ) : (
                       <input type="text" value={fields.temporada} onChange={e => updateField('temporada', e.target.value)} className={inputClass} readOnly={showPreview} />
                     )}
-                  </div>
-                  {/* Fecha + Microciclo */}
-                  <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r border-red-600 flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0 }}>
-                    <span className={labelClass}>Fecha</span>
+                    <span className={`${labelClass} mt-0.5`}>Fecha</span>
                     <input type="text" value={fields.fecha} onChange={e => updateField('fecha', e.target.value)} placeholder="DD/MM/YY" maxLength={8} className="text-sm font-bold text-red-600 text-center bg-transparent outline-none w-full" readOnly={showPreview} />
-                    <span className={`${labelClass} mt-0.5`}>Microciclo</span>
+                  </div>
+                  {/* Microciclo + MD */}
+                  <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r border-red-600 flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0 }}>
+                    <span className={labelClass}>Microciclo</span>
                     <input type="text" value={fields.microciclo} onChange={e => updateField('microciclo', e.target.value)} className="text-sm font-bold text-red-600 text-center bg-transparent outline-none w-full" readOnly={showPreview} />
+                    <span className={`${labelClass} mt-0.5`}>MD</span>
+                    <select value={fields.tipoMD} onChange={e => updateField('tipoMD', e.target.value)} className="text-sm font-bold text-red-600 text-center bg-transparent outline-none w-full cursor-pointer" disabled={showPreview}>
+                      <option value=""></option>
+                      <option value="MD-5">MD-5</option>
+                      <option value="MD-4">MD-4</option>
+                      <option value="MD-3">MD-3</option>
+                      <option value="MD-2">MD-2</option>
+                      <option value="MD-1">MD-1</option>
+                      <option value="MD+1">MD+1</option>
+                    </select>
                   </div>
                   {/* Instalación + Hora */}
                   <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r border-red-600 flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0 }}>

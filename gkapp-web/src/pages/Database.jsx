@@ -4,6 +4,7 @@ import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLe
 import { db } from '../db';
 import { extractYouTubeId, youtubeEmbedUrl } from '../hooks/useYouTubeUpload';
 import { useTags } from '../hooks/useTags';
+import MultiSelectDropdown from '../components/MultiSelectDropdown';
 import { useToast } from '../components/Toast';
 import { useConfirm, usePrompt, useAlert } from '../components/Modal';
 import { formatDateDDMMYY, todayISO } from '../utils/date';
@@ -853,29 +854,15 @@ export default function DatabasePage() {
                 </div>
                 <div className="bg-slate-900 p-3 rounded-lg">
                   <div className="text-xs text-slate-500 mb-1">Situación</div>
-                  <div className="max-h-28 overflow-y-auto space-y-0.5">
-                    {tags.situation.length === 0 && (
-                      <p className="text-sm text-slate-500">Sin situaciones</p>
-                    )}
-                    {tags.situation.map(s => (
-                      <label key={s} className="flex items-center gap-1.5 px-1 py-0.5 hover:bg-slate-800 rounded cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={Array.isArray(selectedTask.situation) && selectedTask.situation.includes(s)}
-                          onChange={async () => {
-                            const sit = Array.isArray(selectedTask.situation) ? selectedTask.situation : [];
-                            const updated = sit.includes(s) ? sit.filter(x => x !== s) : [...sit, s];
-                            setSelectedTask(prev => ({ ...prev, situation: updated }));
-                            await db.tasks.update(selectedTask.id, { situation: updated, updatedAt: new Date() });
-                          }}
-                          className="rounded border-slate-600 bg-slate-700 text-teal-500 focus:ring-teal-500"
-                        />
-                        <span className="text-slate-300">{s}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => {
+                  <MultiSelectDropdown
+                    options={tags.situation}
+                    selected={Array.isArray(selectedTask.situation) ? selectedTask.situation : []}
+                    onChange={async (updated) => {
+                      setSelectedTask(prev => ({ ...prev, situation: updated }));
+                      await db.tasks.update(selectedTask.id, { situation: updated, updatedAt: new Date() });
+                    }}
+                    placeholder="Seleccionar situaciones"
+                    onAddNew={() => {
                       const name = window.prompt('Nueva situación:');
                       if (name && name.trim()) {
                         (async () => {
@@ -891,10 +878,7 @@ export default function DatabasePage() {
                         })();
                       }
                     }}
-                    className="mt-1 text-xs text-teal-400 hover:text-teal-300 cursor-pointer"
-                  >
-                    + Añadir situación
-                  </button>
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

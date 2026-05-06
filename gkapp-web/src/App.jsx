@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield } from 'lucide-react';
-import { db, initDatabase, ensureSeedTasks, ensureDefaultTags } from './db';
-import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore } from './sync';
+import { initDatabase, ensureSeedTasks, ensureDefaultTags } from './db';
+import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore, withSyncGuard, setupSessionGuard, hasImageSyncFailures } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthGate, { handleSignOut, signInWithGoogle } from './components/AuthGate';
@@ -12,8 +12,9 @@ import TaskEditor from './pages/TaskEditor';
 import SessionBuilder from './pages/SessionBuilder';
 import SettingsPage from './pages/Settings';
 import AdminDashboard from './pages/AdminDashboard';
-import { ToastProvider } from './components/Toast';
+import { ToastProvider, useToast } from './components/Toast';
 import { ModalProvider } from './components/Modal';
+import { SyncProvider } from './contexts/SyncContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { isDev } from './utils/env';
 
@@ -28,31 +29,27 @@ function AdminRoute({ children }) {
 
 function Layout() {
   const [loading, setLoading] = useState(true);
-  const { user, isGuest, isAdmin, exitGuestMode } = useAuth();
+  const { user, isGuest, isAdmin, exitGuestMode, performForceSignout } = useAuth();
+  const { addToast } = useToast();
 
   const navActive = isDev ? 'dev-nav-active' : 'bg-slate-700 text-teal-400';
   const navActiveAdmin = isDev ? 'dev-nav-active' : 'bg-slate-700 text-indigo-400';
 
   useEffect(() => {
     async function init() {
-      // 1. Ensure local DB schema is up to date
       await initDatabase();
 
-      // 2. If Firebase is active and user is logged in, sync cloud ↔ local
       if (isFirebaseEnabled && user?.uid) {
         const wasGuest = !!localStorage.getItem('gkapp_guest');
         const lastUid = localStorage.getItem('gkapp_last_uid');
         const isUserChange = !wasGuest && lastUid && lastUid !== user.uid;
 
         if (isUserChange) {
-          // Different user on same device: clear previous user's local data
           await clearAllLocalData();
         }
 
         resetSyncHooks();
 
-        // Bidirectional merge preserves local data (including guest data)
-        // and downloads any newer remote changes from Firestore
         try {
           await syncFromFirestore(user.uid);
         } catch (err) {
@@ -61,22 +58,32 @@ function Layout() {
 
         setupFirestoreSync(user.uid);
 
+        setupSessionGuard(user.uid, () => {
+          performForceSignout('Sesión iniciada en otro dispositivo');
+          const bc = new BroadcastChannel('gkapp_sync');
+          try { bc.postMessage({ type: 'force-signout' }); } catch { /* ignore */ }
+        });
+
         localStorage.setItem('gkapp_last_uid', user.uid);
         localStorage.removeItem('gkapp_guest');
 
-        // Ensure default tags and seed tasks are present after every sync.
-        // This resurrects any seed tasks that were incorrectly soft-deleted in Firestore
-        // and recreates standard tags that may have been purged locally.
-        await ensureDefaultTags();
-        await ensureSeedTasks();
+        await withSyncGuard(async () => {
+          await ensureDefaultTags();
+          await ensureSeedTasks();
+        });
 
-        // Housekeeping: clean up old soft-deleted docs from Firestore.
-        // Deferred so it doesn't block the initial loading spinner.
         setTimeout(() => {
           cleanupOldDeletedFirestore(user.uid).catch(err =>
             console.error('[app] cleanupOldDeletedFirestore failed:', err)
           );
         }, 0);
+
+        try {
+          const hasFailures = await hasImageSyncFailures(user.uid);
+          if (hasFailures) {
+            addToast('Algunas imágenes son demasiado grandes para sincronizarse entre dispositivos y solo están disponibles localmente.', 'warning', 6000);
+          }
+        } catch { /* ignore */ }
       }
 
       setLoading(false);
@@ -85,8 +92,6 @@ function Layout() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
-  // Re-sync from Firestore when the tab becomes visible again
-  // (e.g. user switched devices and came back to this tab)
   useEffect(() => {
     if (!isFirebaseEnabled || !user?.uid) return;
 
@@ -265,14 +270,16 @@ export default function App() {
     <ErrorBoundary>
       <HashRouter>
         <AuthProvider>
-          <ToastProvider>
-            <ModalProvider>
-              <AuthGate>
-                <Layout />
-                <UpdateNotification />
-              </AuthGate>
-            </ModalProvider>
-          </ToastProvider>
+          <SyncProvider>
+            <ToastProvider>
+              <ModalProvider>
+                <AuthGate>
+                  <Layout />
+                  <UpdateNotification />
+                </AuthGate>
+              </ModalProvider>
+            </ToastProvider>
+          </SyncProvider>
         </AuthProvider>
       </HashRouter>
     </ErrorBoundary>

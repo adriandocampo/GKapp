@@ -14,7 +14,7 @@ async function handleSignOut() {
 }
 
 /** Full-page login screen shown when no user is authenticated */
-function LoginScreen() {
+function LoginScreen({ sessionKicked, onDismissKick }) {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
   const { enterGuestMode }    = useAuth();
@@ -94,6 +94,19 @@ function LoginScreen() {
           {error && (
             <p className="text-sm text-red-400 text-center">{error}</p>
           )}
+
+          {sessionKicked && (
+            <div className="bg-amber-900/30 border border-amber-600/40 rounded-lg p-3 text-center">
+              <p className="text-sm text-amber-300 font-medium">Sesión cerrada desde otro dispositivo</p>
+              <p className="text-xs text-amber-400/70 mt-1">Has iniciado sesión en otro dispositivo. Para continuar aquí, vuelve a iniciar sesión.</p>
+              <button
+                onClick={onDismissKick}
+                className="mt-2 text-xs text-amber-400 hover:text-amber-300 underline"
+              >
+                Entendido
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -106,7 +119,7 @@ function LoginScreen() {
  * Guest mode bypasses authentication.
  */
 export default function AuthGate({ children }) {
-  const { user, loading, isGuest } = useAuth();
+  const { user, loading, isGuest, sessionKicked, clearKicked } = useAuth();
 
   // Electron / no Firebase: pass through
   if (!isFirebaseEnabled) return children;
@@ -122,7 +135,7 @@ export default function AuthGate({ children }) {
     );
   }
 
-  if (!user) return <LoginScreen />;
+  if (!user) return <LoginScreen sessionKicked={sessionKicked} onDismissKick={clearKicked} />;
 
   return children;
 }
