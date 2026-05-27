@@ -1,39 +1,32 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
-import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield } from 'lucide-react';
+import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield, BarChart3 } from 'lucide-react';
 import { initDatabase, ensureSeedTasks, ensureDefaultTags } from './db';
 import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore, withSyncGuard, setupSessionGuard, hasImageSyncFailures } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { getBackupConfig, getBackup, createBackup, hasActivitySince } from './utils/adminFirestore';
 import AuthGate, { handleSignOut, signInWithGoogle } from './components/AuthGate';
 import UpdateNotification from './components/UpdateNotification';
 import DatabasePage from './pages/Database';
 import TaskEditor from './pages/TaskEditor';
 import SessionBuilder from './pages/SessionBuilder';
 import SettingsPage from './pages/Settings';
-import AdminDashboard from './pages/AdminDashboard';
+import AnalysisPage from './pages/Analysis';
+import AnalysisListPage from './pages/AnalysisList';
 import { ToastProvider, useToast } from './components/Toast';
 import { ModalProvider } from './components/Modal';
 import { SyncProvider } from './contexts/SyncContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { isDev } from './utils/env';
 
-function AdminRoute({ children }) {
-  const { isAdmin } = useAuth();
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (!isAdmin) navigate('/', { replace: true });
-  }, [isAdmin, navigate]);
-  return isAdmin ? children : null;
-}
-
 function Layout() {
   const [loading, setLoading] = useState(true);
   const { user, isGuest, isAdmin, exitGuestMode, performForceSignout } = useAuth();
   const { addToast } = useToast();
 
-  const navActive = isDev ? 'dev-nav-active' : 'bg-slate-700 text-teal-400';
-  const navActiveAdmin = isDev ? 'dev-nav-active' : 'bg-slate-700 text-indigo-400';
+  const navActive = isDev ? 'dev-nav-active' : 'text-gk-accent border-b-2 border-gk-accent bg-gk-elevated/50';
+  const navActiveAdmin = isDev ? 'dev-nav-active' : 'text-gk-accent border-b-2 border-gk-accent bg-gk-elevated/50';
 
   useEffect(() => {
     async function init() {
@@ -78,6 +71,28 @@ function Layout() {
           );
         }, 0);
 
+        // Auto-backup check: if enabled and 7+ days since last backup with activity
+        setTimeout(async () => {
+          try {
+            const config = await getBackupConfig(user.uid);
+            if (config?.enabled) {
+              const backupMeta = await getBackup(user.uid);
+              const lastBackupDate = backupMeta?._createdAt?.toDate?.() || backupMeta?._createdAt;
+              const daysSince = lastBackupDate ? (Date.now() - new Date(lastBackupDate).getTime()) / 86400000 : Infinity;
+
+              if (daysSince >= config.intervalDays) {
+                const hasActivity = lastBackupDate ? await hasActivitySince(user.uid, lastBackupDate) : true;
+                if (hasActivity) {
+                  await createBackup(user.uid);
+                  addToast('Backup automático completado', 'success');
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('[app] Auto-backup check failed:', err);
+          }
+        }, 3000);
+
         try {
           const hasFailures = await hasImageSyncFailures(user.uid);
           if (hasFailures) {
@@ -108,9 +123,9 @@ function Layout() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center text-slate-200 ${isDev ? 'dev-bg' : 'bg-slate-900'}`}>
+      <div className={`min-h-screen flex items-center justify-center text-gk-text-primary ${isDev ? 'dev-bg' : 'bg-gk-page'}`}>
         <div className={`text-center ${isDev ? 'dev-page-enter' : ''}`}>
-          <div className={`animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4 ${isDev ? 'dev-spinner' : 'border-teal-500'}`}></div>
+          <div className={`animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4 ${isDev ? 'dev-spinner' : 'border-gk-accent'}`}></div>
           <p className="text-lg">
             {isFirebaseEnabled ? 'Sincronizando datos...' : 'Cargando base de datos...'}
           </p>
@@ -120,20 +135,20 @@ function Layout() {
   }
 
   return (
-    <div className={`min-h-screen text-slate-100 flex flex-col ${isDev ? 'dev-bg dev-grid-pattern dev-scrollbar' : 'bg-slate-900'}`}>
-      <nav className={`sticky top-0 z-50 ${isDev ? 'dev-navbar' : 'bg-slate-800 border-b border-slate-700'}`}>
+    <div className={`min-h-screen text-gk-text-primary flex flex-col ${isDev ? 'dev-bg dev-grid-pattern dev-scrollbar' : 'bg-gk-page'}`}>
+      <nav className={`sticky top-0 z-50 ${isDev ? 'dev-navbar' : 'bg-gk-page/95 backdrop-blur-sm border-b border-gk-border'}`}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
               <div className="flex items-center gap-2">
-                <span className={`text-xl font-bold ${isDev ? 'dev-gradient-text' : 'text-teal-400'}`}>GKApp</span>
+                <span className={`text-xl font-bold ${isDev ? 'dev-gradient-text' : 'text-gk-accent'}`}>GKApp</span>
                 {isDev && <span className="dev-badge">DEV</span>}
               </div>
               <NavLink
                 to="/"
                 className={({ isActive }) =>
                   `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
                   }`
                 }
               >
@@ -144,7 +159,7 @@ function Layout() {
                 to="/editor"
                 className={({ isActive }) =>
                   `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
                   }`
                 }
               >
@@ -155,18 +170,29 @@ function Layout() {
                 to="/sessions"
                 className={({ isActive }) =>
                   `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
                   }`
                 }
               >
                 <ClipboardList size={18} />
                 <span>Sesiones</span>
               </NavLink>
+              <NavLink
+                to="/analysis"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
+                  }`
+                }
+              >
+                <BarChart3 size={18} />
+                <span>Análisis</span>
+              </NavLink>
             </div>
             <div className="flex items-center gap-2">
               {/* Guest mode indicator */}
               {isGuest && (
-                <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-600/15 border border-amber-500/30 rounded-lg text-amber-400 text-xs font-medium">
+                <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-500/15 border border-amber-500/30 rounded-lg text-amber-400 text-xs font-medium">
                   <User size={13} />
                   Invitado
                 </span>
@@ -177,7 +203,7 @@ function Layout() {
                   to="/admin"
                   className={({ isActive }) =>
                     `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isActive ? navActiveAdmin : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                      isActive ? navActiveAdmin : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
                     }`
                   }
                 >
@@ -190,7 +216,7 @@ function Layout() {
                 to="/settings"
                 className={({ isActive }) =>
                   `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
                   }`
                 }
               >
@@ -205,7 +231,7 @@ function Layout() {
                     <button
                       onClick={handleSignOut}
                       title={`Cerrar sesión (${user.email})`}
-                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gk-text-tertiary hover:bg-gk-elevated hover:text-white transition-colors"
                     >
                       {user.photoURL && (
                         <img src={user.photoURL} alt="" className="w-6 h-6 rounded-full" />
@@ -218,7 +244,7 @@ function Layout() {
                       <button
                         onClick={signInWithGoogle}
                         title="Iniciar sesión con Google para guardar tus datos"
-                        className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-teal-600/20 text-teal-400 hover:bg-teal-600/30 border border-teal-500/30 transition-colors"
+                        className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-gk-accent/15 text-gk-accent hover:bg-gk-accent/20 border border-gk-accent/30 transition-colors"
                       >
                         <svg viewBox="0 0 24 24" className="w-4 h-4" xmlns="http://www.w3.org/2000/svg">
                           <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -251,16 +277,12 @@ function Layout() {
           <Route path="/sessions" element={<SessionBuilder />} />
           <Route path="/sessions/:id" element={<SessionBuilder />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <AdminDashboard />
-              </AdminRoute>
-            }
-          />
+          <Route path="/analysis" element={<AnalysisListPage />} />
+          <Route path="/analysis/new" element={<AnalysisPage />} />
+          <Route path="/analysis/:id" element={<AnalysisPage />} />
         </Routes>
       </main>
+
     </div>
   );
 }

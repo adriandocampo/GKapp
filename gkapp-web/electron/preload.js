@@ -29,4 +29,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
+
+  listPublicXml: () => ipcRenderer.invoke('analysis:list-public-xml'),
+  readPublicXml: (fileName) => ipcRenderer.invoke('analysis:read-public-xml', fileName),
+  pickVideoFile: () => ipcRenderer.invoke('analysis:pick-video'),
+  lookupBeSoccer: (matchName) => ipcRenderer.invoke('analysis:lookup-besoccer', matchName),
+  fetchSofaScoreData: (url, goalkeeperName) => ipcRenderer.invoke('sofascore:fetch-match-data', { url, goalkeeperName }),
 });

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Square, Circle, ArrowRight, Type, Trash2, RotateCw, ChevronUp, ChevronDown, ChevronRight, RotateCcw, Paintbrush, LayoutTemplate, AlignLeft, AlignCenter, AlignRight, AlignVerticalSpaceAround, AlignHorizontalSpaceAround, Triangle, Hash, Link, Clipboard, Plus, Save, Star } from 'lucide-react';
+import { Square, Circle, ArrowRight, Type, Trash2, RotateCw, ChevronUp, ChevronDown, ChevronRight, RotateCcw, Paintbrush, LayoutTemplate, AlignLeft, AlignCenter, AlignRight, AlignCenterVertical, AlignCenterHorizontal, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Triangle, Hash, Link, Clipboard, Plus, Save, Star, Undo2, Redo2 } from 'lucide-react';
 import { FIELDS, OBJECTS_BY_CATEGORY } from '../data/imageAssets.js';
 
 function uid() { return Math.random().toString(36).substr(2, 9); }
@@ -35,6 +35,8 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   const [clipboard, setClipboard] = useState(null);
   const [pasteCount, setPasteCount] = useState(0);
   const [selectBox, setSelectBox] = useState(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   const selectBoxRef = useRef(null);
   const draggingRef = useRef(null);
@@ -42,6 +44,37 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   const rotatingRef = useRef(null);
   const elementsRef = useRef(elements);
   const canvasSizeRef = useRef(canvasSize);
+  const historyRef = useRef({ past: [], future: [] });
+  const pushHistoryRef = useRef(null);
+
+  const pushHistory = useCallback(() => {
+    historyRef.current = { past: [...historyRef.current.past, JSON.parse(JSON.stringify(elements))], future: [] };
+    setCanUndo(true);
+    setCanRedo(false);
+  }, [elements]);
+  useEffect(() => { pushHistoryRef.current = pushHistory; }, [pushHistory]);
+
+  const undo = useCallback(() => {
+    const { past, future } = historyRef.current;
+    if (past.length === 0) return;
+    const prev = past[past.length - 1];
+    historyRef.current = { past: past.slice(0, -1), future: [JSON.parse(JSON.stringify(elements)), ...future] };
+    setElements(prev);
+    setSelectedIds([]);
+    setCanUndo(historyRef.current.past.length > 0);
+    setCanRedo(true);
+  }, [elements]);
+
+  const redo = useCallback(() => {
+    const { past, future } = historyRef.current;
+    if (future.length === 0) return;
+    const next = future[0];
+    historyRef.current = { past: [...past, JSON.parse(JSON.stringify(elements))], future: future.slice(1) };
+    setElements(next);
+    setSelectedIds([]);
+    setCanUndo(true);
+    setCanRedo(historyRef.current.future.length > 0);
+  }, [elements]);
 
   useEffect(() => { elementsRef.current = elements; }, [elements]);
   useEffect(() => { canvasSizeRef.current = canvasSize; }, [canvasSize]);
@@ -73,6 +106,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   }, [elements]);
 
   const addElement = useCallback((type, extra = {}) => {
+    pushHistory();
     const id = uid();
     if (type === 'field') {
       setElements(prev => {
@@ -181,6 +215,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
 
   const handleSelect = (id, e) => {
     e.stopPropagation();
+    if (selectBoxRef.current) return;
     if (e.ctrlKey || e.metaKey || e.shiftKey) {
       setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     } else {
@@ -188,7 +223,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     }
   };
 
-  const clearSelection = () => { setSelectedIds([]); setEditingTextId(null); }; // eslint-disable-line no-unused-vars
+  const clearSelection = () => { setSelectedIds([]); setEditingTextId(null); };
 
   const onMouseDownCanvas = (e) => {
     if (e.button !== 0) return;
@@ -198,9 +233,57 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     const sy = cs.h / rect.height;
     const x = (e.clientX - rect.left) * sx;
     const y = (e.clientY - rect.top) * sy;
-    const newBox = { startX: x, startY: y, currentX: x, currentY: y, ctrlKey: e.ctrlKey || e.metaKey };
+    const newBox = { startX: x, startY: y, currentX: x, currentY: y, ctrlKey: e.ctrlKey || e.metaKey, elements: elementsRef.current };
     selectBoxRef.current = newBox;
     setSelectBox(newBox);
+  };
+
+  const onMouseUpCanvas = (e) => {
+    const sb = selectBoxRef.current;
+    if (!sb) return;
+    const box = {
+      x: Math.min(sb.startX, sb.currentX),
+      y: Math.min(sb.startY, sb.currentY),
+      w: Math.abs(sb.currentX - sb.startX),
+      h: Math.abs(sb.currentY - sb.startY),
+    };
+    if (box.w > 5 && box.h > 5) {
+      const currentElements = sb.elements || elements;
+      const intersects = (el) => {
+        let ex, ey, ew, eh;
+        if (el.type === 'arrow') {
+          const b = getArrowBox(el);
+          ex = b.x; ey = b.y; ew = b.w; eh = b.h;
+        } else {
+          const rot = el.rotation || 0;
+          if (Math.abs(rot) > 0.5) {
+            const cx = el.x + el.w / 2;
+            const cy = el.y + el.h / 2;
+            const rad = rot * Math.PI / 180;
+            const cos = Math.abs(Math.cos(rad));
+            const sin = Math.abs(Math.sin(rad));
+            ew = el.w * cos + el.h * sin;
+            eh = el.w * sin + el.h * cos;
+            ex = cx - ew / 2;
+            ey = cy - eh / 2;
+          } else {
+            ex = el.x; ey = el.y; ew = el.w; eh = el.h;
+          }
+        }
+        const margin = 4;
+        return !(ex + ew + margin < box.x || ex - margin > box.x + box.w || ey + eh + margin < box.y || ey - margin > box.y + box.h);
+      };
+      const newSel = currentElements.filter(e => e.type !== 'field' && intersects(e)).map(e => e.id);
+      if (sb.ctrlKey) {
+        setSelectedIds(prev => [...new Set([...prev, ...newSel])]);
+      } else {
+        setSelectedIds(newSel);
+      }
+    } else if (!sb.ctrlKey) {
+      setSelectedIds([]); setEditingTextId(null);
+      selectBoxRef.current = null;
+    }
+    setSelectBox(null);
   };
 
   const onMouseDownEl = (e, el) => {
@@ -208,6 +291,20 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     e.stopPropagation();
     if (editingTextId === el.id) return;
     if (e.button !== 0) return;
+
+    if (e.shiftKey) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const cs = canvasSizeRef.current;
+      const sx = cs.w / rect.width;
+      const sy = cs.h / rect.height;
+      const x = (e.clientX - rect.left) * sx;
+      const y = (e.clientY - rect.top) * sy;
+      const newBox = { startX: x, startY: y, currentX: x, currentY: y, ctrlKey: true };
+      selectBoxRef.current = newBox;
+      setSelectBox(newBox);
+      return;
+    }
+
     const sb = selectBoxRef.current;
     if (sb && (Math.abs(sb.currentX - sb.startX) > 5 || Math.abs(sb.currentY - sb.startY) > 5)) return;
     const rect = canvasRef.current.getBoundingClientRect();
@@ -220,12 +317,14 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
       const clickY = (e.clientY - rect.top) * sy;
       const dStart = Math.hypot(clickX - el.x1, clickY - el.y1);
       const dEnd = Math.hypot(clickX - el.x2, clickY - el.y2);
-      if (dStart < 15 && selectedIds.includes(el.id)) {
+      if (dStart < 25) {
+        if (!selectedIds.includes(el.id)) setSelectedIds(prev => [el.id]);
         const d = { id: el.id, type: 'arrow-start' };
         draggingRef.current = d; setDragging(d);
         return;
       }
-      if (dEnd < 15 && selectedIds.includes(el.id)) {
+      if (dEnd < 25) {
+        if (!selectedIds.includes(el.id)) setSelectedIds(prev => [el.id]);
         const d = { id: el.id, type: 'arrow-end' };
         draggingRef.current = d; setDragging(d);
         return;
@@ -274,7 +373,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
         const sy = cs.h / rect.height;
         const mx = (e.clientX - rect.left) * sx;
         const my = (e.clientY - rect.top) * sy;
-        const updated = { ...sb, currentX: mx, currentY: my };
+        const updated = { ...sb, currentX: mx, currentY: my, elements: elementsRef.current };
         selectBoxRef.current = updated;
         setSelectBox(updated);
       }
@@ -364,7 +463,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
           h: Math.abs(sb.currentY - sb.startY),
         };
         if (box.w > 5 && box.h > 5) {
-          const currentElements = elementsRef.current;
+          const currentElements = sb.elements || elementsRef.current;
           const intersects = (el) => {
             let ex, ey, ew, eh;
             if (el.type === 'arrow') {
@@ -401,9 +500,11 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
         selectBoxRef.current = null;
         setSelectBox(null);
       }
+      const wasInteracting = draggingRef.current || resizingRef.current || rotatingRef.current;
       draggingRef.current = null; setDragging(null);
       resizingRef.current = null; setResizing(null);
       rotatingRef.current = null; setRotating(null);
+      if (wasInteracting) pushHistoryRef.current?.();
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -411,15 +512,18 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   }, []);
 
   const updateSelected = (updates) => {
+    if (!draggingRef.current && !resizingRef.current && !rotatingRef.current) pushHistory();
     setElements(prev => prev.map(el => selectedIds.includes(el.id) ? { ...el, ...updates } : el));
   };
 
   const deleteSelected = () => {
+    pushHistory();
     setElements(prev => prev.filter(el => !selectedIds.includes(el.id)));
     setSelectedIds([]);
   };
 
   const clearOverlays = () => {
+    pushHistory();
     setElements(prev => prev.filter(el => el.type === 'field'));
     setSelectedIds([]);
   };
@@ -464,11 +568,66 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     }));
   };
 
+  const distributeHorizontal = () => {
+    if (selectedIds.length < 3) return;
+    const sel = elements.filter(e => selectedIds.includes(e.id));
+    const sorted = [...sel].sort((a, b) => {
+      const ax = a.type === 'arrow' ? (a.x1 + a.x2) / 2 : a.x;
+      const bx = b.type === 'arrow' ? (b.x1 + b.x2) / 2 : b.x;
+      return ax - bx;
+    });
+    const first = sorted[0], last = sorted[sorted.length - 1];
+    const left = first.type === 'arrow' ? (first.x1 + first.x2) / 2 : first.x;
+    const right = last.type === 'arrow' ? (last.x1 + last.x2) / 2 : last.x;
+    const totalSpace = right - left;
+    const gap = totalSpace / (sorted.length - 1);
+    setElements(prev => prev.map(el => {
+      if (!selectedIds.includes(el.id)) return el;
+      const idx = sorted.indexOf(el);
+      if (idx <= 0 || idx >= sorted.length - 1) return el;
+      const targetX = left + gap * idx;
+      if (el.type === 'arrow') {
+        const midX = (el.x1 + el.x2) / 2;
+        const dx = targetX - midX;
+        return { ...el, x1: el.x1 + dx, x2: el.x2 + dx };
+      }
+      return { ...el, x: targetX };
+    }));
+  };
+
+  const distributeVertical = () => {
+    if (selectedIds.length < 3) return;
+    const sel = elements.filter(e => selectedIds.includes(e.id));
+    const sorted = [...sel].sort((a, b) => {
+      const ay = a.type === 'arrow' ? (a.y1 + a.y2) / 2 : a.y;
+      const by = b.type === 'arrow' ? (b.y1 + b.y2) / 2 : b.y;
+      return ay - by;
+    });
+    const first = sorted[0], last = sorted[sorted.length - 1];
+    const top = first.type === 'arrow' ? (first.y1 + first.y2) / 2 : first.y;
+    const bottom = last.type === 'arrow' ? (last.y1 + last.y2) / 2 : last.y;
+    const totalSpace = bottom - top;
+    const gap = totalSpace / (sorted.length - 1);
+    setElements(prev => prev.map(el => {
+      if (!selectedIds.includes(el.id)) return el;
+      const idx = sorted.indexOf(el);
+      if (idx <= 0 || idx >= sorted.length - 1) return el;
+      const targetY = top + gap * idx;
+      if (el.type === 'arrow') {
+        const midY = (el.y1 + el.y2) / 2;
+        const dy = targetY - midY;
+        return { ...el, y1: el.y1 + dy, y2: el.y2 + dy };
+      }
+      return { ...el, y: targetY };
+    }));
+  };
+
   const selectedEls = elements.filter(e => selectedIds.includes(e.id));
   const primarySelected = selectedEls[0];
 
   const duplicateSelected = () => {
     if (!primarySelected) return;
+    pushHistory();
     const id = uid();
     let duplicated;
     if (primarySelected.type === 'arrow') {
@@ -551,7 +710,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
         * { box-shadow: none !important; outline: none !important; }
         *:not(.preserve-border) { border: none !important; }
         img { background: transparent !important; padding: 0 !important; margin: 0 !important; }
-        .ring-2, .ring-teal-500 { box-shadow: none !important; outline: none !important; }
+        .ring-2, .ring-gk-accent { box-shadow: none !important; outline: none !important; }
       `;
       el.appendChild(styleTag);
 
@@ -592,7 +751,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
         nh = maxDim;
         nw = Math.round(maxDim * img.naturalWidth / img.naturalHeight);
       }
-      addElement(type, { src, w: nw, h: nh });
+      addElement(type, { src, w: nw, h: nh, defaultDim: maxDim });
     };
     img.onerror = () => addElement(type, { src });
     img.src = src;
@@ -722,24 +881,23 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 className="text-lg font-bold text-slate-100">Editor de imagen</h2>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200 flex items-center gap-2">
-            <LayoutTemplate size={14} /> Subir imagen
-          </button>
-          <button onClick={generateCard} className="px-3 py-1.5 bg-pink-700 hover:bg-pink-600 rounded text-sm text-white flex items-center gap-2">
-            <LayoutTemplate size={14} /> Generar ficha
-          </button>
-          <button onClick={clearOverlays} className="px-3 py-1.5 bg-red-900/60 hover:bg-red-900/80 rounded text-sm text-red-200 flex items-center gap-2">
-            <RotateCcw size={14} /> Limpiar overlays
-          </button>
-          <button onClick={capture} className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 rounded text-sm text-white font-medium">
-            Usar como imagen
-          </button>
-          <button onClick={onCancel} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
-            Cancelar
-          </button>
+      <div className="sticky top-0 z-10 pb-4 pt-4 px-5 shrink-0" style={{background: 'rgba(12,11,9,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h2 className="text-lg font-bold" style={{color: '#f1ede7'}}>Editor de imagen</h2>
+          <div className="flex gap-2 flex-wrap items-center">
+            <button onClick={() => fileInputRef.current?.click()} className="v2-btn-ghost">
+              <LayoutTemplate size={14} /> Subir imagen
+            </button>
+            <button onClick={generateCard} className="px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all" style={{background: 'rgba(190,24,93,0.12)', color: '#f472b6', border: '1px solid rgba(190,24,93,0.15)'}}>
+              <LayoutTemplate size={14} /> Generar ficha
+            </button>
+            <button onClick={clearOverlays} className="px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all" style={{background: 'rgba(220,38,38,0.10)', color: '#fca5a5', border: '1px solid rgba(220,38,38,0.12)'}}>
+              <RotateCcw size={14} /> Limpiar
+            </button>
+            <button onClick={onCancel} className="v2-btn-ghost">
+              Cancelar
+            </button>
+          </div>
         </div>
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
         <input ref={objectFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAddObjectFromFile} />
@@ -747,35 +905,35 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
 
       {showAddObjectModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-md space-y-4">
-            <h3 className="text-lg font-bold text-slate-100">Añadir objeto</h3>
+          <div className="bg-gk-card rounded-xl border border-gk-border p-6 w-full max-w-md space-y-4">
+            <h3 className="text-lg font-bold text-gk-text-primary">Añadir objeto</h3>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Desde archivo</label>
-              <button onClick={() => objectFileInputRef?.current?.click()} className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 flex items-center justify-center gap-2 transition-colors">
+              <label className="block text-sm font-medium text-gk-text-tertiary mb-2">Desde archivo</label>
+              <button onClick={() => objectFileInputRef?.current?.click()} className="w-full px-4 py-2 bg-gk-elevated hover:bg-gk-elevated rounded-lg text-gk-text-primary flex items-center justify-center gap-2 transition-colors">
                 <LayoutTemplate size={16} /> Seleccionar imagen
               </button>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Desde enlace web</label>
+              <label className="block text-sm font-medium text-gk-text-tertiary mb-2">Desde enlace web</label>
               <div className="flex gap-2">
-                <input type="text" value={objectUrl} onChange={e => setObjectUrl(e.target.value)} placeholder="https://ejemplo.com/imagen.png" className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-teal-500" />
-                <button onClick={handleAddObjectFromUrl} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 rounded-lg text-white flex items-center gap-1 transition-colors">
+                <input type="text" value={objectUrl} onChange={e => setObjectUrl(e.target.value)} placeholder="https://ejemplo.com/imagen.png" className="flex-1 px-3 py-2 bg-gk-page border border-gk-border rounded-lg text-sm text-gk-text-primary focus:outline-none focus:border-gk-accent" />
+                <button onClick={handleAddObjectFromUrl} className="px-4 py-2 bg-gk-accent hover:bg-gk-accent rounded-lg text-white flex items-center gap-1 transition-colors">
                   <Link size={14} /> Añadir
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Desde portapapeles</label>
-              <button onClick={handlePasteImage} className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 flex items-center justify-center gap-2 transition-colors">
+              <label className="block text-sm font-medium text-gk-text-tertiary mb-2">Desde portapapeles</label>
+              <button onClick={handlePasteImage} className="w-full px-4 py-2 bg-gk-elevated hover:bg-gk-elevated rounded-lg text-gk-text-primary flex items-center justify-center gap-2 transition-colors">
                 <Clipboard size={16} /> Pegar imagen
               </button>
             </div>
 
             <div className="flex justify-end pt-2">
-              <button onClick={() => { setShowAddObjectModal(false); setObjectUrl(''); }} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 transition-colors">
+              <button onClick={() => { setShowAddObjectModal(false); setObjectUrl(''); }} className="px-4 py-2 bg-gk-elevated hover:bg-gk-elevated rounded-lg text-gk-text-primary transition-colors">
                 Cancelar
               </button>
             </div>
@@ -785,22 +943,22 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
 
       {showTextInputModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-md space-y-4">
-            <h3 className="text-lg font-bold text-slate-100">Añadir texto</h3>
+          <div className="bg-gk-card rounded-xl border border-gk-border p-6 w-full max-w-md space-y-4">
+            <h3 className="text-lg font-bold text-gk-text-primary">Añadir texto</h3>
             <textarea
               value={textInputValue}
               onChange={e => setTextInputValue(e.target.value)}
               placeholder="Escribe el texto..."
               rows={4}
               autoFocus
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-teal-500 resize-none"
+              className="w-full px-3 py-2 bg-gk-page border border-gk-border rounded-lg text-sm text-gk-text-primary focus:outline-none focus:border-gk-accent resize-none"
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddText(); } }}
             />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowTextInputModal(false)} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 transition-colors">
+              <button onClick={() => setShowTextInputModal(false)} className="px-4 py-2 bg-gk-elevated hover:bg-gk-elevated rounded-lg text-gk-text-primary transition-colors">
                 Cancelar
               </button>
-              <button onClick={handleAddText} disabled={!textInputValue.trim()} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 rounded-lg text-white transition-colors">
+              <button onClick={handleAddText} disabled={!textInputValue.trim()} className="px-4 py-2 bg-gk-accent hover:bg-gk-accent disabled:opacity-50 rounded-lg text-white transition-colors">
                 Añadir
               </button>
             </div>
@@ -809,24 +967,24 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
       )}
 
       <div className="flex flex-1 gap-3 min-h-0">
-        <div className="w-56 bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden shrink-0">
-          <div className="flex border-b border-slate-700">
+        <div className="w-56 bg-gk-card rounded-xl border border-gk-border flex flex-col overflow-hidden shrink-0">
+          <div className="flex border-b border-gk-border">
             {[
               { key: 'fields', icon: LayoutTemplate, label: 'Campos' },
               { key: 'objects', icon: Paintbrush, label: 'Objetos' },
               { key: 'shapes', icon: Square, label: 'Formas' },
               { key: 'text', icon: Type, label: 'Texto' },
             ].map(t => (
-              <button key={t.key} onClick={() => setToolTab(t.key)} className={`flex-1 py-2 text-xs font-medium transition-colors ${toolTab === t.key ? 'bg-slate-700 text-teal-400' : 'text-slate-400 hover:bg-slate-700/50'}`}>
+              <button key={t.key} onClick={() => setToolTab(t.key)} className={`flex-1 py-2 text-xs font-medium transition-colors ${toolTab === t.key ? 'bg-gk-elevated text-gk-accent' : 'text-gk-text-tertiary hover:bg-gk-elevated/50'}`}>
                 <t.icon size={14} className="mx-auto mb-0.5" /> {t.label}
               </button>
             ))}
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {toolTab === 'fields' && FIELDS.map(f => (
-              <button key={f.id} onClick={() => addElement('field', { src: f.src })} className="w-full text-left p-2 rounded hover:bg-slate-700 transition-colors">
-                <img src={f.src} alt={f.name} className="w-full h-20 object-contain bg-slate-900 rounded mb-1" />
-                <div className="text-xs text-slate-300">{f.name}</div>
+              <button key={f.id} onClick={() => addElement('field', { src: f.src })} className="w-full text-left p-2 rounded hover:bg-gk-elevated transition-colors">
+                <img src={f.src} alt={f.name} className="w-full h-20 object-contain bg-gk-page rounded mb-1" />
+                <div className="text-xs text-gk-text-secondary">{f.name}</div>
               </button>
             ))}
             {toolTab === 'objects' && (
@@ -838,7 +996,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                     value={objectSearch}
                     onChange={e => setObjectSearch(e.target.value)}
                     placeholder="Buscar objeto..."
-                    className="w-full mt-2 px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                    className="w-full mt-2 px-2 py-1.5 bg-gk-page border border-gk-border-hover rounded text-xs text-gk-text-primary placeholder-gk-text-tertiary focus:outline-none focus:border-gk-accent"
                   />
                 </div>
                 {OBJECTS_BY_CATEGORY
@@ -864,7 +1022,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                             return next;
                           });
                         }}
-                        className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-slate-700/60 transition-colors text-xs font-semibold text-slate-200 uppercase tracking-wide"
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gk-elevated/60 transition-colors text-xs font-semibold text-gk-text-primary uppercase tracking-wide"
                       >
                         <span>{cat.label}</span>
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -872,9 +1030,9 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                       {isExpanded && (
                         <div className="space-y-1 px-1 pt-1">
                           {filteredItems.map(o => (
-                            <button key={o.id} onClick={() => addImageWithSize('object', o.src, catMaxDim)} className="w-full text-left p-2 rounded hover:bg-slate-700 transition-colors">
+                            <button key={o.id} onClick={() => addImageWithSize('object', o.src, catMaxDim)} className="w-full text-left p-2 rounded hover:bg-gk-elevated transition-colors">
                               <img src={o.src} alt={o.name} className={`w-full ${catMaxDim > 20 ? 'h-16' : 'h-8'} object-contain bg-transparent rounded mb-1`} style={{ border: 'none', background: 'transparent' }} />
-                              <div className="text-xs text-slate-300 capitalize">{o.name}</div>
+                              <div className="text-xs text-gk-text-secondary capitalize">{o.name}</div>
                             </button>
                           ))}
                         </div>
@@ -886,25 +1044,25 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
             )}
             {toolTab === 'shapes' && (
               <div className="space-y-2 p-2">
-                <button onClick={() => addElement('rect')} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded flex items-center gap-2 text-sm text-slate-200"><Square size={16} /> Rectángulo</button>
-                <button onClick={() => addElement('circle')} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded flex items-center gap-2 text-sm text-slate-200"><Circle size={16} /> Círculo</button>
-                <button onClick={() => addElement('triangle')} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded flex items-center gap-2 text-sm text-slate-200"><Triangle size={16} /> Triángulo</button>
-                <button onClick={() => addElement('arrow')} className="w-full p-2 bg-slate-700 hover:bg-slate-600 rounded flex items-center gap-2 text-sm text-slate-200"><ArrowRight size={16} /> Flecha</button>
+                <button onClick={() => addElement('rect')} className="w-full p-2 bg-gk-elevated hover:bg-gk-elevated rounded flex items-center gap-2 text-sm text-gk-text-primary"><Square size={16} /> Rectángulo</button>
+                <button onClick={() => addElement('circle')} className="w-full p-2 bg-gk-elevated hover:bg-gk-elevated rounded flex items-center gap-2 text-sm text-gk-text-primary"><Circle size={16} /> Círculo</button>
+                <button onClick={() => addElement('triangle')} className="w-full p-2 bg-gk-elevated hover:bg-gk-elevated rounded flex items-center gap-2 text-sm text-gk-text-primary"><Triangle size={16} /> Triángulo</button>
+                <button onClick={() => addElement('arrow')} className="w-full p-2 bg-gk-elevated hover:bg-gk-elevated rounded flex items-center gap-2 text-sm text-gk-text-primary"><ArrowRight size={16} /> Flecha</button>
               </div>
             )}
             {toolTab === 'text' && (
               <div className="p-2 space-y-2">
-                <button onClick={() => { setTextInputValue(''); setShowTextInputModal(true); }} className="w-full p-2 bg-teal-600 hover:bg-teal-500 rounded text-sm text-white font-medium">+ Añadir texto</button>
+                <button onClick={() => { setTextInputValue(''); setShowTextInputModal(true); }} className="w-full p-2 bg-gk-accent hover:bg-gk-accent rounded text-sm text-white font-medium">+ Añadir texto</button>
                 <button onClick={() => addElement('number')} className="w-full p-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white font-medium flex items-center justify-center gap-2"><Hash size={16} /> Añadir número</button>
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex-1 bg-slate-900 rounded-xl border border-slate-700 overflow-auto flex items-center justify-center p-4">
+        <div className="flex-1 rounded-xl overflow-auto flex flex-col items-center justify-center gap-4 p-4" style={{background: 'rgba(22,20,16,0.4)', border: '1px solid rgba(185,165,135,0.08)'}} onMouseUp={onMouseUpCanvas}>
           <div
             ref={canvasRef}
-            className="relative bg-white select-none"
+            className="relative bg-white select-none shrink-0"
             style={{ width: canvasSize.w, height: canvasSize.h }}
             onMouseDown={onMouseDownCanvas}
           >
@@ -940,8 +1098,8 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                     <div className="absolute inset-0" style={{ cursor: 'move' }} onMouseDown={(e) => onMouseDownEl(e, el)} onClick={(e) => handleSelect(el.id, e)} />
                     {isSelected && (
                       <>
-                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: el.x1 - box.x + padding, top: el.y1 - box.y + padding }} onMouseDown={(e) => { e.stopPropagation(); setDragging({ id: el.id, type: 'arrow-start' }); }} />
-                        <div className="absolute w-4 h-4 bg-teal-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: el.x2 - box.x + padding, top: el.y2 - box.y + padding }} onMouseDown={(e) => { e.stopPropagation(); setDragging({ id: el.id, type: 'arrow-end' }); }} />
+                        <div className="absolute w-3 h-3 bg-blue-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: el.x1 - box.x + padding, top: el.y1 - box.y + padding }} onMouseDown={(e) => { e.stopPropagation(); handleSelect(el.id, e); const d = { id: el.id, type: 'arrow-start' }; draggingRef.current = d; setDragging(d); }} />
+                        <div className="absolute w-3 h-3 bg-blue-500 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 cursor-grab z-20" style={{ left: el.x2 - box.x + padding, top: el.y2 - box.y + padding }} onMouseDown={(e) => { e.stopPropagation(); handleSelect(el.id, e); const d = { id: el.id, type: 'arrow-end' }; draggingRef.current = d; setDragging(d); }} />
                       </>
                     )}
                   </div>
@@ -951,10 +1109,10 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
               return (
                 <div
                   key={el.id}
-                  className={`absolute ${isSelected && el.type !== 'field' ? 'ring-2 ring-teal-500' : ''}`}
+                  className={`absolute ${isSelected && el.type !== 'field' ? 'ring-2 ring-gk-accent' : ''}`}
                   style={{ left: el.x, top: el.y, width: el.w, height: el.h, transform: el.type !== 'field' ? `rotate(${el.rotation || 0}deg) scaleX(${el.flipH ? -1 : 1})` : undefined, opacity: el.opacity, zIndex: el.zIndex, cursor: el.type === 'field' ? 'default' : 'move' }}
                   onMouseDown={(e) => onMouseDownEl(e, el)}
-                  onClick={(e) => handleSelect(el.id, e)}
+                  onClick={(e) => { if (el.type === 'field') return; handleSelect(el.id, e); }}
                   onDoubleClick={(e) => { if (el.type === 'text') { e.stopPropagation(); setEditingTextId(el.id); } }}
                 >
                   {el.type === 'field' && <img src={el.src} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false} />}
@@ -1026,7 +1184,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                     <>
                       <div className="absolute inset-0" style={{ transform: `rotate(${-(el.rotation || 0)}deg)`, transformOrigin: 'center center' }}>
                         {['nw','ne','sw','se'].map(h => (
-                          <div key={h} className="absolute w-3 h-3 bg-teal-500 border border-white rounded-full z-20" style={{ top: h.includes('n') ? -6 : 'auto', bottom: h.includes('s') ? -6 : 'auto', left: h.includes('w') ? -6 : 'auto', right: h.includes('e') ? -6 : 'auto', cursor: h === 'nw' || h === 'se' ? 'nwse-resize' : 'nesw-resize' }} onMouseDown={(e) => onMouseDownResize(e, h)} />
+                          <div key={h} className="absolute w-3 h-3 bg-gk-accent border border-white rounded-full z-20" style={{ top: h.includes('n') ? -6 : 'auto', bottom: h.includes('s') ? -6 : 'auto', left: h.includes('w') ? -6 : 'auto', right: h.includes('e') ? -6 : 'auto', cursor: h === 'nw' || h === 'se' ? 'nwse-resize' : 'nesw-resize' }} onMouseDown={(e) => onMouseDownResize(e, h)} />
                         ))}
                         <div className="absolute left-1/2 -translate-x-1/2 -top-5 w-4 h-4 bg-amber-500 border border-white rounded-full cursor-grab z-20 flex items-center justify-center" onMouseDown={onMouseDownRotate}>
                           <RotateCw size={10} className="text-white" />
@@ -1040,36 +1198,56 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
             })}
             {selectBox && (
               <div
-                className="absolute border border-teal-400 bg-teal-400/10 pointer-events-none"
+                className="absolute pointer-events-none"
                 style={{
                   left: Math.min(selectBox.startX, selectBox.currentX),
                   top: Math.min(selectBox.startY, selectBox.currentY),
                   width: Math.abs(selectBox.currentX - selectBox.startX),
                   height: Math.abs(selectBox.currentY - selectBox.startY),
                   zIndex: 9999,
+                  background: 'rgba(59,130,246,0.08)',
+                  border: '1px solid rgba(59,130,246,0.5)',
                 }}
               />
             )}
           </div>
+          <button
+            onClick={capture}
+            className="py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shrink-0"
+            style={{
+              background: 'rgba(232,172,101,0.15)',
+              color: '#e8ac65',
+              border: '1px solid rgba(232,172,101,0.25)',
+              width: canvasSize.w,
+            }}
+          >
+            Usar como imagen
+          </button>
         </div>
 
-        <div className="w-64 bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden shrink-0">
-          <div className="px-4 py-3 border-b border-slate-700 font-medium text-sm text-slate-200">
-            {selectedEls.length > 1 ? `${selectedEls.length} seleccionados` : 'Propiedades'}
+        <div className="w-64 bg-gk-card rounded-xl border border-gk-border flex flex-col overflow-hidden shrink-0">
+          <div className="px-4 py-3 border-b border-gk-border font-medium text-sm text-gk-text-primary flex items-center justify-between" style={{background: 'rgba(232,172,101,0.15)'}}>
+            <span>{selectedEls.length > 1 ? `${selectedEls.length} seleccionados` : 'Propiedades'}</span>
+            <div className="flex gap-1">
+              <button onClick={undo} className={`p-1.5 rounded-lg transition-colors ${canUndo ? 'v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50' : 'opacity-30 cursor-default'}`} disabled={!canUndo} title="Deshacer"><Undo2 size={14} className="text-gk-text-secondary" /></button>
+              <button onClick={redo} className={`p-1.5 rounded-lg transition-colors ${canRedo ? 'v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50' : 'opacity-30 cursor-default'}`} disabled={!canRedo} title="Rehacer"><Redo2 size={14} className="text-gk-text-secondary" /></button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-            {selectedEls.length === 0 && <div className="text-xs text-slate-500 text-center py-4">Selecciona un elemento</div>}
+            {selectedEls.length === 0 && <div className="text-xs text-gk-text-tertiary text-center py-4">Selecciona un elemento</div>}
 
             {selectedEls.length > 1 && (
               <>
-                <div className="flex gap-2">
-                  <button onClick={alignHorizontal} className="flex-1 p-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg flex items-center justify-center gap-1 transition-colors" title="Alinear horizontalmente"><AlignHorizontalSpaceAround size={14} className="text-slate-300" /></button>
-                  <button onClick={alignVertical} className="flex-1 p-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg flex items-center justify-center gap-1 transition-colors" title="Alinear verticalmente"><AlignVerticalSpaceAround size={14} className="text-slate-300" /></button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={alignHorizontal} className="p-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg flex items-center justify-center transition-colors" title="Centrar en eje horizontal (misma altura)"><AlignCenterHorizontal size={16} className="text-gk-text-secondary" /></button>
+                  <button onClick={alignVertical} className="p-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg flex items-center justify-center transition-colors" title="Centrar en eje vertical (misma posición horizontal)"><AlignCenterVertical size={16} className="text-gk-text-secondary" /></button>
+                  <button onClick={distributeHorizontal} className="p-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg flex items-center justify-center transition-colors" title="Distribuir horizontalmente"><AlignHorizontalDistributeCenter size={16} className="text-gk-text-secondary" /></button>
+                  <button onClick={distributeVertical} className="p-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg flex items-center justify-center transition-colors" title="Distribuir verticalmente"><AlignVerticalDistributeCenter size={16} className="text-gk-text-secondary" /></button>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={bringForward} className="flex-1 p-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg transition-colors" title="Traer al frente"><ChevronUp size={14} className="mx-auto text-slate-300" /></button>
-                  <button onClick={sendBackward} className="flex-1 p-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg transition-colors" title="Enviar atrás"><ChevronDown size={14} className="mx-auto text-slate-300" /></button>
-                  <button onClick={deleteSelected} className="flex-1 p-2 bg-red-900/30 hover:bg-red-900/50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={14} className="mx-auto text-red-400" /></button>
+                  <button onClick={bringForward} className="flex-1 p-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg transition-colors" title="Traer al frente"><ChevronUp size={14} className="mx-auto text-gk-text-secondary" /></button>
+                  <button onClick={sendBackward} className="flex-1 p-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg transition-colors" title="Enviar atrás"><ChevronDown size={14} className="mx-auto text-gk-text-secondary" /></button>
+                  <button onClick={deleteSelected} className="flex-1 p-2 bg-red-900/30 hover:bg-red-900/50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={14} className="mx-auto text-stat-rose" /></button>
                 </div>
               </>
             )}
@@ -1077,40 +1255,61 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
             {selectedEls.length === 1 && primarySelected && primarySelected.type !== 'field' && (
               <>
                 <div className="flex gap-2">
-                  <button onClick={bringForward} className="flex-1 p-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg transition-colors" title="Traer al frente"><ChevronUp size={14} className="mx-auto text-slate-300" /></button>
-                  <button onClick={sendBackward} className="flex-1 p-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg transition-colors" title="Enviar atrás"><ChevronDown size={14} className="mx-auto text-slate-300" /></button>
-                  <button onClick={deleteSelected} className="flex-1 p-2 bg-red-900/30 hover:bg-red-900/50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={14} className="mx-auto text-red-400" /></button>
+                  <button onClick={bringForward} className="flex-1 p-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg transition-colors" title="Traer al frente"><ChevronUp size={14} className="mx-auto text-gk-text-secondary" /></button>
+                  <button onClick={sendBackward} className="flex-1 p-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg transition-colors" title="Enviar atrás"><ChevronDown size={14} className="mx-auto text-gk-text-secondary" /></button>
+                  <button onClick={deleteSelected} className="flex-1 p-2 bg-red-900/30 hover:bg-red-900/50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={14} className="mx-auto text-stat-rose" /></button>
                 </div>
 
                 {primarySelected.type !== 'arrow' && primarySelected.type !== 'number' && primarySelected.type !== 'text' && (
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5">Tamaño</label>
-                    <input type="number" min="10" value={Math.round(primarySelected.w)} onChange={e => { const newW = Math.max(10, Number(e.target.value)); const ratio = primarySelected.h / primarySelected.w; updateSelected({ w: newW, h: Math.round(newW * ratio) }); }} className="w-full px-2.5 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-teal-500/50" />
+                    {primarySelected.src?.includes('/picas/') ? (
+                      <>
+                        <label className="block text-xs text-gk-text-tertiary mb-1.5">Tamaño {Math.round(primarySelected.w)}×{Math.round(primarySelected.h)}px</label>
+                        <input type="range" min="1" max="9" step="1" value={Math.max(1, Math.min(9, Math.round(primarySelected.w)))} onChange={e => { const newW = Number(e.target.value); const ratio = primarySelected.h / primarySelected.w; updateSelected({ w: newW, h: Math.round(newW * ratio) }); }} className="w-full accent-gk-accent" />
+                      </>
+                    ) : (
+                      (() => {
+                      const defDim = primarySelected.defaultDim || 120;
+                      const minSize = Math.round(defDim * 0.1);
+                      const curW = Math.round(primarySelected.w);
+                      const maxSize = Math.max(Math.round(defDim * 3), curW);
+                      return (
+                        <>
+                          <label className="block text-xs text-gk-text-tertiary mb-1.5">Tamaño {curW}×{Math.round(primarySelected.h)}px</label>
+                          <input type="range" min={minSize} max={maxSize} value={curW} onChange={e => { const newW = Number(e.target.value); const ratio = primarySelected.h / primarySelected.w; updateSelected({ w: newW, h: Math.round(newW * ratio) }); }} className="w-full accent-gk-accent" />
+                          <div className="flex justify-between text-[10px] text-gk-text-tertiary mt-0.5">
+                            <span>{minSize}px</span>
+                            <span>{maxSize}px</span>
+                          </div>
+                        </>
+                      );
+                    })()
+                    )}
                   </div>
                 )}
 
-                <button onClick={duplicateSelected} className="w-full px-3 py-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-xs text-slate-200 flex items-center justify-center gap-2 transition-colors"><Square size={13} /> Duplicar</button>
+                <button onClick={duplicateSelected} className="w-full px-3 py-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-xs text-gk-text-primary flex items-center justify-center gap-2 transition-colors"><Square size={13} /> Duplicar</button>
 
                 {primarySelected.type !== 'arrow' && (
                   <>
                     <div className="pt-2">
-                      <label className="block text-xs text-slate-400 mb-1.5">Rotación ({Math.round(primarySelected.rotation || 0)}°)</label>
-                      <input type="range" min="-180" max="180" value={primarySelected.rotation || 0} onChange={e => updateSelected({ rotation: Number(e.target.value) })} className="w-full accent-teal-500" />
+                      <label className="block text-xs text-gk-text-tertiary mb-1.5">Rotación ({Math.round(primarySelected.rotation || 0)}°)</label>
+                      <input type="range" min="-180" max="180" value={primarySelected.rotation || 0} onChange={e => updateSelected({ rotation: Number(e.target.value) })} className="w-full accent-gk-accent" />
                     </div>
                     {(primarySelected.type === 'object' || primarySelected.type === 'image') && (
                       <div className="flex gap-2">
-                        <button onClick={() => updateSelected({ rotation: normalizeRotation((primarySelected.rotation || 0) - 45) })} className="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-xs text-slate-300 transition-colors">⟲ -45°</button>
-                        <button onClick={() => updateSelected({ rotation: 0 })} className="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-xs text-slate-300 transition-colors">0°</button>
-                        <button onClick={() => updateSelected({ rotation: normalizeRotation((primarySelected.rotation || 0) + 45) })} className="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-xs text-slate-300 transition-colors">⟳ +45°</button>
+                        <button onClick={() => updateSelected({ rotation: normalizeRotation((primarySelected.rotation || 0) - 45) })} className="flex-1 px-2 py-1.5 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-xs text-gk-text-secondary transition-colors">⟲ -45°</button>
+                        <button onClick={() => updateSelected({ rotation: 0 })} className="flex-1 px-2 py-1.5 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-xs text-gk-text-secondary transition-colors">0°</button>
+                        <button onClick={() => updateSelected({ rotation: normalizeRotation((primarySelected.rotation || 0) + 45) })} className="flex-1 px-2 py-1.5 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-xs text-gk-text-secondary transition-colors">⟳ +45°</button>
                       </div>
                     )}
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1.5">Opacidad</label>
-                      <input type="range" min="0.1" max="1" step="0.05" value={primarySelected.opacity ?? 1} onChange={e => updateSelected({ opacity: Number(e.target.value) })} className="w-full accent-teal-500" />
+                      <label className="block text-xs text-gk-text-tertiary mb-1.5">Opacidad</label>
+                      <input type="range" min="0.1" max="1" step="0.05" value={primarySelected.opacity ?? 1} onChange={e => updateSelected({ opacity: Number(e.target.value) })} className="w-full accent-gk-accent" />
                     </div>
                     {(primarySelected.type === 'object' || primarySelected.type === 'image') && (
                       <div className="flex gap-2">
-                        <button onClick={() => updateSelected({ flipH: !primarySelected.flipH })} className={`flex-1 px-3 py-2 rounded-lg text-xs transition-colors ${primarySelected.flipH ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>
+                        <button onClick={() => updateSelected({ flipH: !primarySelected.flipH })} className={`flex-1 px-3 py-2 rounded-lg text-xs transition-colors ${primarySelected.flipH ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>
                           ↔ Voltear horizontal
                         </button>
                       </div>
@@ -1121,22 +1320,22 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                 {(primarySelected.type === 'rect' || primarySelected.type === 'circle' || primarySelected.type === 'triangle') && (
                   <>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1.5">Borde</label>
+                      <label className="block text-xs text-gk-text-tertiary mb-1.5">Borde</label>
                       <div className="flex gap-2 items-center">
                         <input type="color" value={primarySelected.stroke} onChange={e => updateSelected({ stroke: e.target.value })} className="w-9 h-9 rounded-lg cursor-pointer shrink-0 border-0 bg-transparent" />
-                        <input type="number" min="1" max="20" value={primarySelected.strokeWidth} onChange={e => updateSelected({ strokeWidth: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg text-xs text-slate-100 text-center focus:outline-none focus:border-teal-500/50" />
+                        <input type="number" min="1" max="20" value={primarySelected.strokeWidth} onChange={e => updateSelected({ strokeWidth: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-gk-page/50 border border-gk-border/50 rounded-lg text-xs text-gk-text-primary text-center focus:outline-none focus:border-gk-accent/50" />
                         <div className="flex gap-1.5 flex-1">
                           {['solid','dashed'].map(ss => (
-                            <button key={ss} onClick={() => updateSelected({ strokeStyle: ss })} className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.strokeStyle === ss ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{ss === 'solid' ? '─' : '┅'}</button>
+                            <button key={ss} onClick={() => updateSelected({ strokeStyle: ss })} className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.strokeStyle === ss ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>{ss === 'solid' ? '─' : '┅'}</button>
                           ))}
                         </div>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1.5">Relleno</label>
+                      <label className="block text-xs text-gk-text-tertiary mb-1.5">Relleno</label>
                       <div className="flex gap-1.5 mb-2">
                         {['transparent','solid','striped'].map(ft => (
-                          <button key={ft} onClick={() => updateSelected({ fillType: ft })} className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.fillType === ft ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{ft === 'transparent' ? 'Vacío' : ft === 'solid' ? 'Sólido' : 'Rayado'}</button>
+                          <button key={ft} onClick={() => updateSelected({ fillType: ft })} className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.fillType === ft ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>{ft === 'transparent' ? 'Vacío' : ft === 'solid' ? 'Sólido' : 'Rayado'}</button>
                         ))}
                       </div>
                       {primarySelected.fillType === 'solid' && (
@@ -1146,8 +1345,8 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                         <>
                           <input type="color" value={primarySelected.fill === 'transparent' ? primarySelected.stroke : primarySelected.fill} onChange={e => updateSelected({ fill: e.target.value })} className="w-full h-9 rounded-lg cursor-pointer mb-2 border-0 bg-transparent" />
                           <div>
-                            <label className="block text-[10px] text-slate-500 mb-1">Opacidad ({Math.round((primarySelected.fillOpacity ?? 0.2) * 100)}%)</label>
-                            <input type="range" min="0.05" max="1" step="0.05" value={primarySelected.fillOpacity ?? 0.2} onChange={e => updateSelected({ fillOpacity: Number(e.target.value) })} className="w-full accent-teal-500" />
+                            <label className="block text-[10px] text-gk-text-tertiary mb-1">Opacidad ({Math.round((primarySelected.fillOpacity ?? 0.2) * 100)}%)</label>
+                            <input type="range" min="0.05" max="1" step="0.05" value={primarySelected.fillOpacity ?? 0.2} onChange={e => updateSelected({ fillOpacity: Number(e.target.value) })} className="w-full accent-gk-accent" />
                           </div>
                         </>
                       )}
@@ -1157,65 +1356,65 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
 
                 {primarySelected.type === 'arrow' && (
                   <>
-                    <div className="border-t border-slate-700/50 pt-3 mt-1">
-                      <label className="block text-xs text-slate-400 mb-1.5">Línea</label>
+                    <div className="border-t border-gk-border/50 pt-3 mt-1">
+                      <label className="block text-xs text-gk-text-tertiary mb-1.5">Línea</label>
                       <div className="flex gap-2 items-center">
                         <input type="color" value={primarySelected.stroke} onChange={e => updateSelected({ stroke: e.target.value })} className="w-9 h-9 rounded-lg cursor-pointer shrink-0 border-0 bg-transparent" />
-                        <input type="number" min="1" max="20" value={primarySelected.strokeWidth} onChange={e => updateSelected({ strokeWidth: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg text-xs text-slate-100 text-center focus:outline-none focus:border-teal-500/50" />
+                        <input type="number" min="1" max="20" value={primarySelected.strokeWidth} onChange={e => updateSelected({ strokeWidth: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-gk-page/50 border border-gk-border/50 rounded-lg text-xs text-gk-text-primary text-center focus:outline-none focus:border-gk-accent/50" />
                         <div className="flex gap-1.5 flex-1">
                           {['solid','dashed'].map(ss => (
-                            <button key={ss} onClick={() => updateSelected({ strokeStyle: ss })} className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.strokeStyle === ss ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{ss === 'solid' ? '─' : '┅'}</button>
+                            <button key={ss} onClick={() => updateSelected({ strokeStyle: ss })} className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.strokeStyle === ss ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>{ss === 'solid' ? '─' : '┅'}</button>
                           ))}
                         </div>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1.5">Punta</label>
+                      <label className="block text-xs text-gk-text-tertiary mb-1.5">Punta</label>
                       <div className="flex gap-1.5 mb-2">
                         {['standard','round'].map(hs => (
-                          <button key={hs} onClick={() => updateSelected({ headStyle: hs })} className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.headStyle === hs ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{hs === 'standard' ? 'Triangular' : 'Redonda'}</button>
+                          <button key={hs} onClick={() => updateSelected({ headStyle: hs })} className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.headStyle === hs ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>{hs === 'standard' ? 'Triangular' : 'Redonda'}</button>
                         ))}
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => updateSelected({ doubleHead: !primarySelected.doubleHead })} className={`px-2.5 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.doubleHead ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{primarySelected.doubleHead ? 'Doble' : 'Simple'}</button>
-                        <label className="text-[10px] text-slate-500">Tamaño ({primarySelected.headSize || 4})</label>
+                        <button onClick={() => updateSelected({ doubleHead: !primarySelected.doubleHead })} className={`px-2.5 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.doubleHead ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>{primarySelected.doubleHead ? 'Doble' : 'Simple'}</button>
+                        <label className="text-[10px] text-gk-text-tertiary">Tamaño ({primarySelected.headSize || 4})</label>
                       </div>
-                      <input type="range" min="1" max="6" value={primarySelected.headSize || 4} onChange={e => updateSelected({ headSize: Number(e.target.value) })} className="w-full mt-1.5 accent-teal-500" />
+                      <input type="range" min="1" max="6" value={primarySelected.headSize || 4} onChange={e => updateSelected({ headSize: Number(e.target.value) })} className="w-full mt-1.5 accent-gk-accent" />
                     </div>
                   </>
                 )}
 
                 {primarySelected.type === 'text' && (
                   <>
-                    <button onClick={() => setEditingTextId(primarySelected.id)} className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-500 rounded-lg text-xs text-white flex items-center justify-center gap-2 transition-colors"><Type size={13} /> Editar texto</button>
+                    <button onClick={() => setEditingTextId(primarySelected.id)} className="w-full px-3 py-2 bg-gk-accent hover:bg-gk-accent rounded-lg text-xs text-white flex items-center justify-center gap-2 transition-colors"><Type size={13} /> Editar texto</button>
                     <div className="flex gap-2 items-center">
-                      <label className="text-xs text-slate-400 shrink-0 w-10">Color</label>
+                      <label className="text-xs text-gk-text-tertiary shrink-0 w-10">Color</label>
                       <input type="color" value={primarySelected.color} onChange={e => updateSelected({ color: e.target.value })} className="w-9 h-9 rounded-lg cursor-pointer shrink-0 border-0 bg-transparent" />
-                      <input type="number" min="8" max="120" value={primarySelected.fontSize} onChange={e => updateSelected({ fontSize: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg text-xs text-slate-100 text-center focus:outline-none focus:border-teal-500/50" />
-                      <select value={primarySelected.fontWeight} onChange={e => updateSelected({ fontWeight: e.target.value })} className="flex-1 px-2 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-teal-500/50"><option value="normal">Normal</option><option value="bold">Negrita</option></select>
+                      <input type="number" min="8" max="120" value={primarySelected.fontSize} onChange={e => updateSelected({ fontSize: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-gk-page/50 border border-gk-border/50 rounded-lg text-xs text-gk-text-primary text-center focus:outline-none focus:border-gk-accent/50" />
+                      <select value={primarySelected.fontWeight} onChange={e => updateSelected({ fontWeight: e.target.value })} className="flex-1 px-2 py-1.5 bg-gk-page/50 border border-gk-border/50 rounded-lg text-xs text-gk-text-primary focus:outline-none focus:border-gk-accent/50"><option value="normal">Normal</option><option value="bold">Negrita</option></select>
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1.5">Tamaño caja ({Math.round(primarySelected.w)}x{Math.round(primarySelected.h)})</label>
-                      <input type="range" min="20" max="300" value={Math.round(primarySelected.w)} onChange={e => { const newW = Number(e.target.value); const ratio = newW / primarySelected.w; updateSelected({ w: newW, h: Math.round(primarySelected.h * ratio) }); }} className="w-full accent-teal-500" />
+                      <label className="block text-xs text-gk-text-tertiary mb-1.5">Tamaño caja ({Math.round(primarySelected.w)}x{Math.round(primarySelected.h)})</label>
+                      <input type="range" min="20" max="300" value={Math.round(primarySelected.w)} onChange={e => { const newW = Number(e.target.value); const ratio = newW / primarySelected.w; updateSelected({ w: newW, h: Math.round(primarySelected.h * ratio) }); }} className="w-full accent-gk-accent" />
                     </div>
                     <div className="flex gap-2 items-center">
-                      <label className="text-xs text-slate-400 shrink-0 w-10">Fondo</label>
+                      <label className="text-xs text-gk-text-tertiary shrink-0 w-10">Fondo</label>
                       <input type="color" value={primarySelected.bgColor === 'transparent' ? '#000000' : primarySelected.bgColor} onChange={e => updateSelected({ bgColor: e.target.value })} className="w-9 h-9 rounded-lg cursor-pointer shrink-0 border-0 bg-transparent" />
-                      <button onClick={() => updateSelected({ bgColor: 'transparent' })} className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.bgColor === 'transparent' ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>Sin fondo</button>
+                      <button onClick={() => updateSelected({ bgColor: 'transparent' })} className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.bgColor === 'transparent' ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>Sin fondo</button>
                     </div>
                     <div className="flex gap-2 items-center">
-                      <label className="text-xs text-slate-400 shrink-0 w-10">Borde</label>
+                      <label className="text-xs text-gk-text-tertiary shrink-0 w-10">Borde</label>
                       <input type="color" value={primarySelected.stroke} onChange={e => updateSelected({ stroke: e.target.value })} className="w-9 h-9 rounded-lg cursor-pointer shrink-0 border-0 bg-transparent" />
-                      <input type="number" min="0" max="20" value={primarySelected.strokeWidth} onChange={e => updateSelected({ strokeWidth: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg text-xs text-slate-100 text-center focus:outline-none focus:border-teal-500/50" />
-                      <button onClick={() => updateSelected({ noStroke: !primarySelected.noStroke })} className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.noStroke ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{primarySelected.noStroke ? 'Con borde' : 'Sin borde'}</button>
+                      <input type="number" min="0" max="20" value={primarySelected.strokeWidth} onChange={e => updateSelected({ strokeWidth: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-gk-page/50 border border-gk-border/50 rounded-lg text-xs text-gk-text-primary text-center focus:outline-none focus:border-gk-accent/50" />
+                      <button onClick={() => updateSelected({ noStroke: !primarySelected.noStroke })} className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.noStroke ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>{primarySelected.noStroke ? 'Con borde' : 'Sin borde'}</button>
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1.5">Alineación</label>
+                      <label className="block text-xs text-gk-text-tertiary mb-1.5">Alineación</label>
                       <div className="flex gap-1.5">
                         {['left','center','right'].map(ta => {
                           const isActive = primarySelected.textAlign === ta || (!primarySelected.textAlign && ta === 'left');
                           return (
-                            <button key={ta} onClick={() => updateSelected({ textAlign: ta })} className={`flex-1 px-2 py-2 rounded-lg text-xs transition-colors ${isActive ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>
+                            <button key={ta} onClick={() => updateSelected({ textAlign: ta })} className={`flex-1 px-2 py-2 rounded-lg text-xs transition-colors ${isActive ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>
                               {ta === 'left' ? <AlignLeft size={14} className="mx-auto" /> : ta === 'center' ? <AlignCenter size={14} className="mx-auto" /> : <AlignRight size={14} className="mx-auto" />}
                             </button>
                           );
@@ -1228,54 +1427,54 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
                 {primarySelected.type === 'number' && (
                   <>
                     <div className="flex items-center gap-2">
-                      <label className="text-xs text-slate-400 shrink-0 w-8">Nº</label>
-                      <button onClick={() => updateSelected({ number: Math.max(1, (primarySelected.number || 1) - 1) })} className="w-10 h-10 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-lg text-slate-200 flex items-center justify-center transition-colors">-</button>
-                      <input type="number" min="1" value={primarySelected.number || 1} onChange={e => updateSelected({ number: Math.max(1, Number(e.target.value)) })} className="w-14 h-10 px-1 bg-slate-900/50 border border-slate-700/50 rounded-lg text-sm text-slate-100 text-center focus:outline-none focus:border-teal-500/50" />
-                      <button onClick={() => updateSelected({ number: (primarySelected.number || 1) + 1 })} className="w-10 h-10 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-lg text-slate-200 flex items-center justify-center transition-colors">+</button>
+                      <label className="text-xs text-gk-text-tertiary shrink-0 w-8">Nº</label>
+                      <button onClick={() => updateSelected({ number: Math.max(1, (primarySelected.number || 1) - 1) })} className="w-10 h-10 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-lg text-gk-text-primary flex items-center justify-center transition-colors">-</button>
+                      <input type="number" min="1" value={primarySelected.number || 1} onChange={e => updateSelected({ number: Math.max(1, Number(e.target.value)) })} className="w-14 h-10 px-1 bg-gk-page/50 border border-gk-border/50 rounded-lg text-sm text-gk-text-primary text-center focus:outline-none focus:border-gk-accent/50" />
+                      <button onClick={() => updateSelected({ number: (primarySelected.number || 1) + 1 })} className="w-10 h-10 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-lg text-gk-text-primary flex items-center justify-center transition-colors">+</button>
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1.5">Tamaño ({Math.round(primarySelected.w)}px)</label>
-                      <input type="range" min="20" max="200" value={Math.round(primarySelected.w)} onChange={e => { const newSize = Number(e.target.value); const ratio = newSize / primarySelected.w; updateSelected({ w: newSize, h: newSize, fontSize: Math.round(primarySelected.fontSize * ratio) }); }} className="w-full accent-teal-500" />
+                      <label className="block text-xs text-gk-text-tertiary mb-1.5">Tamaño ({Math.round(primarySelected.w)}px)</label>
+                      <input type="range" min="20" max="200" value={Math.round(primarySelected.w)} onChange={e => { const newSize = Number(e.target.value); const ratio = newSize / primarySelected.w; updateSelected({ w: newSize, h: newSize, fontSize: Math.round(primarySelected.fontSize * ratio) }); }} className="w-full accent-gk-accent" />
                     </div>
                     <div className="flex gap-2 items-center">
-                      <label className="text-xs text-slate-400 shrink-0 w-14">Color nº</label>
+                      <label className="text-xs text-gk-text-tertiary shrink-0 w-14">Color nº</label>
                       <input type="color" value={primarySelected.numberColor} onChange={e => updateSelected({ numberColor: e.target.value })} className="w-9 h-9 rounded-lg cursor-pointer border-0 bg-transparent" />
                     </div>
                     <div className="flex gap-2 items-center">
-                      <label className="text-xs text-slate-400 shrink-0 w-14">Borde</label>
+                      <label className="text-xs text-gk-text-tertiary shrink-0 w-14">Borde</label>
                       <input type="color" value={primarySelected.stroke} onChange={e => updateSelected({ stroke: e.target.value })} className="w-9 h-9 rounded-lg cursor-pointer shrink-0 border-0 bg-transparent" />
-                      <input type="number" min="0" max="20" value={primarySelected.strokeWidth} onChange={e => updateSelected({ strokeWidth: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg text-xs text-slate-100 text-center focus:outline-none focus:border-teal-500/50" />
-                      <button onClick={() => updateSelected({ noStroke: !primarySelected.noStroke })} className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.noStroke ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{primarySelected.noStroke ? 'Con borde' : 'Sin borde'}</button>
+                      <input type="number" min="0" max="20" value={primarySelected.strokeWidth} onChange={e => updateSelected({ strokeWidth: Number(e.target.value) })} className="w-14 px-2 py-1.5 bg-gk-page/50 border border-gk-border/50 rounded-lg text-xs text-gk-text-primary text-center focus:outline-none focus:border-gk-accent/50" />
+                      <button onClick={() => updateSelected({ noStroke: !primarySelected.noStroke })} className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.noStroke ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>{primarySelected.noStroke ? 'Con borde' : 'Sin borde'}</button>
                     </div>
                     <div className="flex gap-2 items-center">
-                      <label className="text-xs text-slate-400 shrink-0 w-14">Fondo</label>
+                      <label className="text-xs text-gk-text-tertiary shrink-0 w-14">Fondo</label>
                       <input type="color" value={primarySelected.bgColor === 'transparent' ? '#ffffff' : primarySelected.bgColor} onChange={e => updateSelected({ bgColor: e.target.value })} className="w-9 h-9 rounded-lg cursor-pointer border-0 bg-transparent" />
-                      <button onClick={() => updateSelected({ bgColor: 'transparent' })} className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.bgColor === 'transparent' ? 'bg-teal-600 text-white' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>Sin fondo</button>
+                      <button onClick={() => updateSelected({ bgColor: 'transparent' })} className={`flex-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${primarySelected.bgColor === 'transparent' ? 'v2-btn-active font-semibold' : 'v2-btn-inactive'}`}>Sin fondo</button>
                     </div>
                   </>
                 )}
 
                 {(primarySelected.type === 'rect' || primarySelected.type === 'circle' || primarySelected.type === 'triangle' || primarySelected.type === 'arrow') && (
-                  <div className="border-t border-slate-700/50 pt-3 mt-1">
-                    <label className="block text-xs text-slate-400 mb-2">Presets</label>
+                  <div className="border-t border-gk-border/50 pt-3 mt-1">
+                    <label className="block text-xs text-gk-text-tertiary mb-2">Presets</label>
+                    {showPresetName ? (
+                      <div className="flex gap-1.5 mb-2">
+                        <input type="text" value={presetName} onChange={e => setPresetName(e.target.value)} placeholder="Nombre" className="flex-1 px-2.5 py-1.5 bg-gk-page/50 border border-gk-border/50 rounded-lg text-xs text-gk-text-primary focus:outline-none focus:border-gk-accent/50" autoFocus onKeyDown={e => { if (e.key === 'Enter') saveShapePreset(); if (e.key === 'Escape') { setShowPresetName(false); setPresetName(''); } }} />
+                        <button onClick={saveShapePreset} className="px-2.5 py-1.5 bg-gk-accent hover:bg-gk-accent rounded-lg text-xs text-white transition-colors"><Save size={12} /></button>
+                        <button onClick={() => { setShowPresetName(false); setPresetName(''); }} className="px-2.5 py-1.5 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-xs text-gk-text-secondary transition-colors">✕</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setShowPresetName(true)} className="w-full px-3 py-2 mb-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-xs text-gk-text-primary flex items-center justify-center gap-2 transition-colors"><Star size={12} /> Guardar preset</button>
+                    )}
                     {(shapePresets[primarySelected.type] || []).length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-2">
+                      <div className="space-y-1">
                         {(shapePresets[primarySelected.type] || []).map(p => (
-                          <div key={p.id} className="flex items-center gap-1">
-                            <button onClick={() => loadShapePreset(p)} className="px-2 py-1 bg-slate-700/50 hover:bg-slate-700 rounded-md text-xs text-slate-200 truncate max-w-[80px] transition-colors" title={p.name}>{p.name}</button>
-                            <button onClick={() => deleteShapePreset(p.id)} className="text-red-400 hover:text-red-300 text-xs transition-colors">✕</button>
+                          <div key={p.id} className="flex items-center gap-1.5">
+                            <button onClick={() => loadShapePreset(p)} className="flex-1 px-3 py-2 v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-xs text-gk-text-primary text-left transition-colors" title={p.name}>{p.name}</button>
+                            <button onClick={() => deleteShapePreset(p.id)} className="shrink-0 w-8 h-8 flex items-center justify-center v2-btn-panel border border-gk-border/30 hover:bg-gk-elevated hover:border-gk-border/50 rounded-lg text-stat-rose hover:text-stat-rose text-xs transition-colors">✕</button>
                           </div>
                         ))}
                       </div>
-                    )}
-                    {showPresetName ? (
-                      <div className="flex gap-1.5">
-                        <input type="text" value={presetName} onChange={e => setPresetName(e.target.value)} placeholder="Nombre" className="flex-1 px-2.5 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-teal-500/50" autoFocus onKeyDown={e => { if (e.key === 'Enter') saveShapePreset(); if (e.key === 'Escape') { setShowPresetName(false); setPresetName(''); } }} />
-                        <button onClick={saveShapePreset} className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-500 rounded-lg text-xs text-white transition-colors"><Save size={12} /></button>
-                        <button onClick={() => { setShowPresetName(false); setPresetName(''); }} className="px-2.5 py-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-xs text-slate-300 transition-colors">✕</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setShowPresetName(true)} className="w-full px-3 py-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-xs text-slate-200 flex items-center justify-center gap-2 transition-colors"><Star size={12} /> Guardar preset</button>
                     )}
                   </div>
                 )}

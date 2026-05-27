@@ -574,16 +574,37 @@ export async function ensureDefaultTags() {
 
 async function ensureDefaultSettings() {
   const count = await db.settings.count();
+  const defaultAttributes = [
+    { name: 'Reflejos', value: 70 },
+    { name: 'Juego Aéreo', value: 70 },
+    { name: 'Juego con Pies', value: 70 },
+    { name: '1 vs 1', value: 70 },
+    { name: 'Liderazgo', value: 70 },
+  ];
   if (count === 0) {
     const defaultPorteros = [
-      { name: 'MARC', active: true },
-      { name: 'IKER', active: true },
-      { name: 'CANDAL', active: true },
+      { name: 'MARC', active: true, photo: null },
+      { name: 'IKER', active: true, photo: null },
+      { name: 'CANDAL', active: true, photo: null },
     ];
     await db.settings.add({ key: 'teamName', value: 'Club Deportivo Lugo' });
     await db.settings.add({ key: 'teamCrest', value: null });
     await db.settings.add({ key: 'secondaryImage', value: null });
     await db.settings.add({ key: 'defaultPorteros', value: defaultPorteros });
+    await db.settings.add({ key: 'defaultAttributes', value: defaultAttributes });
+  } else {
+    const existing = await db.settings.where('key').equals('defaultAttributes').first();
+    if (!existing) {
+      await db.settings.add({ key: 'defaultAttributes', value: defaultAttributes });
+    }
+  }
+  const existingColor = await db.settings.where('key').equals('corporateColor').first();
+  if (!existingColor) {
+    await db.settings.add({ key: 'corporateColor', value: '#dc2626' });
+  }
+  const existingApplyAll = await db.settings.where('key').equals('applyTemplateToAll').first();
+  if (!existingApplyAll) {
+    await db.settings.add({ key: 'applyTemplateToAll', value: false });
   }
 }
 
@@ -734,6 +755,149 @@ export async function deduplicateSeedTasks() {
     console.error('[db] Deduplicate seed tasks error:', err);
   }
 }
+
+// Version 20 — Add goalkeeper match analysis table
+db.version(20).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+  analyses: '++id, goalkeeperName, opponent, date, seasonId, createdAt, deletedAt',
+});
+
+// Version 21 — Extend analyses for match library/editor workflow
+db.version(21).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+  analyses: '++id, [seasonId+xmlFileName], seasonId, xmlFileName, matchName, goalkeeperName, opponent, date, jornadaNumber, createdAt, deletedAt',
+});
+
+// Version 22 — Add clipRatings and clipCustomizations to analyses
+db.version(22).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+  analyses: '++id, [seasonId+xmlFileName], seasonId, xmlFileName, matchName, goalkeeperName, opponent, date, jornadaNumber, createdAt, deletedAt',
+}).upgrade(async trans => {
+  await trans.table('analyses').toCollection().modify(a => {
+    if (a.clipRatings === undefined) a.clipRatings = {};
+    if (a.clipCustomizations === undefined) a.clipCustomizations = {};
+    if (a.microciclo === undefined) a.microciclo = null;
+  });
+});
+
+// Version 23 — Infer videoType/videoSource for analyses with videoPath but missing type
+db.version(23).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+  analyses: '++id, [seasonId+xmlFileName], seasonId, xmlFileName, matchName, goalkeeperName, opponent, date, jornadaNumber, createdAt, deletedAt',
+}).upgrade(async trans => {
+  await trans.table('analyses').toCollection().modify(a => {
+    if (!a.videoType && !a.videoSource && a.videoPath) {
+      a.videoType = 'local';
+      a.videoSource = 'local';
+    }
+    if (!a.videoType && !a.videoSource && a.youtubeUrl) {
+      a.videoType = 'veo';
+      a.videoSource = 'veo';
+    }
+  });
+});
+
+// Version 24 — Version-marker legacy clipCustomizations
+// Iterates over existing analyses and marks legacy clipCustomizations
+// entries that do NOT have a `_v` field with `_v: 1` so future code
+// can distinguish the legacy format from the new v2 format.
+db.version(24).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+  analyses: '++id, [seasonId+xmlFileName], seasonId, xmlFileName, matchName, goalkeeperName, opponent, date, jornadaNumber, createdAt, deletedAt',
+}).upgrade(async trans => {
+  await trans.table('analyses').toCollection().modify(a => {
+    if (a.clipCustomizations && typeof a.clipCustomizations === 'object' && !Array.isArray(a.clipCustomizations)) {
+      for (const eventId of Object.keys(a.clipCustomizations)) {
+        const entry = a.clipCustomizations[eventId];
+        if (entry && typeof entry === 'object' && !Array.isArray(entry) && !('_v' in entry)) {
+          entry._v = 1;
+        }
+      }
+    }
+  });
+});
+
+// Version 25 — Add SofaScore match URL and data support
+db.version(25).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+  analyses: '++id, [seasonId+xmlFileName], seasonId, xmlFileName, matchName, goalkeeperName, opponent, date, jornadaNumber, createdAt, deletedAt, matchUrl',
+}).upgrade(async trans => {
+  await trans.table('analyses').toCollection().modify(a => {
+    if (a.matchUrl === undefined) a.matchUrl = '';
+    if (a.sofascoreData === undefined) a.sofascoreData = null;
+  });
+});
+
+// Version 26 — Add porteros (goalkeeper profiles) table
+db.version(26).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+  analyses: '++id, [seasonId+xmlFileName], seasonId, xmlFileName, matchName, goalkeeperName, opponent, date, jornadaNumber, createdAt, deletedAt',
+  porteros: '++id, name, slug, sofascoreId, isManual, createdAt',
+}).upgrade(async trans => {
+  const count = await trans.table('porteros').count();
+  if (count === 0) {
+    const defaultPorteros = [
+      { name: 'MARC', slug: 'marc', isManual: true, team: 'CD Lugo', personalRating: 0, customAttributes: [
+        { name: 'Reflejos', value: 70 }, { name: 'Juego Aéreo', value: 70 },
+        { name: 'Juego con Pies', value: 70 }, { name: '1 vs 1', value: 70 },
+        { name: 'Liderazgo', value: 70 },
+      ], createdAt: new Date(), updatedAt: new Date() },
+      { name: 'IKER', slug: 'iker', isManual: true, team: 'CD Lugo', personalRating: 0, customAttributes: [
+        { name: 'Reflejos', value: 70 }, { name: 'Juego Aéreo', value: 70 },
+        { name: 'Juego con Pies', value: 70 }, { name: '1 vs 1', value: 70 },
+        { name: 'Liderazgo', value: 70 },
+      ], createdAt: new Date(), updatedAt: new Date() },
+      { name: 'CANDAL', slug: 'candal', isManual: true, team: 'CD Lugo', personalRating: 0, customAttributes: [
+        { name: 'Reflejos', value: 70 }, { name: 'Juego Aéreo', value: 70 },
+        { name: 'Juego con Pies', value: 70 }, { name: '1 vs 1', value: 70 },
+        { name: 'Liderazgo', value: 70 },
+      ], createdAt: new Date(), updatedAt: new Date() },
+    ];
+    await trans.table('porteros').bulkAdd(defaultPorteros);
+  }
+});
 
 // Backwards compatibility alias
 export const seedDatabase = ensureSeedTasks;

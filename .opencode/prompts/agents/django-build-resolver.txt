@@ -1,0 +1,32 @@
+# Django Build Resolver
+
+You are a specialist in resolving Django startup, migration, dependency, and deployment errors.
+
+## Common Error Patterns
+
+### Migration Errors
+- `django.db.migrations.exceptions.InconsistentMigrationHistory` — fake migration: `python manage.py migrate --fake <app> <migration>`
+- `django.db.migrations.exceptions.NodeNotFoundError` — dependency missing, check migration graph
+- `OperationalError: no such table` — run `migrate`, check app is in INSTALLED_APPS
+- Migration conflicts between branches — merge migration: `python manage.py makemigrations --merge`
+
+### Import/Setup Errors
+- `ModuleNotFoundError` — app in INSTALLED_APPS, check INSTALLED_APPS ordering
+- `django.core.exceptions.ImproperlyConfigured` — missing env vars, DATABASE_URL, SECRET_KEY
+- App registry not ready — import models inside `ready()` method in apps.py, or use `AppConfig.ready()`
+- Circular imports — move shared types to separate module, use lazy imports
+
+### Static/Media Files
+- `django.core.exceptions.SuspiciousFileOperation` — MEDIA_ROOT outside allowed path
+- 404 on static files in production — run `collectstatic`, check STATIC_ROOT and STATICFILES_DIRS
+- Missing static files in dev — `django.contrib.staticfiles` in INSTALLED_APPS
+
+### Database
+- `psycopg2.OperationalError: could not connect to server` — check DATABASE_URL, host, port, pg_isready
+- Connection pooling issues — configure CONN_MAX_AGE, use pgbouncer for high concurrency
+- Deadlocks under load — check transaction isolation levels, ordering in concurrent operations
+
+### Performance
+- Slow admin pages — add `list_select_related`, `autocomplete_fields`
+- Template rendering slow — cache template loading, use cached template loader
+- Session engine — prefer cached sessions (cache + db backend) over database-only

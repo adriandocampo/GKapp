@@ -48,9 +48,9 @@ function JsonEditor({ value, onChange, readOnly = false }) {
         onChange={e => setText(e.target.value)}
         onBlur={handleBlur}
         rows={12}
-        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-slate-200 focus:outline-none focus:border-teal-500 resize-y"
+        className="w-full px-3 py-2 bg-gk-page border border-gk-border rounded-lg text-xs font-mono text-gk-text-primary focus:outline-none focus:border-gk-accent resize-y"
       />
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-stat-rose">{error}</p>}
     </div>
   );
 }
@@ -187,8 +187,8 @@ export default function UserDataViewer({ uid }) {
               onClick={() => { setActiveTable(key); setExpandedId(null); setSearch(''); }}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
                 active
-                  ? 'bg-teal-600/20 border-teal-500/40 text-teal-400'
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                  ? 'bg-gk-accent/15 border-gk-accent/40 text-gk-accent'
+                  : 'bg-gk-card border-gk-border text-gk-text-tertiary hover:bg-gk-elevated hover:text-gk-text-primary'
               }`}
             >
               <Icon size={15} />
@@ -201,18 +201,18 @@ export default function UserDataViewer({ uid }) {
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gk-text-tertiary" size={14} />
           <input
             type="text"
             placeholder="Buscar en JSON..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+            className="w-full pl-8 pr-3 py-1.5 bg-gk-page border border-gk-border rounded-lg text-sm text-gk-text-primary placeholder-gk-text-tertiary focus:outline-none focus:border-gk-accent"
           />
         </div>
         <button
           onClick={handleCreate}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 rounded-lg text-white text-sm font-medium transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gk-accent hover:bg-gk-accent rounded-lg text-white text-sm font-medium transition-colors"
         >
           <Plus size={14} /> Nuevo
         </button>
@@ -225,35 +225,35 @@ export default function UserDataViewer({ uid }) {
       </div>
 
       {/* Rows */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+      <div className="bg-gk-card rounded-xl border border-gk-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 size={24} className="text-slate-500 animate-spin" />
+            <Loader2 size={24} className="text-gk-text-tertiary animate-spin" />
           </div>
         ) : filteredRows.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 text-sm">No hay documentos</div>
+          <div className="text-center py-12 text-gk-text-tertiary text-sm">No hay documentos</div>
         ) : (
-          <div className="divide-y divide-slate-700/50">
+          <div className="divide-y divide-gk-border/50">
             {filteredRows.map(row => {
               const isOpen = expandedId === row.id;
               const isDeleted = !!row.deletedAt;
               return (
-                <div key={row.id} className={`p-3 ${isDeleted ? 'opacity-50 bg-slate-900/40' : ''}`}>
+                <div key={row.id} className={`p-3 ${isDeleted ? 'opacity-50 bg-gk-page/40' : ''}`}>
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setExpandedId(isOpen ? null : row.id)}
-                      className="p-1 hover:bg-slate-700 rounded text-slate-400 transition-colors"
+                      className="p-1 hover:bg-gk-elevated rounded text-gk-text-tertiary transition-colors"
                     >
                       {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     </button>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-200 truncate">
+                      <div className="text-sm font-medium text-gk-text-primary truncate">
                         {row.title || row.name || row.key || `ID: ${row.id}`}
                       </div>
-                      <div className="text-xs text-slate-500 truncate">
+                      <div className="text-xs text-gk-text-tertiary truncate">
                         {row.id}
                         {isDeleted && (
-                          <span className="ml-2 text-red-400">
+                          <span className="ml-2 text-stat-rose">
                             Eliminado el {new Date(row.deletedAt).toLocaleDateString()}
                           </span>
                         )}
@@ -263,7 +263,7 @@ export default function UserDataViewer({ uid }) {
                       {isDeleted && (
                         <button
                           onClick={() => handleRestore(row)}
-                          className="p-1.5 hover:bg-teal-900/30 rounded text-teal-400 hover:text-teal-300 transition-colors"
+                          className="p-1.5 hover:bg-gk-accent/15 rounded text-gk-accent hover:text-gk-accent transition-colors"
                           title="Restaurar"
                         >
                           <RotateCcw size={14} />
@@ -271,7 +271,7 @@ export default function UserDataViewer({ uid }) {
                       )}
                       <button
                         onClick={() => handleDelete(row)}
-                        className="p-1.5 hover:bg-red-900/30 rounded text-slate-400 hover:text-red-400 transition-colors"
+                        className="p-1.5 hover:bg-red-900/30 rounded text-gk-text-tertiary hover:text-stat-rose transition-colors"
                         title="Eliminar permanentemente"
                       >
                         <Trash2 size={14} />
@@ -290,13 +290,13 @@ export default function UserDataViewer({ uid }) {
                       <div className="flex justify-end gap-2 mt-2">
                         <button
                           onClick={() => setExpandedId(null)}
-                          className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 text-sm transition-colors flex items-center gap-1"
+                          className="px-3 py-1.5 bg-gk-elevated hover:bg-gk-elevated rounded-lg text-gk-text-primary text-sm transition-colors flex items-center gap-1"
                         >
                           <X size={14} /> Cerrar
                         </button>
                         <button
                           onClick={() => handleSave(row)}
-                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 rounded-lg text-white text-sm transition-colors flex items-center gap-1"
+                          className="px-3 py-1.5 bg-gk-accent hover:bg-gk-accent rounded-lg text-white text-sm transition-colors flex items-center gap-1"
                         >
                           <Save size={14} /> Guardar cambios
                         </button>

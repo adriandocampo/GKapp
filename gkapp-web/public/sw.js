@@ -1,4 +1,4 @@
-var CACHE_NAME = 'gkapp-v1';
+var CACHE_NAME = 'gkapp-v2';
 var APP_SHELL = [
   './',
   './index.html',

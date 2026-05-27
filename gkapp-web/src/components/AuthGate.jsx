@@ -33,34 +33,43 @@ function LoginScreen({ sessionKicked, onDismissKick }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen p-4 flex items-center justify-center" style={{ background: '#0c0b09' }}>
       <div className="w-full max-w-sm">
-        {/* Logo / brand */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-teal-500/10 border border-teal-500/20 mb-5">
-            <svg viewBox="0 0 24 24" className="w-10 h-10 text-teal-400" fill="none" stroke="currentColor" strokeWidth={1.8}>
-              <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2Z"/>
-              <path d="M9 12l2 2 4-4"/>
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-5" style={{background: 'rgba(232,172,101,0.08)', border: '1px solid rgba(232,172,101,0.15)'}}>
+            <svg viewBox="0 0 100 100" className="w-12 h-12" fill="none" stroke="#e8ac65" strokeWidth={1.5}>
+              <circle cx="50" cy="50" r="45" stroke="currentColor" fill="none"/>
+              <path d="M50 5 L50 95" stroke="currentColor" opacity="0.2"/>
+              <path d="M5 50 L95 50" stroke="currentColor" opacity="0.2"/>
+              <path d="M26 42 Q26 28 38 28 Q44 28 46 34" stroke="currentColor" strokeLinecap="round"/>
+              <path d="M46 34 L46 50" stroke="currentColor" strokeLinecap="round"/>
+              <path d="M43 50 L49 50" stroke="currentColor" strokeLinecap="round"/>
+              <path d="M62 42 Q62 28 74 28 Q80 28 82 34" stroke="currentColor" strokeLinecap="round"/>
+              <path d="M82 34 L82 50" stroke="currentColor" strokeLinecap="round"/>
+              <path d="M79 50 L85 50" stroke="currentColor" strokeLinecap="round"/>
+              <path d="M38 68 L38 80" stroke="currentColor" strokeLinecap="round"/>
+              <path d="M62 68 L62 80" stroke="currentColor" strokeLinecap="round"/>
+              <path d="M30 62 Q50 90 70 62" stroke="currentColor" fill="rgba(232,172,101,0.10)" strokeLinecap="round"/>
+              <text x="50" y="95" textAnchor="middle" fontSize="8" fill="#baa587" fontWeight="600">GK</text>
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">GKApp</h1>
-          <p className="text-slate-400 mt-2 text-sm">Gestión de porteros · Análisis táctico</p>
+          <h1 className="text-3xl font-bold tracking-tight" style={{color: '#f1ede7'}}>GKApp</h1>
+          <p className="mt-2 text-sm" style={{color: '#997b66'}}>Gestión de porteros · Análisis táctico</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl space-y-4">
-          <h2 className="text-lg font-semibold text-slate-100 mb-1">Iniciar sesión</h2>
-          <p className="text-sm text-slate-400 mb-6">
+        <div className="glass-card-static p-8 shadow-2xl space-y-4" style={{borderRadius: 24}}>
+          <h2 className="text-lg font-semibold mb-1" style={{color: '#f1ede7'}}>Iniciar sesión</h2>
+          <p className="text-sm mb-6" style={{color: '#997b66'}}>
             Tus datos se sincronizan de forma segura en la nube, aislados de otros usuarios.
           </p>
 
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white hover:bg-slate-100 disabled:opacity-60 rounded-xl text-slate-800 font-semibold text-sm transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white hover:bg-gray-100 disabled:opacity-60 rounded-xl text-gray-900 font-semibold text-sm transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
           >
             {loading ? (
-              <div className="w-5 h-5 border-2 border-slate-400 border-t-slate-800 rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
             ) : (
               /* Google G icon */
               <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
@@ -76,9 +85,9 @@ function LoginScreen({ sessionKicked, onDismissKick }) {
           {/* Guest mode button */}
           <button
             onClick={enterGuestMode}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-slate-300 font-semibold text-sm transition-all border border-slate-600 hover:border-slate-500 active:scale-[0.98]"
+            className="v2-btn-ghost w-full justify-center py-3"
           >
-            <svg viewBox="0 0 24 24" className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8}>
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} style={{color: '#997b66'}}>
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
               <circle cx="9" cy="7" r="4"/>
               <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
@@ -87,21 +96,21 @@ function LoginScreen({ sessionKicked, onDismissKick }) {
             Entrar como invitado
           </button>
 
-          <p className="text-xs text-slate-500 text-center leading-relaxed">
+          <p className="text-xs text-center leading-relaxed" style={{color: '#997b66'}}>
             Modo invitado: tus datos se guardan solo en este dispositivo y se perderán si cierras sesión o borras los datos del navegador.
           </p>
 
           {error && (
-            <p className="text-sm text-red-400 text-center">{error}</p>
+            <p className="text-sm text-center" style={{color: '#e04a4a'}}>{error}</p>
           )}
 
           {sessionKicked && (
-            <div className="bg-amber-900/30 border border-amber-600/40 rounded-lg p-3 text-center">
-              <p className="text-sm text-amber-300 font-medium">Sesión cerrada desde otro dispositivo</p>
-              <p className="text-xs text-amber-400/70 mt-1">Has iniciado sesión en otro dispositivo. Para continuar aquí, vuelve a iniciar sesión.</p>
+            <div className="rounded-xl p-3 text-center" style={{background: 'rgba(240,180,41,0.08)', border: '1px solid rgba(240,180,41,0.15)'}}>
+              <p className="text-sm font-medium" style={{color: '#f0b429'}}>Sesión cerrada desde otro dispositivo</p>
+              <p className="text-xs mt-1" style={{color: 'rgba(240,180,41,0.7)'}}>Has iniciado sesión en otro dispositivo. Para continuar aquí, vuelve a iniciar sesión.</p>
               <button
                 onClick={onDismissKick}
-                className="mt-2 text-xs text-amber-400 hover:text-amber-300 underline"
+                className="mt-2 text-xs underline" style={{color: '#f0b429'}}
               >
                 Entendido
               </button>
@@ -129,8 +138,8 @@ export default function AuthGate({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-500" />
+      <div className="min-h-screen bg-gk-page flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gk-accent" />
       </div>
     );
   }

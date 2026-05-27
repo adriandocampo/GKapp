@@ -7,6 +7,10 @@ import {
   purgeUserData,
   restoreDefaultTagsForUser,
   restoreDefaultTasksForUser,
+  getBackupConfig,
+  setBackupConfig,
+  createBackup,
+  getBackup,
 } from '../utils/adminFirestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
@@ -20,10 +24,10 @@ import UserDataViewer from '../components/UserDataViewer';
 
 function CountBadge({ icon: Icon, label, count }) {
   return (
-    <div className="flex items-center gap-1.5 text-xs text-slate-400">
+    <div className="flex items-center gap-1.5 text-xs text-gk-text-tertiary">
       <Icon size={13} />
       <span>{label}:</span>
-      <span className="font-medium text-slate-200">{count ?? 0}</span>
+      <span className="font-medium text-gk-text-primary">{count ?? 0}</span>
     </div>
   );
 }
@@ -40,6 +44,9 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedUid, setSelectedUid] = useState(null);
+  const [backupConfigs, setBackupConfigs] = useState({});
+  const [backupDates, setBackupDates] = useState({});
+  const [forcingBackup, setForcingBackup] = useState({});
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -65,6 +72,26 @@ export default function AdminDashboard() {
         })
       );
       setCounts(countsMap);
+
+      // Load backup configs and latest backup dates in parallel
+      const configMap = {};
+      const dateMap = {};
+      await Promise.all(
+        profiles.map(async (u) => {
+          try {
+            const [config, backupMeta] = await Promise.all([
+              getBackupConfig(u.uid),
+              getBackup(u.uid),
+            ]);
+            if (config) configMap[u.uid] = config;
+            if (backupMeta) dateMap[u.uid] = backupMeta._createdAt;
+          } catch (e) {
+            // ignore
+          }
+        })
+      );
+      setBackupConfigs(configMap);
+      setBackupDates(dateMap);
     } catch (err) {
       console.error(err);
       addToast('Error cargando usuarios', 'error');
@@ -146,17 +173,52 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleToggleBackup(uid, enabled) {
+    try {
+      const config = {
+        enabled,
+        intervalDays: 7,
+        updatedAt: new Date().toISOString(),
+      };
+      await setBackupConfig(uid, config);
+      setBackupConfigs(prev => ({ ...prev, [uid]: config }));
+      addToast(enabled ? 'Backup automático activado' : 'Backup automático desactivado', 'success');
+    } catch (err) {
+      addToast('Error: ' + err.message, 'error');
+    }
+  }
+
+  async function handleForceBackup(uid) {
+    setForcingBackup(prev => ({ ...prev, [uid]: true }));
+    try {
+      const result = await createBackup(uid);
+      const now = new Date();
+      setBackupDates(prev => ({ ...prev, [uid]: now }));
+      addToast(`Backup completado (${(result.size / 1024).toFixed(1)} KB)`, 'success');
+    } catch (err) {
+      addToast('Error en backup: ' + err.message, 'error');
+    } finally {
+      setForcingBackup(prev => ({ ...prev, [uid]: false }));
+    }
+  }
+
+  function formatBackupDate(timestamp) {
+    if (!timestamp) return null;
+    const d = timestamp?.toDate?.() || new Date(timestamp);
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
   if (selectedUid) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSelectedUid(null)}
-            className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"
+            className="p-2 hover:bg-gk-card rounded-lg text-gk-text-tertiary transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
-          <h1 className="text-xl font-bold text-slate-100">Datos de usuario</h1>
+          <h1 className="text-xl font-bold font-serif text-gk-text-primary tracking-tight">Datos de usuario</h1>
         </div>
         <UserDataViewer uid={selectedUid} />
       </div>
@@ -167,38 +229,38 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <div className="p-2 bg-indigo-600/20 rounded-lg">
-          <Shield size={24} className="text-indigo-400" />
+          <Shield size={24} className="text-stat-indigo" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-slate-100">Panel de Administración</h1>
-          <p className="text-sm text-slate-400">Gestiona usuarios, datos y backups</p>
+          <h1 className="text-xl font-bold font-serif text-gk-text-primary tracking-tight">Panel de Administración</h1>
+          <p className="text-sm text-gk-text-tertiary">Gestiona usuarios, datos y backups</p>
         </div>
       </div>
 
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-4">
+      <div className="bg-gk-card rounded-xl border border-gk-border p-4">
         <div className="flex items-center gap-3 mb-4">
-          <Users size={18} className="text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Usuarios registrados</h2>
-          <span className="ml-auto text-xs text-slate-500">{users.length} total</span>
+          <Users size={18} className="text-gk-text-tertiary" />
+          <h2 className="text-sm font-semibold text-gk-text-secondary uppercase tracking-wider">Usuarios registrados</h2>
+          <span className="ml-auto text-xs text-gk-text-tertiary">{users.length} total</span>
         </div>
 
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gk-text-tertiary" size={16} />
           <input
             type="text"
             placeholder="Buscar por nombre o email..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+            className="w-full pl-9 pr-4 py-2 bg-gk-page border border-gk-border rounded-lg text-sm text-gk-text-primary placeholder-gk-text-tertiary focus:outline-none focus:border-gk-accent"
           />
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 size={24} className="text-slate-500 animate-spin" />
+            <Loader2 size={24} className="text-gk-text-tertiary animate-spin" />
           </div>
         ) : filteredUsers.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 text-sm">No hay usuarios registrados</div>
+          <div className="text-center py-12 text-gk-text-tertiary text-sm">No hay usuarios registrados</div>
         ) : (
           <div className="space-y-3">
             {filteredUsers.map(u => {
@@ -206,18 +268,18 @@ export default function AdminDashboard() {
               return (
                 <div
                   key={u.uid}
-                  className="flex items-center gap-4 p-3 bg-slate-900 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors"
+                  className="flex items-center gap-4 p-3 bg-gk-page rounded-lg border border-gk-border/50 hover:border-gk-border-hover transition-colors"
                 >
                   <img
                     src={u.photoURL || 'https://www.gravatar.com/avatar/?d=mp'}
                     alt=""
-                    className="w-10 h-10 rounded-full bg-slate-800 object-cover shrink-0"
+                    className="w-10 h-10 rounded-full bg-gk-card object-cover shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-200 truncate">
+                    <div className="text-sm font-medium text-gk-text-primary truncate">
                       {u.displayName || 'Sin nombre'}
                     </div>
-                    <div className="text-xs text-slate-500 truncate">{u.email}</div>
+                    <div className="text-xs text-gk-text-tertiary truncate">{u.email}</div>
                     <div className="mt-2 flex flex-wrap gap-3">
                       <CountBadge icon={Database} label="Tareas" count={`${c.tasksActive ?? 0}${c.tasksDeleted ? ` (${c.tasksDeleted} elim.)` : ''}`} />
                       <CountBadge icon={ClipboardList} label="Sesiones" count={`${c.sessionsActive ?? 0}${c.sessionsDeleted ? ` (${c.sessionsDeleted} elim.)` : ''}`} />
@@ -226,36 +288,56 @@ export default function AdminDashboard() {
                       <CountBadge icon={Settings} label="Ajustes" count={c.settings} />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => setSelectedUid(u.uid)}
                       title="Ver datos"
-                      className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors"
+                      className="p-2 bg-gk-card hover:bg-gk-elevated rounded-lg text-gk-text-secondary transition-colors"
                     >
                       <Eye size={16} />
                     </button>
                     <button
                       onClick={() => handleExport(u.uid)}
                       title="Exportar backup"
-                      className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-teal-400 transition-colors"
+                      className="p-2 bg-gk-card hover:bg-gk-elevated rounded-lg text-gk-accent transition-colors"
                     >
                       <Download size={16} />
                     </button>
                     <button
+                      onClick={() => handleForceBackup(u.uid)}
+                      disabled={forcingBackup[u.uid]}
+                      title={forcingBackup[u.uid] ? 'Creando backup...' : 'Forzar backup ahora'}
+                      className="p-2 bg-gk-card hover:bg-gk-elevated rounded-lg text-cyan-400 transition-colors disabled:opacity-40"
+                    >
+                      {forcingBackup[u.uid] ? <Loader2 size={16} className="animate-spin" /> : <FileJson size={16} />}
+                    </button>
+                    <button
+                      onClick={() => handleToggleBackup(u.uid, !backupConfigs[u.uid]?.enabled)}
+                      title={backupConfigs[u.uid]?.enabled ? 'Desactivar backup automático (7d)' : 'Activar backup automático (7d)'}
+                      className={`p-2 rounded-lg transition-colors ${backupConfigs[u.uid]?.enabled ? 'bg-gk-accent/15 text-gk-accent' : 'bg-gk-card text-gk-text-tertiary hover:text-gk-text-secondary'}`}
+                    >
+                      <Database size={16} />
+                    </button>
+                    <button
                       onClick={() => handleRestoreDefaults(u.uid, u.displayName)}
                       title="Restaurar tareas y etiquetas por defecto"
-                      className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-amber-400 transition-colors"
+                      className="p-2 bg-gk-card hover:bg-gk-elevated rounded-lg text-amber-400 transition-colors"
                     >
                       <RotateCcw size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(u.uid, u.displayName)}
                       title="Eliminar usuario"
-                      className="p-2 bg-slate-800 hover:bg-red-900/30 rounded-lg text-slate-400 hover:text-red-400 transition-colors"
+                      className="p-2 bg-gk-card hover:bg-red-900/30 rounded-lg text-gk-text-tertiary hover:text-stat-rose transition-colors"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
+                  {backupDates[u.uid] && (
+                    <div className="text-[10px] text-gk-text-tertiary text-right shrink-0 w-28 leading-tight">
+                      Backup: {formatBackupDate(backupDates[u.uid])}
+                    </div>
+                  )}
                 </div>
               );
             })}

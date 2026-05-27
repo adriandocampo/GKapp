@@ -36,6 +36,7 @@ export default function TaskEditor() {
     youtubeUrl: null,
   });
   const [newTags, setNewTags] = useState({ phase: '', category: '', situation: '' });
+  const [showNewTag, setShowNewTag] = useState({ phase: false, category: false });
   const [previewUrl, setPreviewUrl]       = useState(null);
   const [videoUrl, setVideoUrl]           = useState(null);    // blob URL for local videos
   const [videoMode, setVideoMode]         = useState('local'); // active tab: 'local'|'youtube'|'upload'
@@ -244,6 +245,18 @@ export default function TaskEditor() {
     setNewTags(prev => ({ ...prev, [type]: '' }));
   }
 
+  async function handleInlineAdd(type) {
+    const name = newTags[type].trim();
+    if (!name) return;
+    const result = await addTagHook(type, name);
+    if (result) {
+      setTask(prev => ({ ...prev, [type]: result }));
+      setHasChanges(true);
+    }
+    setNewTags(prev => ({ ...prev, [type]: '' }));
+    setShowNewTag(prev => ({ ...prev, [type]: false }));
+  }
+
   function goBack() {
     if (hasChanges) {
       const ok = window.confirm('Tienes cambios sin guardar. ¿Seguro que deseas salir?');
@@ -257,89 +270,78 @@ export default function TaskEditor() {
   }
 
   return (
+    <>
+    <div className="animate-v2-fade-in-up -mx-4 -my-6 px-4 py-6 min-h-[calc(100vh-4rem)]" style={{ backgroundColor: '#0c0b09' }}>
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={goBack} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400">
+        <button onClick={goBack} className="v2-btn-ghost rounded-xl p-2">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-xl font-bold text-slate-100">{isNew ? 'Nueva Tarea' : 'Editar Tarea'}</h1>
+        <h1 className="text-xl font-bold" style={{ color: '#f1ede7' }}>{isNew ? 'Nueva Tarea' : 'Editar Tarea'}</h1>
       </div>
 
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-6">
+      <div className="glass-card-static p-6 space-y-6" style={{ borderRadius: 20 }}>
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Título / Contenido</label>
+          <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Título / Contenido</label>
           <input
             name="title"
             value={task.title}
             onChange={handleChange}
-            className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
+            className="v2-input w-full"
             placeholder="Nombre del ejercicio"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Contenido</label>
+          <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Contenido</label>
           <input
             name="subtitle"
             value={task.subtitle}
             onChange={handleChange}
-            className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
+            className="v2-input w-full"
             placeholder="Contenido o subtítulo del ejercicio"
           />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">Fase</label>
-            <select
-              name="phase"
-              value={task.phase}
-              onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
-            >
-              <option value="">Seleccionar...</option>
-              {tags.phase.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <div className="flex gap-2 mt-2">
-              <input
-                value={newTags.phase}
-                onChange={e => setNewTags(prev => ({ ...prev, phase: e.target.value }))}
-                placeholder="Nueva fase"
-                className="flex-1 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-sm text-slate-100"
-              />
-              <button onClick={() => addTag('phase')} className="px-2 py-1 bg-teal-600 rounded text-xs text-white">Añadir</button>
-            </div>
+            <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Fase</label>
+            {showNewTag.phase ? (
+              <div className="flex gap-2">
+                <input autoFocus value={newTags.phase} onChange={e => setNewTags(prev => ({ ...prev, phase: e.target.value }))} placeholder="Nueva fase" className="v2-input flex-1 py-1.5 text-xs" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInlineAdd('phase'); } if (e.key === 'Escape') { setShowNewTag(prev => ({ ...prev, phase: false })); setNewTags(prev => ({ ...prev, phase: '' })); } }} />
+                <button onClick={() => { setShowNewTag(prev => ({ ...prev, phase: false })); setNewTags(prev => ({ ...prev, phase: '' })); }} className="v2-btn-ghost py-1.5 text-xs">✕</button>
+              </div>
+            ) : (
+              <select value={task.phase} onChange={e => { const val = e.target.value; if (val === '__add_new__') { setShowNewTag(prev => ({ ...prev, phase: true })); return; } setTask(prev => ({ ...prev, phase: val })); setHasChanges(true); }} className="v2-select w-full">
+                <option value="">Seleccionar...</option>
+                {tags.phase.map(p => <option key={p} value={p}>{p}</option>)}
+                <option value="__add_new__" style={{color: '#e8ac65'}}>+ Añadir</option>
+              </select>
+            )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">Categoría</label>
-            <select
-              name="category"
-              value={task.category}
-              onChange={handleChange}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
-            >
-              <option value="">Seleccionar...</option>
-              {tags.category.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <div className="flex gap-2 mt-2">
-              <input
-                value={newTags.category}
-                onChange={e => setNewTags(prev => ({ ...prev, category: e.target.value }))}
-                placeholder="Nueva categoría"
-                className="flex-1 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-sm text-slate-100"
-              />
-              <button onClick={() => addTag('category')} className="px-2 py-1 bg-teal-600 rounded text-xs text-white">Añadir</button>
-            </div>
+            <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Categoría</label>
+            {showNewTag.category ? (
+              <div className="flex gap-2">
+                <input autoFocus value={newTags.category} onChange={e => setNewTags(prev => ({ ...prev, category: e.target.value }))} placeholder="Nueva categoría" className="v2-input flex-1 py-1.5 text-xs" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInlineAdd('category'); } if (e.key === 'Escape') { setShowNewTag(prev => ({ ...prev, category: false })); setNewTags(prev => ({ ...prev, category: '' })); } }} />
+                <button onClick={() => { setShowNewTag(prev => ({ ...prev, category: false })); setNewTags(prev => ({ ...prev, category: '' })); }} className="v2-btn-ghost py-1.5 text-xs">✕</button>
+              </div>
+            ) : (
+              <select value={task.category} onChange={e => { const val = e.target.value; if (val === '__add_new__') { setShowNewTag(prev => ({ ...prev, category: true })); return; } setTask(prev => ({ ...prev, category: val })); setHasChanges(true); }} className="v2-select w-full">
+                <option value="">Seleccionar...</option>
+                {tags.category.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="__add_new__" style={{color: '#e8ac65'}}>+ Añadir</option>
+              </select>
+            )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">Situación</label>
+            <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Situación</label>
             <MultiSelectDropdown
               options={tags.situation}
               selected={Array.isArray(task.situation) ? task.situation : []}
               onChange={(val) => { setTask(prev => ({ ...prev, situation: val })); setHasChanges(true); }}
               placeholder="Seleccionar situaciones"
-              onAddNew={() => {
-                const name = window.prompt('Nueva situación:');
+              onAddNew={(name) => {
                 if (name && name.trim()) {
                   addTag('situation', name.trim());
                 }
@@ -350,83 +352,82 @@ export default function TaskEditor() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">Tiempo</label>
+            <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Tiempo</label>
             <input
               name="time"
               value={task.time}
               onChange={handleChange}
-              className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
+              className="v2-input w-full"
               placeholder="Ej: 20'"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">Repeticiones</label>
+            <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Repeticiones</label>
             <input
               name="reps"
               value={task.reps}
               onChange={handleChange}
-              className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
+              className="v2-input w-full"
               placeholder="Ej: 4x2"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Foco</label>
+          <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Foco</label>
           <input
             name="focus"
             value={task.focus}
             onChange={handleChange}
-            className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
+            className="v2-input w-full"
             placeholder="Objetivo principal del ejercicio"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Descripción</label>
+          <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Descripción</label>
           <textarea
             name="description"
             value={task.description}
             onChange={handleChange}
             onDoubleClick={e => e.target.select()}
             rows={5}
-            className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
+            className="v2-input w-full resize-none"
             placeholder="Detalles del ejercicio..."
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Imagen</label>
+          <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Imagen</label>
           <div className="flex items-center gap-4 flex-wrap">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 flex items-center gap-2 transition-colors"
+              className="v2-btn-ghost"
             >
               <Upload size={16} /> Subir imagen
             </button>
             <button
               onClick={() => setShowImageEditor(true)}
-              className="px-4 py-2 bg-indigo-700 hover:bg-indigo-600 rounded-lg text-slate-200 flex items-center gap-2 transition-colors"
+              className="v2-btn-ghost"
             >
               <Paintbrush size={16} /> Crear / Editar imagen
             </button>
             {previewUrl && (
-              <button onClick={removeImage} className="px-4 py-2 bg-red-900/50 hover:bg-red-900/80 rounded-lg text-red-300 flex items-center gap-2 transition-colors">
+              <button onClick={removeImage} className="v2-btn-danger">
                 <X size={16} /> Eliminar
               </button>
             )}
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
           </div>
           {previewUrl && (
-            <img src={previewUrl} alt="Preview" className="mt-4 max-h-64 rounded-lg border border-slate-700" />
+            <img src={previewUrl} alt="Preview" className="mt-4 max-h-64 rounded-xl" style={{border: '1px solid rgba(185,165,135,0.08)'}} />
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Video</label>
+          <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Video</label>
 
-          {/* Mode tabs */}
-          <div className="flex gap-1 mb-3 bg-slate-900 p-1 rounded-lg w-fit">
+          <div className="flex gap-1 mb-3 p-1 rounded-xl" style={{background: 'rgba(22,20,16,0.6)', width: 'fit-content'}}>
             {[
               { key: 'local',  icon: Video,       label: 'Archivo local' },
               { key: 'youtube', icon: Link,        label: 'URL YouTube' },
@@ -437,40 +438,38 @@ export default function TaskEditor() {
               <button
                 key={key}
                 onClick={() => setVideoMode(key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  videoMode === key
-                    ? 'bg-slate-700 text-teal-400'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{
+                  background: videoMode === key ? 'rgba(232,172,101,0.08)' : 'transparent',
+                  color: videoMode === key ? '#e8ac65' : '#997b66',
+                }}
               >
                 <Icon size={13} />{label}
               </button>
             ))}
           </div>
 
-          {/* Local file mode */}
           {videoMode === 'local' && (
             <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => videoFileInputRef.current?.click()}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 flex items-center gap-2 transition-colors"
+                className="v2-btn-ghost"
               >
                 <Video size={16} /> Seleccionar video
               </button>
               {(videoUrl || task.videoType === 'local') && (
-                <button onClick={removeVideo} className="px-4 py-2 bg-red-900/50 hover:bg-red-900/80 rounded-lg text-red-300 flex items-center gap-2 transition-colors">
+                <button onClick={removeVideo} className="v2-btn-danger">
                   <X size={16} /> Eliminar
                 </button>
               )}
               <input ref={videoFileInputRef} type="file" accept="video/*" onChange={handleVideoChange} className="hidden" />
-              <p className="w-full text-xs text-slate-500">El vídeo se guarda en este dispositivo. No se sincroniza entre dispositivos.</p>
+              <p className="w-full text-xs" style={{ color: '#997b66' }}>El vídeo se guarda en este dispositivo. No se sincroniza entre dispositivos.</p>
             </div>
           )}
           {videoMode === 'local' && videoUrl && (
-            <video src={videoUrl} controls className="mt-3 max-h-64 rounded-lg border border-slate-700 w-full" />
+            <video src={videoUrl} controls className="mt-3 max-h-64 rounded-xl w-full" style={{border: '1px solid rgba(185,165,135,0.08)'}} />
           )}
 
-          {/* YouTube URL mode */}
           {videoMode === 'youtube' && (
             <div className="space-y-3">
               <div className="flex gap-2">
@@ -479,10 +478,10 @@ export default function TaskEditor() {
                   value={youtubeUrlInput}
                   onChange={e => handleYouTubeUrl(e.target.value)}
                   placeholder="https://www.youtube.com/watch?v=..."
-                  className="flex-1 px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                  className="v2-input flex-1"
                 />
                 {task.youtubeUrl && (
-                  <button onClick={removeVideo} className="px-3 py-2 bg-red-900/50 hover:bg-red-900/80 rounded-lg text-red-300 transition-colors">
+                  <button onClick={removeVideo} className="v2-btn-danger px-2.5">
                     <X size={16} />
                   </button>
                 )}
@@ -490,50 +489,49 @@ export default function TaskEditor() {
               {task.youtubeUrl && extractYouTubeId(task.youtubeUrl) && (
                 <iframe
                   src={youtubeEmbedUrl(extractYouTubeId(task.youtubeUrl))}
-                  className="mt-2 w-full aspect-video rounded-lg border border-slate-700"
+                  className="mt-2 w-full aspect-video rounded-xl" style={{border: '1px solid rgba(185,165,135,0.08)'}}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                   title="YouTube preview"
                 />
               )}
-              <p className="text-xs text-slate-500">Pega cualquier URL de YouTube. El vídeo puede ser público, no listado o privado.</p>
+              <p className="text-xs" style={{ color: '#997b66' }}>Pega cualquier URL de YouTube. El vídeo puede ser público, no listado o privado.</p>
             </div>
           )}
 
-          {/* Upload to YouTube mode */}
           {videoMode === 'upload' && (
             <div className="space-y-3">
               {ytUploading ? (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-slate-300">
-                    <Loader2 size={16} className="animate-spin text-teal-400" />
+                  <div className="flex items-center gap-2 text-sm" style={{color: '#baa587'}}>
+                    <Loader2 size={16} className="animate-spin" style={{color: '#e8ac65'}} />
                     Subiendo a YouTube… {ytProgress}%
                   </div>
-                  <div className="w-full bg-slate-700 rounded-full h-2">
-                    <div className="bg-teal-500 h-2 rounded-full transition-all duration-300" style={{ width: `${ytProgress}%` }} />
+                  <div className="w-full rounded-full h-2" style={{background: 'rgba(185,165,135,0.08)'}}>
+                    <div className="h-2 rounded-full transition-all duration-300" style={{width: `${ytProgress}%`, background: '#e8ac65'}} />
                   </div>
                 </div>
               ) : (
-                <label className="flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-slate-700/50 rounded-xl text-slate-400 hover:border-teal-500/50 hover:text-teal-400 cursor-pointer transition-all bg-slate-900/30">
+                <label className="flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed rounded-xl cursor-pointer transition-all" style={{borderColor: 'rgba(185,165,135,0.12)', color: '#997b66', background: 'rgba(22,20,16,0.4)'}}>
                   <CloudUpload size={18} />
                   <span className="text-sm font-medium">Seleccionar vídeo para subir a tu YouTube</span>
                   <input type="file" accept="video/*" onChange={handleYouTubeUpload} className="hidden" />
                 </label>
               )}
               {task.youtubeUrl && !ytUploading && (
-                <div className="flex items-center gap-2 text-xs text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 text-xs rounded-lg px-3 py-2" style={{color: '#e8ac65', background: 'rgba(232,172,101,0.08)', border: '1px solid rgba(232,172,101,0.15)'}}>
                   <Link size={12} />
-                  <a href={task.youtubeUrl} target="_blank" rel="noreferrer" className="underline truncate">{task.youtubeUrl}</a>
-                  <button onClick={removeVideo} className="ml-auto text-red-400 hover:text-red-300"><X size={12} /></button>
+                  <a href={task.youtubeUrl} target="_blank" rel="noreferrer" className="underline truncate" style={{color: '#e8ac65'}}>{task.youtubeUrl}</a>
+                  <button onClick={removeVideo} className="ml-auto" style={{color: '#d08c60'}}><X size={12} /></button>
                 </div>
               )}
-              <p className="text-xs text-slate-500">Se subirá como "No listado" a tu canal de YouTube. Solo accesible mediante enlace directo.</p>
+              <p className="text-xs" style={{color: '#997b66'}}>Se subirá como "No listado" a tu canal de YouTube. Solo accesible mediante enlace directo.</p>
             </div>
           )}
         </div>
 
         {showImageEditor && (
-          <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col p-4">
+          <div className="fixed inset-0 z-50 flex flex-col" style={{background: '#0c0b09'}}>
             <ImageEditor
               taskData={{ title: task.title, subtitle: task.subtitle, time: task.time, reps: task.reps, focus: task.focus, description: task.description }}
               initialElements={task.imageElements || null}
@@ -546,28 +544,58 @@ export default function TaskEditor() {
               }}
               onCancel={() => setShowImageEditor(false)}
             />
-          </div>
-        )}
+        </div>
+      )}
 
-        <div className="flex gap-3 pt-4 border-t border-slate-700">
+        <div className="flex gap-3 pt-4" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
           <button
             onClick={() => saveTask(false)}
             disabled={saving}
-            className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+            style={{
+              flex: 1,
+              background: 'rgba(232,172,101,0.12)',
+              border: '1px solid rgba(232,172,101,0.15)',
+              borderRadius: 14,
+              padding: '12px 16px',
+              color: '#e8ac65',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              opacity: saving ? 0.5 : 1,
+            }}
           >
             <Save size={16} /> {saving ? 'Guardando...' : 'Guardar'}
           </button>
           <button
             onClick={() => saveTask(true)}
             disabled={saving}
-            className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+            style={{
+              flex: 1,
+              background: 'rgba(155,155,122,0.12)',
+              border: '1px solid rgba(155,155,122,0.20)',
+              borderRadius: 14,
+              padding: '12px 16px',
+              color: '#9b9b7a',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              opacity: saving ? 0.5 : 1,
+            }}
           >
             <ClipboardList size={16} /> {saving ? 'Guardando...' : 'Guardar y añadir a sesión'}
           </button>
           {!isNew && (
             <button
               onClick={deleteTask}
-              className="px-4 py-2 bg-red-900/50 hover:bg-red-900/80 rounded-lg text-red-300 font-medium transition-colors flex items-center gap-2"
+              className="v2-btn-danger py-2.5 rounded-xl"
             >
               <Trash2 size={16} /> Eliminar
             </button>
@@ -575,5 +603,25 @@ export default function TaskEditor() {
         </div>
       </div>
     </div>
+    </div>
+
+      {showImageEditor && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{background: '#0c0b09'}}>
+          <ImageEditor
+            taskData={{ title: task.title, subtitle: task.subtitle, time: task.time, reps: task.reps, focus: task.focus, description: task.description }}
+            initialElements={task.imageElements || null}
+            onSave={(blob, elements) => {
+              setTask(prev => ({ ...prev, imageBlob: blob, imageElements: elements }));
+              if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+              setPreviewUrl(URL.createObjectURL(blob));
+              setShowImageEditor(false);
+              setHasChanges(true);
+            }}
+            onCancel={() => setShowImageEditor(false)}
+          />
+        </div>
+      )}
+    </>
   );
 }
+

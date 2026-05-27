@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLeft, ChevronRight, ImageIcon, Download, Upload, Star, ArrowUpDown, Video, Pencil, Trash2, Paintbrush } from 'lucide-react';
+import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLeft, ChevronRight, ImageIcon, Download, Upload, ArrowUpDown, Video, Pencil, Trash2, Paintbrush } from 'lucide-react';
 import { db } from '../db';
 import { extractYouTubeId, youtubeEmbedUrl } from '../hooks/useYouTubeUpload';
 import { useTags } from '../hooks/useTags';
 import MultiSelectDropdown from '../components/MultiSelectDropdown';
 import { useToast } from '../components/Toast';
-import { useConfirm, usePrompt, useAlert } from '../components/Modal';
+import { useConfirm, useModal, useAlert } from '../components/Modal';
 import { formatDateDDMMYY, todayISO } from '../utils/date';
 import { useSyncRefresh } from '../contexts/SyncContext';
+import StarRating from '../components/StarRating';
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -109,30 +110,6 @@ function useTaskImageUrls(tasks) {
   return { getUrl, getVideoUrl };
 }
 
-function StarRating({ rating, interactive = false, onChange }) {
-  const [hover, setHover] = useState(0);
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map(i => (
-        <button
-          key={i}
-          type="button"
-          disabled={!interactive}
-          onClick={() => onChange?.(i === rating ? 0 : i)}
-          onMouseEnter={() => interactive && setHover(i)}
-          onMouseLeave={() => interactive && setHover(0)}
-          className={`${interactive ? 'cursor-pointer hover:scale-110' : 'cursor-default'} transition-transform`}
-        >
-          <Star
-            size={14}
-            className={i <= (hover || rating) ? 'fill-yellow-400 text-yellow-400' : 'text-slate-600'}
-          />
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function formatRelativeDate(dateStr) {
   if (!dateStr) return 'Nunca';
   const parts = dateStr.split('-').map(Number);
@@ -160,10 +137,11 @@ function formatRelativeDate(dateStr) {
 const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddToSession }) {
   return (
     <div
-      className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hover:border-teal-500/50 transition-all cursor-pointer group relative"
+      className="glass-card group relative cursor-pointer transition-all duration-300"
+      style={{ borderRadius: 16, overflow: 'hidden' }}
       onClick={() => onClick(task)}
     >
-      <div className="aspect-video bg-slate-900 relative overflow-hidden">
+      <div className="aspect-video relative overflow-hidden" style={{ background: 'rgba(22,20,16,0.6)' }}>
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -171,19 +149,20 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddTo
             className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-slate-600">
+          <div className="w-full h-full flex items-center justify-center" style={{ color: '#997b66' }}>
             <FileText size={32} />
           </div>
         )}
         {task.youtubeUrl || task.videoBlob || task.videoPath ? (
-          <div className="absolute bottom-2 right-2 bg-black/70 rounded-full p-1.5">
-            <Video size={14} className="text-white" />
+          <div className="absolute bottom-2 right-2 rounded-full p-1.5" style={{ background: 'rgba(0,0,0,0.6)' }}>
+            <Video size={14} style={{ color: 'white' }} />
           </div>
         ) : null}
         {onAddToSession && (
           <button
             onClick={(e) => { e.stopPropagation(); onAddToSession(task); }}
-            className="absolute top-2 right-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
+            className="absolute top-2 right-2 rounded-full p-2 opacity-0 group-hover:opacity-100 transition-all shadow-lg z-10"
+            style={{ background: 'rgba(232,172,101,0.8)', color: 'white' }}
             title="Añadir a sesión"
           >
             <ClipboardList size={16} />
@@ -191,17 +170,17 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddTo
         )}
       </div>
       <div className="p-4">
-        <h3 className="font-semibold text-slate-100 text-sm mb-1 line-clamp-2">{task.title}</h3>
+        <h3 className="font-semibold text-sm mb-1 line-clamp-2" style={{ color: '#f1ede7' }}>{task.title}</h3>
         {task.subtitle && (
-          <p className="text-xs text-slate-400 mb-2 line-clamp-1">{task.subtitle}</p>
+          <p className="text-xs mb-2 line-clamp-1" style={{ color: '#997b66' }}>{task.subtitle}</p>
         )}
         <div className="flex items-center gap-2 mb-1">
-          <StarRating rating={task.rating || 0} />
+          <StarRating value={task.rating || 0} size={14} />
           {task.usageCount > 0 && (
-            <span className="text-xs text-slate-500">({task.usageCount})</span>
+            <span className="text-xs" style={{ color: '#997b66' }}>({task.usageCount})</span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-slate-400">
+        <div className="flex items-center gap-3 text-xs" style={{ color: '#997b66' }}>
           {task.time && (
             <span className="flex items-center gap-1">
               <Clock size={12} /> {task.time}
@@ -214,10 +193,10 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddTo
           )}
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
-          <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">{task.phase}</span>
-          <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">{task.category}</span>
+          <span className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(22,20,16,0.6)', color: '#baa587' }}>{task.phase}</span>
+          <span className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(22,20,16,0.6)', color: '#baa587' }}>{task.category}</span>
           {Array.isArray(task.situation) && task.situation.length > 0 && task.situation.map(s => (
-            <span key={s} className="px-2 py-0.5 bg-teal-900/50 rounded text-xs text-teal-300">{s}</span>
+            <span key={s} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(232,172,101,0.08)', color: '#e8ac65' }}>{s}</span>
           ))}
         </div>
       </div>
@@ -227,6 +206,7 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddTo
 
 export default function DatabasePage() {
   const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ phase: '', category: '', situation: '', search: '' });
   const [sortBy, setSortBy] = useState('createdAt');
   const [selectedTask, setSelectedTask] = useState(null);
@@ -236,14 +216,16 @@ export default function DatabasePage() {
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [taskToAdd, setTaskToAdd] = useState(null);
+  const [allSeasons, setAllSeasons] = useState([]);
+  const [selectedSeasonId, setSelectedSeasonId] = useState(null);
   const [taskHistory, setTaskHistory] = useState([]);
-  const [feedback, setFeedback] = useState('');
+  
   const navigate = useNavigate();
   const location = useLocation();
   const { tags } = useTags();
   const { addToast } = useToast();
   const confirm = useConfirm();
-  const prompt = usePrompt();
+  const { showModal } = useModal();
   const alert = useAlert();
   const { refreshKey } = useSyncRefresh();
 
@@ -286,6 +268,7 @@ export default function DatabasePage() {
     });
     const sorted = active.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     setTasks(sorted);
+    setLoading(false);
   }
 
   async function loadSessions() {
@@ -329,7 +312,7 @@ export default function DatabasePage() {
     }
     if (!Array.isArray(task.situation)) task.situation = [];
     setSelectedTask(task);
-    setFeedback(task.feedback || '');
+    
     const idx = filteredTasks.findIndex(t => t.id === task.id);
     setSelectedIndex(idx);
     const url = getUrl(task);
@@ -369,8 +352,12 @@ export default function DatabasePage() {
     openDetail(filteredTasks[newIndex]);
   }
 
-  function openSessionPicker(task) {
+  async function openSessionPicker(task) {
     setTaskToAdd(task);
+    const seasons = await db.seasons.toArray();
+    const activeSeasons = seasons.filter(s => !s.deletedAt).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    setAllSeasons(activeSeasons);
+    setSelectedSeasonId(activeSeasons[0]?.id || null);
     setShowSessionPicker(true);
   }
 
@@ -412,17 +399,25 @@ export default function DatabasePage() {
       addToast('Crea una temporada primero en la sección de Sesiones', 'warning');
       return;
     }
-    const name = await prompt('Nombre de la nueva sesión:', { placeholder: 'Mi sesión', required: true });
-    if (!name) return;
-    const lastSeason = activeSeasons[activeSeasons.length - 1];
-    const date = todayISO();
+    const result = await showModal({
+      type: 'session-form',
+      title: 'Nueva sesión',
+      defaultName: '',
+      defaultDate: todayISO(),
+    });
+    if (!result) return;
+    const { name, date, microciclo, mdType } = result;
     const newId = await db.sessions.add({
       name,
       date,
+      templateFields: {
+        microciclo,
+        tipoMD: mdType,
+      },
       tasks: [taskToAdd.id],
       createdAt: new Date(),
       updatedAt: new Date(),
-      seasonId: lastSeason.id,
+      seasonId: selectedSeasonId,
     });
     await db.taskHistory.add({
       taskId: taskToAdd.id,
@@ -447,13 +442,6 @@ export default function DatabasePage() {
     if (selectedTask?.id === taskId) {
       setSelectedTask(prev => ({ ...prev, rating }));
     }
-  }
-
-  async function saveFeedback() {
-    if (!selectedTask) return;
-    await db.tasks.update(selectedTask.id, { feedback, updatedAt: new Date() });
-    setSelectedTask(prev => ({ ...prev, feedback }));
-    addToast('Feedback guardado', 'success');
   }
 
   function downloadImage(task) {
@@ -591,7 +579,7 @@ export default function DatabasePage() {
             onBlur={save}
             onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) save(); }}
             rows={4}
-            className="w-full px-2 py-1 bg-slate-800 border border-teal-500/50 rounded text-sm text-slate-100 focus:outline-none resize-none"
+            className="w-full px-2 py-1 border border-gk-accent/50 rounded text-sm text-gk-text-primary focus:outline-none resize-none" style={{background: 'rgba(232,172,101,0.08)'}}
           />
         );
       }
@@ -603,19 +591,22 @@ export default function DatabasePage() {
           onChange={e => setDraft(e.target.value)}
           onBlur={save}
           onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setEditing(false); setDraft(value || ''); } }}
-          className="w-full px-2 py-1 bg-slate-800 border border-teal-500/50 rounded text-sm text-slate-100 focus:outline-none"
+          className="w-full px-2 py-1 border border-gk-accent/50 rounded text-sm text-gk-text-primary focus:outline-none" style={{background: 'rgba(232,172,101,0.08)'}}
         />
       );
     }
 
     return (
-      <div className="group flex items-start gap-2">
-        <span className={`text-sm ${value ? 'font-medium text-slate-200' : 'text-slate-500'} flex-1 ${multiline ? 'whitespace-pre-wrap' : ''}`}>
+      <div
+        className="group flex items-start gap-2 cursor-pointer px-2 py-1.5 rounded border border-transparent hover:border-gk-accent/30 transition-all"
+        style={{background: 'rgba(232,172,101,0.08)'}}
+        onClick={() => setEditing(true)}
+      >
+        <span className={`text-sm ${value ? 'font-medium' : 'text-gk-text-tertiary'} flex-1 ${multiline ? 'whitespace-pre-wrap' : ''}`} style={{color: value ? '#baa587' : undefined}}>
           {value || placeholder}
         </span>
         <button
-          onClick={() => setEditing(true)}
-          className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-teal-400 transition-all shrink-0 mt-0.5"
+          className="p-1 text-gk-text-tertiary hover:text-gk-accent transition-all shrink-0 mt-0.5 opacity-0 group-hover:opacity-100"
           title="Editar"
         >
           <Pencil size={12} />
@@ -658,10 +649,10 @@ export default function DatabasePage() {
             onChange={e => setNewTag(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleAddNew(); if (e.key === 'Escape') setShowAdd(false); }}
             placeholder={`Nueva ${label}...`}
-            className="flex-1 px-2 py-1 bg-slate-800 border border-teal-500/50 rounded text-sm text-slate-100 focus:outline-none"
+            className="flex-1 px-2 py-1 bg-gk-card border border-gk-accent/50 rounded text-sm text-gk-text-primary focus:outline-none"
           />
-          <button onClick={handleAddNew} className="px-2 py-1 bg-teal-600 hover:bg-teal-500 rounded text-xs text-white">Añadir</button>
-          <button onClick={() => { setShowAdd(false); setNewTag(''); }} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300">Cancelar</button>
+          <button onClick={handleAddNew} className="px-2 py-1 bg-gk-accent hover:bg-gk-accent rounded text-xs text-white">Añadir</button>
+          <button onClick={() => { setShowAdd(false); setNewTag(''); }} className="px-2 py-1 bg-gk-elevated hover:bg-gk-elevated rounded text-xs text-gk-text-secondary">Cancelar</button>
         </div>
       );
     }
@@ -670,33 +661,37 @@ export default function DatabasePage() {
       <select
         value={value || ''}
         onChange={handleChange}
-        className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-slate-100 focus:outline-none focus:border-teal-500/50 cursor-pointer"
+        className="v2-select w-full cursor-pointer"
+        style={{ colorScheme: 'dark' }}
       >
-        <option value="">—</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-        <option value="__add_new__">+ Añadir nueva {label}</option>
+        <option value="" style={{background: '#161410', color: '#f1ede7'}}>—</option>
+        {options.map(o => <option key={o} value={o} style={{background: '#161410', color: '#f1ede7'}}>{o}</option>)}
+        <option value="__add_new__" style={{background: '#161410', color: '#e8ac65'}}>+ Añadir nueva {label}</option>
       </select>
     );
   }
 
   return (
+    <>
+    <div className="animate-v2-fade-in-up -mx-4 -my-6 px-4 py-6 min-h-[calc(100vh-4rem)]" style={{ backgroundColor: '#0c0b09' }}>
     <div>
       <div className="mb-6 space-y-4">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2" size={18} style={{ color: '#997b66' }} />
             <input
               type="text"
               placeholder="Buscar tarea..."
               value={filters.search}
               onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+              className="v2-input w-full"
+              style={{ paddingLeft: 40 }}
             />
           </div>
           <select
             value={filters.phase}
             onChange={e => setFilters(f => ({ ...f, phase: e.target.value }))}
-            className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
+            className="v2-select"
           >
             <option value="">Todas las fases</option>
             {tags.phase.map(p => <option key={p} value={p}>{p}</option>)}
@@ -704,7 +699,7 @@ export default function DatabasePage() {
           <select
             value={filters.category}
             onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}
-            className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
+            className="v2-select"
           >
             <option value="">Todas las categorías</option>
             {tags.category.map(c => <option key={c} value={c}>{c}</option>)}
@@ -712,7 +707,7 @@ export default function DatabasePage() {
           <select
             value={filters.situation}
             onChange={e => setFilters(f => ({ ...f, situation: e.target.value }))}
-            className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-teal-500"
+            className="v2-select"
           >
             <option value="">Todas las situaciones</option>
             {tags.situation.map(s => <option key={s} value={s}>{s}</option>)}
@@ -720,7 +715,7 @@ export default function DatabasePage() {
           {(filters.phase || filters.category || filters.situation || filters.search) && (
             <button
               onClick={clearFilters}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 flex items-center gap-2 transition-colors"
+              className="v2-btn-ghost shrink-0"
             >
               <X size={16} /> Limpiar
             </button>
@@ -728,15 +723,15 @@ export default function DatabasePage() {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="text-slate-400 text-sm">
+            <div className="text-sm" style={{ color: '#997b66' }}>
               Mostrando {filteredTasks.length} de {tasks.length} tareas
             </div>
             <div className="flex items-center gap-2">
-              <ArrowUpDown size={14} className="text-slate-500" />
+              <ArrowUpDown size={14} style={{ color: '#997b66' }} />
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="px-3 py-1 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-teal-500"
+                className="v2-select text-sm py-1"
               >
                 <option value="createdAt">Fecha de creación</option>
                 <option value="rating">Valoración</option>
@@ -744,44 +739,59 @@ export default function DatabasePage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={exportData}
-              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 flex items-center gap-2 text-sm transition-colors"
-            >
+            <button onClick={exportData} className="v2-btn-ghost text-sm">
               <Download size={14} /> Exportar
             </button>
-            <button
-              onClick={importData}
-              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 flex items-center gap-2 text-sm transition-colors"
-            >
+            <button onClick={importData} className="v2-btn-ghost text-sm">
               <Upload size={14} /> Importar
             </button>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filteredTasks.map(task => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            imageUrl={getUrl(task)}
-            onClick={openDetail}
-            onAddToSession={openSessionPicker}
-          />
-        ))}
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="glass-card-static overflow-hidden animate-pulse" style={{ borderRadius: 16 }}>
+              <div className="aspect-video" style={{ background: 'rgba(185,165,135,0.04)' }} />
+              <div className="p-4 space-y-3">
+                <div className="h-4 rounded w-3/4" style={{ background: 'rgba(185,165,135,0.06)' }} />
+                <div className="h-3 rounded w-1/2" style={{ background: 'rgba(185,165,135,0.06)' }} />
+                <div className="flex gap-2">
+                  <div className="h-3 rounded w-12" style={{ background: 'rgba(185,165,135,0.06)' }} />
+                  <div className="h-3 rounded w-16" style={{ background: 'rgba(185,165,135,0.06)' }} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredTasks.map(task => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              imageUrl={getUrl(task)}
+              onClick={openDetail}
+              onAddToSession={openSessionPicker}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+    </div>
 
       {selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={closeDetail}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={closeDetail}>
           <div
-            className="bg-slate-800 rounded-xl border border-slate-700 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative"
+            className="glass-card-static max-w-4xl w-full max-h-[90vh] overflow-y-auto v2-scrollbar relative"
+            style={{ borderRadius: 24 }}
             onClick={e => e.stopPropagation()}
           >
             {selectedIndex > 0 && (
               <button
                 onClick={() => goToTask(-1)}
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-slate-900/80 hover:bg-slate-700 rounded-full text-white transition-colors"
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 v2-btn-ghost rounded-full p-2"
               >
                 <ChevronLeft size={24} />
               </button>
@@ -789,71 +799,70 @@ export default function DatabasePage() {
             {selectedIndex < filteredTasks.length - 1 && (
               <button
                 onClick={() => goToTask(1)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-slate-900/80 hover:bg-slate-700 rounded-full text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 v2-btn-ghost rounded-full p-2"
               >
                 <ChevronRight size={24} />
               </button>
             )}
 
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between z-10">
+            <div className="sticky top-0 p-4 flex items-center justify-between z-10" style={{ background: 'rgba(22,20,16,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(185,165,135,0.08)', borderRadius: '24px 24px 0 0' }}>
               <div className="flex-1 pr-4">
                 <InlineTextField value={selectedTask.title} field="title" taskId={selectedTask.id} />
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => deleteTask(selectedTask.id)}
-                  className="p-2 hover:bg-red-600/20 hover:text-red-400 rounded text-slate-400 transition-colors"
+                  className="v2-btn-danger p-2"
                   title="Eliminar tarea"
                 >
                   <Trash2 size={18} />
                 </button>
-                <button onClick={closeDetail} className="p-1 hover:bg-slate-700 rounded text-slate-400">
+                <button onClick={closeDetail} className="v2-btn-ghost p-1">
                   <X size={20} />
                 </button>
               </div>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-5 space-y-4">
               {detailImageUrl && (
                 <div className="relative">
-                  <img src={detailImageUrl} alt={selectedTask.title} className="w-full rounded-lg border border-slate-700" />
+                  <img src={detailImageUrl} alt={selectedTask.title} className="w-full rounded-xl" style={{border: '1px solid rgba(185,165,135,0.08)'}} />
                   <button
                     onClick={() => navigate(`/editor/${selectedTask.id}`)}
-                    className="absolute top-2 right-2 px-3 py-1.5 bg-slate-900/80 hover:bg-teal-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 backdrop-blur-sm"
+                    className="v2-btn-ghost absolute top-3 right-3 backdrop-blur-sm"
                     title="Editar imagen"
                   >
                     <Paintbrush size={14} /> Editar imagen
                   </button>
                 </div>
               )}
-              {/* Video section — supports local blob and YouTube embed */}
               {selectedTask.videoType === 'youtube' && selectedTask.youtubeUrl && extractYouTubeId(selectedTask.youtubeUrl) ? (
-                <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-2">Video (YouTube)</div>
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                  <div className="text-xs mb-2" style={{ color: '#997b66' }}>Video (YouTube)</div>
                   <iframe
                     src={youtubeEmbedUrl(extractYouTubeId(selectedTask.youtubeUrl))}
-                    className="w-full aspect-video rounded-lg border border-slate-700"
+                    className="w-full aspect-video rounded-xl" style={{border: '1px solid rgba(185,165,135,0.08)'}}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                     title={selectedTask.title}
                   />
                 </div>
               ) : detailVideoUrl ? (
-                <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-2">Video (local)</div>
-                  <video src={detailVideoUrl} controls className="w-full rounded-lg border border-slate-700" />
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                  <div className="text-xs mb-2" style={{ color: '#997b66' }}>Video (local)</div>
+                  <video src={detailVideoUrl} controls className="w-full rounded-xl" style={{border: '1px solid rgba(185,165,135,0.08)'}} />
                 </div>
               ) : null}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">Fase</div>
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                  <div className="text-xs mb-1" style={{ color: '#997b66' }}>Fase</div>
                   <InlineSelectField value={selectedTask.phase} field="phase" taskId={selectedTask.id} options={tags.phase} label="fase" />
                 </div>
-                <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">Categoría</div>
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                  <div className="text-xs mb-1" style={{ color: '#997b66' }}>Categoría</div>
                   <InlineSelectField value={selectedTask.category} field="category" taskId={selectedTask.id} options={tags.category} label="categoría" />
                 </div>
-                <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">Situación</div>
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                  <div className="text-xs mb-1" style={{ color: '#997b66' }}>Situación</div>
                   <MultiSelectDropdown
                     options={tags.situation}
                     selected={Array.isArray(selectedTask.situation) ? selectedTask.situation : []}
@@ -862,100 +871,82 @@ export default function DatabasePage() {
                       await db.tasks.update(selectedTask.id, { situation: updated, updatedAt: new Date() });
                     }}
                     placeholder="Seleccionar situaciones"
-                    onAddNew={() => {
-                      const name = window.prompt('Nueva situación:');
-                      if (name && name.trim()) {
-                        (async () => {
-                          const trimmed = name.trim();
-                          await db.tags.add({ type: 'situation', name: trimmed });
-                          const sit = Array.isArray(selectedTask.situation) ? selectedTask.situation : [];
-                          if (!sit.includes(trimmed)) {
-                            const updated = [...sit, trimmed];
-                            setSelectedTask(prev => ({ ...prev, situation: updated }));
-                            await db.tasks.update(selectedTask.id, { situation: updated, updatedAt: new Date() });
-                          }
-                          window.dispatchEvent(new CustomEvent('tags-changed'));
-                        })();
+                    onAddNew={async (name) => {
+                      const trimmed = name.trim();
+                      await db.tags.add({ type: 'situation', name: trimmed });
+                      const sit = Array.isArray(selectedTask.situation) ? selectedTask.situation : [];
+                      if (!sit.includes(trimmed)) {
+                        const updated = [...sit, trimmed];
+                        setSelectedTask(prev => ({ ...prev, situation: updated }));
+                        await db.tasks.update(selectedTask.id, { situation: updated, updatedAt: new Date() });
                       }
+                      window.dispatchEvent(new CustomEvent('tags-changed'));
                     }}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">Tiempo</div>
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                  <div className="text-xs mb-1" style={{ color: '#997b66' }}>Tiempo</div>
                   <InlineTextField value={selectedTask.time} field="time" taskId={selectedTask.id} />
                 </div>
-                <div className="bg-slate-900 p-3 rounded-lg">
-                  <div className="text-xs text-slate-500 mb-1">Repeticiones</div>
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                  <div className="text-xs mb-1" style={{ color: '#997b66' }}>Repeticiones</div>
                   <InlineTextField value={selectedTask.reps} field="reps" taskId={selectedTask.id} />
                 </div>
               </div>
-              <div className="bg-slate-900 p-3 rounded-lg">
-                <div className="text-xs text-slate-500 mb-1">Contenido</div>
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                <div className="text-xs mb-1" style={{ color: '#997b66' }}>Contenido</div>
                 <InlineTextField value={selectedTask.subtitle} field="subtitle" taskId={selectedTask.id} />
               </div>
-              <div className="bg-slate-900 p-3 rounded-lg">
-                <div className="text-xs text-slate-500 mb-1">Foco</div>
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                <div className="text-xs mb-1" style={{ color: '#997b66' }}>Foco</div>
                 <InlineTextField value={selectedTask.focus} field="focus" taskId={selectedTask.id} />
               </div>
-              <div className="bg-slate-900 p-3 rounded-lg">
-                <div className="text-xs text-slate-500 mb-1">Descripción</div>
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                <div className="text-xs mb-1" style={{ color: '#997b66' }}>Descripción</div>
                 <InlineTextField value={safeDesc(selectedTask.description)} field="description" taskId={selectedTask.id} multiline />
               </div>
 
-              <div className="bg-slate-900 p-3 rounded-lg">
-                <div className="text-xs text-slate-500 mb-2">Valoración</div>
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                <div className="text-xs mb-2" style={{ color: '#997b66' }}>Valoración</div>
                 <StarRating
-                  rating={selectedTask.rating || 0}
-                  interactive
+                  value={selectedTask.rating || 0}
                   onChange={(r) => updateTaskRating(selectedTask.id, r)}
                 />
               </div>
 
-              <div className="bg-slate-900 p-3 rounded-lg">
-                <div className="text-xs text-slate-500 mb-2">Feedback</div>
-                <textarea
-                  value={feedback}
-                  onChange={e => setFeedback(e.target.value)}
-                  placeholder="Notas sobre esta tarea..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-teal-500 resize-none"
-                />
-                <button
-                  onClick={saveFeedback}
-                  className="mt-2 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 rounded-lg text-white text-sm font-medium transition-colors"
-                >
-                  Guardar feedback
-                </button>
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                <div className="text-xs mb-2" style={{ color: '#997b66' }}>Feedback</div>
+                <InlineTextField value={selectedTask.feedback} field="feedback" taskId={selectedTask.id} multiline placeholder="Notas sobre esta tarea..." />
               </div>
 
-              <div className="bg-slate-900 p-3 rounded-lg">
-                <div className="text-xs text-slate-500 mb-2">Historial de sesiones</div>
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                <div className="text-xs mb-2" style={{ color: '#997b66' }}>Historial de sesiones</div>
                 {taskHistory.length === 0 ? (
-                  <div className="text-sm text-slate-500">Esta tarea no ha sido usada en ninguna sesión.</div>
+                  <div className="text-sm" style={{color: '#997b66'}}>Esta tarea no ha sido usada en ninguna sesión.</div>
                 ) : (
                   <>
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="flex items-center gap-2 bg-teal-600/20 border border-teal-500/30 rounded-lg px-4 py-2">
-                        <span className="text-2xl font-bold text-teal-400">{selectedTask.usageCount || 0}</span>
-                        <span className="text-xs text-teal-400/80">veces</span>
+                      <div className="flex items-center gap-2 rounded-lg px-4 py-2" style={{background: 'rgba(232,172,101,0.08)', border: '1px solid rgba(232,172,101,0.15)'}}>
+                        <span className="text-2xl font-bold" style={{color: '#e8ac65'}}>{selectedTask.usageCount || 0}</span>
+                        <span className="text-xs" style={{color: 'rgba(232,172,101,0.7)'}}>veces</span>
                       </div>
                     </div>
                     {selectedTask.lastUsedDate && (
-                      <div className="text-sm text-slate-300 mb-3">
-                        <span className="text-slate-500">Última vez:</span>{' '}
-                        <span className="font-medium text-slate-200">{formatRelativeDate(selectedTask.lastUsedDate)}</span>
+                      <div className="text-sm mb-3" style={{color: '#baa587'}}>
+                        <span style={{color: '#997b66'}}>Última vez:</span>{' '}
+                        <span className="font-medium" style={{color: '#f1ede7'}}>{formatRelativeDate(selectedTask.lastUsedDate)}</span>
                         {taskHistory.length > 0 && (
-                          <span className="text-slate-500">, {taskHistory[0].sessionName} ({formatDateDDMMYY(taskHistory[0].date)})</span>
+                          <span style={{color: '#997b66'}}>, {taskHistory[0].sessionName} ({formatDateDDMMYY(taskHistory[0].date)})</span>
                         )}
                       </div>
                     )}
-                    <div className="space-y-1 max-h-32 overflow-y-auto border-t border-slate-700 pt-2">
+                    <div className="space-y-1 max-h-32 overflow-y-auto v2-scrollbar pt-2" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
                       {taskHistory.map((h, i) => (
-                        <div key={i} className="text-sm text-slate-300 flex justify-between">
+                        <div key={i} className="text-sm flex justify-between" style={{color: '#baa587'}}>
                           <span>{h.sessionName}</span>
-                          <span className="text-slate-500 text-xs">{formatDateDDMMYY(h.date)}</span>
+                          <span className="text-xs" style={{color: '#997b66'}}>{formatDateDDMMYY(h.date)}</span>
                         </div>
                       ))}
                     </div>
@@ -966,13 +957,18 @@ export default function DatabasePage() {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => downloadImage(selectedTask)}
-                  className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 font-medium transition-colors flex items-center justify-center gap-2"
+                  className="v2-btn-ghost flex-1 justify-center py-2.5"
                 >
                   <ImageIcon size={16} /> Descargar imagen
                 </button>
                 <button
                   onClick={() => openSessionPicker(selectedTask)}
-                  className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+                  className="v2-btn-ghost flex-1 justify-center py-2.5"
+                  style={{
+                    background: 'rgba(232,172,101,0.08)',
+                    borderColor: 'rgba(232,172,101,0.15)',
+                    color: '#e8ac65',
+                  }}
                 >
                   <ClipboardList size={16} /> Añadir a sesión
                 </button>
@@ -983,36 +979,69 @@ export default function DatabasePage() {
       )}
 
       {showSessionPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setShowSessionPicker(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setShowSessionPicker(false)}>
           <div
-            className="bg-slate-800 rounded-xl border border-slate-700 max-w-md w-full"
+            className="glass-card-static max-w-md w-full"
+            style={{ borderRadius: 20 }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-100">Añadir a sesión</h3>
-              <button onClick={() => setShowSessionPicker(false)} className="p-1 hover:bg-slate-700 rounded text-slate-400">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
-              {sessions.length === 0 && (
-                <div className="text-sm text-slate-500 text-center py-4">No hay sesiones guardadas</div>
+            <div className="p-4" style={{borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-bold" style={{color: '#f1ede7'}}>Añadir a sesión</h3>
+                <button onClick={() => setShowSessionPicker(false)} className="v2-btn-ghost rounded-lg p-1">
+                  <X size={20} />
+                </button>
+              </div>
+              {allSeasons.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {allSeasons.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSelectedSeasonId(s.id)}
+                      className="px-3 py-1.5 rounded-lg text-sm transition-all"
+                      style={{
+                        background: selectedSeasonId === s.id ? 'rgba(232,172,101,0.15)' : 'rgba(22,20,16,0.6)',
+                        color: selectedSeasonId === s.id ? '#e8ac65' : '#baa587',
+                        border: selectedSeasonId === s.id ? '1px solid rgba(232,172,101,0.2)' : '1px solid rgba(185,165,135,0.08)',
+                      }}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
               )}
-              {sessions.map(s => (
+            </div>
+            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto v2-scrollbar">
+              {sessions.filter(s => !s.deletedAt && s.seasonId === selectedSeasonId).length === 0 && (
+                <div className="text-sm text-center py-4" style={{color: '#997b66'}}>No hay sesiones en esta temporada</div>
+              )}
+              {sessions
+                .filter(s => !s.deletedAt && s.seasonId === selectedSeasonId)
+                .sort((a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0))
+                .map(s => (
                 <button
                   key={s.id}
                   onClick={() => addToSession(s.id)}
-                  className="w-full text-left p-3 bg-slate-900 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors"
+                  className="w-full text-left p-3 rounded-xl transition-all"
+                  style={{
+                    background: 'rgba(22,20,16,0.6)',
+                    border: '1px solid rgba(185,165,135,0.08)',
+                  }}
                 >
-                  <div className="text-sm font-medium text-slate-200">{s.name}</div>
-                  <div className="text-xs text-slate-500">{s.tasks?.length || 0} tareas {s.date ? `• ${formatDateDDMMYY(s.date)}` : ''}</div>
+                  <div className="text-sm font-medium" style={{color: '#f1ede7'}}>{s.name}</div>
+                  <div className="text-xs" style={{color: '#997b66'}}>{s.tasks?.length || 0} tareas {s.date ? `• ${formatDateDDMMYY(s.date)}` : ''}</div>
                 </button>
               ))}
             </div>
-            <div className="p-4 border-t border-slate-700">
+            <div className="p-4" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
               <button
                 onClick={createSessionAndAdd}
-                className="w-full px-4 py-2 bg-teal-600 hover:bg-teal-500 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+                className="v2-btn-ghost w-full justify-center py-2.5"
+                style={{
+                  background: 'rgba(232,172,101,0.08)',
+                  borderColor: 'rgba(232,172,101,0.15)',
+                  color: '#e8ac65',
+                }}
               >
                 <Plus size={16} /> Crear nueva sesión
               </button>
@@ -1020,6 +1049,6 @@ export default function DatabasePage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

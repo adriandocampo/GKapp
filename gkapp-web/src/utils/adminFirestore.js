@@ -1,11 +1,13 @@
+import pako from 'pako';
 import {
   collection, doc, getDocs, getDoc,
   setDoc, updateDoc, deleteDoc,
   writeBatch, serverTimestamp,
 } from 'firebase/firestore';
-import { firestore } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { firestore, storage } from '../firebase';
 
-const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings'];
+const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings', 'analyses', 'porteros'];
 
 function userCol(uid, table) {
   return collection(firestore, 'users', uid, table);
@@ -158,6 +160,145 @@ export async function purgeUserData(uid) {
   }
   // Optionally remove user profile as well
   await deleteDoc(doc(firestore, 'userProfiles', uid));
+}
+
+// ─── Backup functions ────────────────────────────────────────────────────────
+
+/** Get backup config for a user */
+export async function getBackupConfig(uid) {
+  const ref = doc(firestore, 'users', uid, 'backups', 'config');
+  const snap = await getDoc(ref);
+  return snap.exists() ? snap.data() : null;
+}
+
+/** Set backup config (admin toggle) */
+export async function setBackupConfig(uid, config) {
+  const ref = doc(firestore, 'users', uid, 'backups', 'config');
+  await setDoc(ref, config, { merge: true });
+}
+
+/** Get the latest backup metadata (without data) */
+export async function getBackup(uid) {
+  const ref = doc(firestore, 'users', uid, 'backups', 'latest');
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    _createdAt: data._createdAt,
+    _size: data._size,
+    _filename: data._filename,
+  };
+}
+
+/** Check if user has any document updated since a given date */
+export async function hasActivitySince(uid, sinceDate) {
+  const since = sinceDate instanceof Date ? sinceDate : new Date(sinceDate);
+  const TABLES_SCAN = ['tasks', 'sessions', 'seasons', 'settings', 'taskHistory', 'analyses', 'porteros'];
+
+  for (const table of TABLES_SCAN) {
+    const snap = await getDocs(userCol(uid, table));
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (data.deletedAt) continue;
+      const updatedAt = data.updatedAt?.toDate?.() || data.updatedAt;
+      if (updatedAt && new Date(updatedAt) > since) return true;
+    }
+  }
+  return false;
+}
+
+/** Create a backup to Firebase Storage and store lightweight metadata in Firestore */
+export async function createBackup(uid, adminUid = null) {
+  const data = await exportAllUserData(uid);
+  const json = JSON.stringify(data);
+  const encoder = new TextEncoder();
+  const compressed = pako.gzip(encoder.encode(json));
+  const filename = `gkapp_backup_${uid}_${Date.now()}.json.gz`;
+  const path = `backups/${uid}/${filename}`;
+
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, compressed);
+
+  // Metadatos ligeros en Firestore (sin data)
+  const metaRef = doc(firestore, 'users', uid, 'backups', 'latest');
+  await setDoc(metaRef, {
+    _createdAt: serverTimestamp(),
+    _size: compressed.length,
+    _filename: filename,
+    _triggeredBy: adminUid || 'auto',
+  });
+
+  // Notificar a n8n si está configurado
+  const webhookUrl = import.meta.env.VITE_BACKUP_WEBHOOK_URL;
+  if (webhookUrl) {
+    const downloadUrl = await getDownloadURL(storageRef);
+    fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid,
+        filename,
+        size: compressed.length,
+        downloadUrl,
+        triggeredBy: adminUid || 'auto',
+      }),
+    }).catch(err => console.warn('[backup] n8n webhook failed:', err));
+  }
+
+  return { size: compressed.length, filename, path };
+}
+
+/** Restore all user data from the latest Storage backup */
+export async function restoreFromBackup(uid) {
+  const metaRef = doc(firestore, 'users', uid, 'backups', 'latest');
+  const metaSnap = await getDoc(metaRef);
+  if (!metaSnap.exists()) throw new Error('No hay backup disponible');
+  const meta = metaSnap.data();
+  if (!meta._filename) throw new Error('No hay backup disponible');
+
+  const storageRef = ref(storage, `backups/${uid}/${meta._filename}`);
+  const url = await getDownloadURL(storageRef);
+  const response = await fetch(url);
+  const buffer = await response.arrayBuffer();
+  const decompressed = pako.ungzip(new Uint8Array(buffer));
+  const data = JSON.parse(new TextDecoder().decode(decompressed));
+
+  const BATCH_SIZE = 450;
+
+  for (const table of TABLES) {
+    const rows = data[table];
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+
+    // Clear existing data in this table
+    const existingSnap = await getDocs(userCol(uid, table));
+    for (let i = 0; i < existingSnap.docs.length; i += BATCH_SIZE) {
+      const batch = writeBatch(firestore);
+      const chunk = existingSnap.docs.slice(i, i + BATCH_SIZE);
+      for (const d of chunk) {
+        batch.delete(d.ref);
+      }
+      await batch.commit();
+    }
+
+    // Write backup data (excluding imageBase64 to stay within limits)
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = writeBatch(firestore);
+      const chunk = rows.slice(i, i + BATCH_SIZE);
+      for (const row of chunk) {
+        const id = String(row.id);
+        const ref = userDocRef(uid, table, id);
+        const { id: _id, imageBase64, ...clean } = row;
+        batch.set(ref, { ...clean, updatedAt: serverTimestamp() });
+      }
+      await batch.commit();
+    }
+  }
+
+  // Touch backup config to mark restore happened
+  const configRef = doc(firestore, 'users', uid, 'backups', 'config');
+  await updateDoc(configRef, { lastRestoreAt: serverTimestamp() }).catch(() => {});
+
+  return true;
 }
 
 const DEFAULT_PHASES = ['Activación', 'Parte Principal'];

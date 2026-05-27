@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -16,20 +17,24 @@ let app = null;
 let auth = null;
 let firestore = null;
 
+let storage = null;
+
 if (firebaseConfig.apiKey) {
   app       = initializeApp(firebaseConfig);
   auth      = getAuth(app);
   firestore = getFirestore(app);
+  storage   = getStorage(app);
 
   // Connect to local emulators in development
   if (import.meta.env.VITE_USE_FIREBASE_EMULATOR) {
     connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
     connectFirestoreEmulator(firestore, 'localhost', 8080);
+    connectStorageEmulator(storage, 'localhost', 9199);
     console.log('[firebase] Connected to local emulators');
   }
 }
 
-export { app, auth, firestore };
+export { app, auth, firestore, storage };
 
 /** True when the app is running inside Electron */
 export const isElectron = Boolean(window.electronAPI);

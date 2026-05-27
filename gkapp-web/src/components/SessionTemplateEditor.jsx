@@ -46,7 +46,7 @@ const defaultTemplateFields = {
   notasGenerales: '',
 };
 
-export default function SessionTemplateEditor({ session, sessionTasks, taskImageUrls, porteros, seasons, contenidos: contenidosProp, objetivos: objetivosProp, focos: focosProp, onSave, onClose }) {
+export default function SessionTemplateEditor({ session, sessionTasks, taskImageUrls, porteros, seasons, contenidos: contenidosProp, objetivos: objetivosProp, focos: focosProp, onSave, onClose, hasSavedTemplate = false }) {
   const normalizePorteros = (p) =>
     p.map(x => ({ ...x, active: x.active === false ? false : true }));
 
@@ -57,21 +57,25 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
     const today = formatDateDDMMYY(session?.date || new Date().toISOString().split('T')[0]);
     const sessionNum = extractSessionNumber(session?.name);
     if (saved) {
-      return { ...defaultTemplateFields, temporada: seasonName, fecha: today, ...saved };
+      return { ...defaultTemplateFields, temporada: seasonName, fecha: today, ...saved, sesionNumero: saved.sesionNumero || sessionNum };
     }
     return { ...defaultTemplateFields, temporada: seasonName, fecha: today, sesionNumero: sessionNum };
   });
+  const [corporateColor, setCorporateColor] = useState(session?.templateFields?.corporateColor || '#dc2626');
   const [showPreview, setShowPreview] = useState(false);
-  const [teamName, setTeamName] = useState('Club Deportivo Lugo');
-  const [teamCrest, setTeamCrest] = useState(null);
-  const [secondaryImage, setSecondaryImage] = useState(null);
+  const [teamName, setTeamName] = useState(session?.templateFields?.teamName || 'Club Deportivo Lugo');
+  const [teamCrest, setTeamCrest] = useState(session?.templateFields?.teamCrest || null);
+  const [secondaryImage, setSecondaryImage] = useState(session?.templateFields?.secondaryImage || null);
   const [activePorteros, setActivePorteros] = useState(() => normalizePorteros(porteros || []));
   const printRef = useRef(null);
 
   useEffect(() => {
-    getSetting('teamName').then(n => { if (n) setTeamName(n); });
-    getSetting('teamCrest').then(c => { if (c) setTeamCrest(c); });
-    getSetting('secondaryImage').then(s => { if (s) setSecondaryImage(s); });
+    if (!hasSavedTemplate) {
+      getSetting('teamName').then(n => { if (n) setTeamName(n); });
+      getSetting('teamCrest').then(c => { if (c) setTeamCrest(c); });
+      getSetting('secondaryImage').then(s => { if (s) setSecondaryImage(s); });
+      getSetting('corporateColor').then(c => { if (c) setCorporateColor(c); });
+    }
   }, []);
 
   useEffect(() => {
@@ -133,7 +137,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
   }
 
   function handleSave() {
-    onSave(fields);
+    onSave({ ...fields, teamName, teamCrest, secondaryImage, corporateColor });
   }
 
   function handlePrint() {
@@ -147,11 +151,11 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
       : 'bg-gradient-to-b from-green-500 to-green-600 text-white font-bold shadow-sm';
 
   const inputClass =
-    'text-sm font-bold text-red-600 text-center bg-transparent border-b-2 border-gray-200 focus:border-red-500 outline-none w-full py-0.5 transition-colors';
+    'text-sm font-bold text-center bg-transparent border-b-2 border-gray-200 outline-none w-full py-0.5 transition-colors template-color-focus';
   const labelClass = 'text-[9px] font-semibold text-gray-400 uppercase tracking-wider text-center block';
 
   const lineInputClass =
-    'w-full text-[11px] text-gray-700 border-b border-dotted border-gray-300 py-1.5 bg-transparent outline-none focus:border-red-400 placeholder-gray-300 transition-colors';
+    'w-full text-[11px] text-gray-700 border-b border-dotted border-gray-300 py-1.5 bg-transparent outline-none placeholder-gray-300 transition-colors template-color-focus';
 
   const half = Math.ceil(activePorteros.length / 2);
   const row1 = activePorteros.slice(0, half);
@@ -159,14 +163,14 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 print:p-0 print:bg-white print:fixed print:inset-0 print:z-auto template-print-target">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full h-full flex flex-col print:bg-white print:border-0 print:rounded-none print:h-auto print:w-auto">
+      <div className="bg-gk-card rounded-xl border border-gk-border w-full h-full flex flex-col print:bg-white print:border-0 print:rounded-none print:h-auto print:w-auto">
         {/* Header - hidden when printing */}
-        <div className="p-3 border-b border-slate-700 flex items-center justify-between shrink-0 print:hidden">
-          <h2 className="text-lg font-bold text-slate-100">Editar Plantilla de Sesión</h2>
+        <div className="p-3 border-b border-gk-border flex items-center justify-between shrink-0 print:hidden">
+          <h2 className="text-lg font-bold text-gk-text-primary">Editar Plantilla de Sesión</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowPreview(!showPreview)}
-              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 text-sm flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 bg-gk-elevated hover:bg-gk-elevated rounded-lg text-gk-text-primary text-sm flex items-center gap-1.5 transition-colors"
             >
               <Eye size={14} /> {showPreview ? 'Editar' : 'Vista previa'}
             </button>
@@ -178,11 +182,11 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
             </button>
             <button
               onClick={handleSave}
-              className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 rounded-lg text-white text-sm flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 bg-gk-accent hover:bg-gk-accent rounded-lg text-white text-sm flex items-center gap-1.5 transition-colors"
             >
               <Save size={14} /> Guardar
             </button>
-            <button onClick={onClose} className="p-1.5 hover:bg-slate-700 rounded text-slate-400">
+            <button onClick={onClose} className="p-1.5 hover:bg-gk-elevated rounded text-gk-text-tertiary">
               <X size={20} />
             </button>
           </div>
@@ -194,13 +198,17 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
             className="bg-white mx-auto shadow-2xl print:shadow-none print:mx-0"
             style={{ width: '100%', maxWidth: '1100px', aspectRatio: '841/595' }}
           >
-            <div className="flex flex-col h-full border-2 border-red-600">
+            <style>{`
+              .template-sidebar > * + * { border-top: 2px solid ${corporateColor}; }
+              .template-color-focus:focus { border-color: ${corporateColor} !important; }
+            `}</style>
+            <div className="flex flex-col h-full border-2" style={{ borderColor: corporateColor }}>
               {/* Top Header Bar */}
-              <div className="flex border-b-2 border-red-600 shrink-0" style={{ minHeight: '60px' }}>
+              <div className="flex border-b-2 shrink-0" style={{ minHeight: '60px', borderColor: corporateColor }}>
                 {/* Logo area */}
                 <div
-                  className="flex items-center gap-2 px-3 border-r-2 border-red-600 bg-gradient-to-b from-white to-gray-50"
-                  style={{ width: '25%', minWidth: '180px' }}
+                  className="flex items-center gap-2 px-3 border-r-2 bg-gradient-to-b from-white to-gray-50"
+                  style={{ width: '25%', minWidth: '180px', borderColor: corporateColor }}
                 >
                   <div className="w-12 h-12 flex items-center justify-center shrink-0">
                     {teamCrest ? (
@@ -209,31 +217,31 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                       <img src={`${import.meta.env.BASE_URL}images/lugo_badge.webp`} alt="CD Lugo" className="w-full h-full object-contain drop-shadow-sm" />
                     )}
                   </div>
-                  <span className="text-red-600 font-extrabold text-base whitespace-nowrap tracking-tight">{teamName}</span>
+                  <span className="font-extrabold text-base whitespace-nowrap tracking-tight" style={{ color: corporateColor }}>{teamName}</span>
                 </div>
 
                 {/* Info fields container */}
                 <div className="flex flex-1" style={{ minWidth: 0 }}>
                   {/* Temporada + Fecha */}
-                  <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r border-red-600 flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0 }}>
+                  <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0, borderColor: corporateColor }}>
                     <span className={labelClass}>Temporada</span>
                     {seasons && seasons.length > 1 ? (
-                      <select value={fields.temporada} onChange={e => updateField('temporada', e.target.value)} className={`${inputClass} cursor-pointer`} disabled={showPreview}>
+                      <select value={fields.temporada} onChange={e => updateField('temporada', e.target.value)} className={`${inputClass} cursor-pointer`} style={{ color: corporateColor }} disabled={showPreview}>
                         {seasons.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                         {!seasons.find(s => s.name === fields.temporada) && <option value={fields.temporada}>{fields.temporada}</option>}
                       </select>
                     ) : (
-                      <input type="text" value={fields.temporada} onChange={e => updateField('temporada', e.target.value)} className={inputClass} readOnly={showPreview} />
+                      <input type="text" value={fields.temporada} onChange={e => updateField('temporada', e.target.value)} className={inputClass} style={{ color: corporateColor }} readOnly={showPreview} />
                     )}
                     <span className={`${labelClass} mt-0.5`}>Fecha</span>
-                    <input type="text" value={fields.fecha} onChange={e => updateField('fecha', e.target.value)} placeholder="DD/MM/YY" maxLength={8} className="text-sm font-bold text-red-600 text-center bg-transparent outline-none w-full" readOnly={showPreview} />
+                    <input type="text" value={fields.fecha} onChange={e => updateField('fecha', e.target.value)} placeholder="DD/MM/YY" maxLength={8} className="text-sm font-bold text-center bg-transparent outline-none w-full" style={{ color: corporateColor }} readOnly={showPreview} />
                   </div>
                   {/* Microciclo + MD */}
-                  <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r border-red-600 flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0 }}>
+                  <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0, borderColor: corporateColor }}>
                     <span className={labelClass}>Microciclo</span>
-                    <input type="text" value={fields.microciclo} onChange={e => updateField('microciclo', e.target.value)} className="text-sm font-bold text-red-600 text-center bg-transparent outline-none w-full" readOnly={showPreview} />
+                    <input type="text" value={fields.microciclo} onChange={e => updateField('microciclo', e.target.value)} className="text-sm font-bold text-center bg-transparent outline-none w-full" style={{ color: corporateColor }} readOnly={showPreview} />
                     <span className={`${labelClass} mt-0.5`}>MD</span>
-                    <select value={fields.tipoMD} onChange={e => updateField('tipoMD', e.target.value)} className="text-sm font-bold text-red-600 text-center bg-transparent outline-none w-full cursor-pointer" disabled={showPreview}>
+                    <select value={fields.tipoMD} onChange={e => updateField('tipoMD', e.target.value)} className="text-sm font-bold text-center bg-transparent outline-none w-full cursor-pointer" style={{ color: corporateColor }} disabled={showPreview}>
                       <option value=""></option>
                       <option value="MD-5">MD-5</option>
                       <option value="MD-4">MD-4</option>
@@ -244,34 +252,34 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                     </select>
                   </div>
                   {/* Instalación + Hora */}
-                  <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r border-red-600 flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0 }}>
+                  <div className="flex flex-col justify-center items-center px-2 py-1.5 border-r flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0, borderColor: corporateColor }}>
                     <span className={labelClass}>Instalación</span>
-                    <input type="text" value={fields.instalacion} onChange={e => updateField('instalacion', e.target.value)} className={inputClass} readOnly={showPreview} />
+                    <input type="text" value={fields.instalacion} onChange={e => updateField('instalacion', e.target.value)} className={inputClass} style={{ color: corporateColor }} readOnly={showPreview} />
                     <span className={`${labelClass} mt-0.5`}>Hora</span>
-                    <input type="text" value={fields.hora} onChange={e => updateField('hora', e.target.value)} placeholder="HH:MM" className="text-sm font-bold text-red-600 text-center bg-transparent outline-none w-full" readOnly={showPreview} />
+                    <input type="text" value={fields.hora} onChange={e => updateField('hora', e.target.value)} placeholder="HH:MM" className="text-sm font-bold text-center bg-transparent outline-none w-full" style={{ color: corporateColor }} readOnly={showPreview} />
                   </div>
                   {/* Tiempo sesión PT */}
                   <div className="flex flex-col justify-center items-center px-2 py-1.5 flex-1 bg-gradient-to-b from-white to-gray-50" style={{ minWidth: 0 }}>
                     <span className={labelClass}>Tiempo sesión PT</span>
-                    <input type="text" value={fields.tiempoSesion} onChange={e => updateField('tiempoSesion', e.target.value)} className={inputClass} readOnly={showPreview} />
+                    <input type="text" value={fields.tiempoSesion} onChange={e => updateField('tiempoSesion', e.target.value)} className={inputClass} style={{ color: corporateColor }} readOnly={showPreview} />
                   </div>
                 </div>
 
                 {/* Porteros */}
-                <div className="flex border-l-2 border-red-600" style={{ width: '25%', minWidth: '180px' }}>
-                  <div className="px-1.5 py-1 flex items-center justify-center border-r border-red-600 bg-gradient-to-b from-gray-100 to-gray-200">
+                <div className="flex border-l-2" style={{ width: '25%', minWidth: '180px', borderColor: corporateColor }}>
+                  <div className="px-1.5 py-1 flex items-center justify-center border-r bg-gradient-to-b from-gray-100 to-gray-200" style={{ borderColor: corporateColor }}>
                     <span className="text-[9px] font-bold text-gray-500" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: '0.1em' }}>PORTEROS</span>
                   </div>
                   <div className="flex flex-1">
                     {/* Porteros grid - fills all available space */}
-                    <div className="flex-1 grid gap-0 divide-x divide-red-600" style={{ gridTemplateColumns: `repeat(${Math.max(row1.length, row2.length) || 1}, 1fr)`, gridTemplateRows: row2.length > 0 ? '1fr 1fr' : '1fr' }}>
+                    <div className="flex-1 grid gap-0" style={{ gridTemplateColumns: `repeat(${Math.max(row1.length, row2.length) || 1}, 1fr)`, gridTemplateRows: row2.length > 0 ? '1fr 1fr' : '1fr' }}>
                       {row1.map((p, i) => (
-                        <div key={`r1-${i}`} className="flex items-center justify-center bg-gradient-to-b from-white to-gray-50">
+                        <div key={`r1-${i}`} className="flex items-center justify-center bg-gradient-to-b from-white to-gray-50" style={{ borderRight: i < Math.max(row1.length, row2.length) - 1 ? `1px solid ${corporateColor}` : 'none' }}>
                           <div className={`text-[10px] px-2 py-1 rounded-sm shadow-sm ${porteroClass(p.active)}`}>{p.name}</div>
                         </div>
                       ))}
                       {row2.map((p, i) => (
-                        <div key={`r2-${i}`} className="flex items-center justify-center bg-gradient-to-b from-white to-gray-50">
+                        <div key={`r2-${i}`} className="flex items-center justify-center bg-gradient-to-b from-white to-gray-50" style={{ borderRight: i < Math.max(row1.length, row2.length) - 1 ? `1px solid ${corporateColor}` : 'none' }}>
                           <div className={`text-[10px] px-2 py-1 rounded-sm shadow-sm ${porteroClass(p.active)}`}>{p.name}</div>
                         </div>
                       ))}
@@ -281,16 +289,16 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                       ))}
                     </div>
                     {/* SESIÓN block */}
-                    <div className="w-16 flex flex-col items-center justify-center border-l border-red-600 bg-gradient-to-b from-gray-100 to-gray-200">
+                    <div className="w-16 flex flex-col items-center justify-center border-l bg-gradient-to-b from-gray-100 to-gray-200" style={{ borderColor: corporateColor }}>
                       <div className="text-[9px] font-bold px-1.5 py-0.5 bg-gray-300 text-gray-700 rounded-sm shadow-sm">SESIÓN</div>
-                      <input type="text" value={fields.sesionNumero} onChange={e => updateField('sesionNumero', e.target.value)} className="text-base font-extrabold text-red-600 text-center bg-transparent outline-none w-full" readOnly={showPreview} />
+                      <input type="text" value={fields.sesionNumero} onChange={e => updateField('sesionNumero', e.target.value)} className="text-base font-extrabold text-center bg-transparent outline-none w-full" style={{ color: corporateColor }} readOnly={showPreview} />
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Equipment Bar */}
-              <div className="grid grid-cols-11 divide-x divide-red-600 border-b-2 border-red-600 bg-gradient-to-b from-gray-50 to-gray-100 shrink-0">
+              <div className="grid grid-cols-11 border-b-2 bg-gradient-to-b from-gray-50 to-gray-100 shrink-0" style={{ borderBottomColor: corporateColor }}>
                 {[
                   { key: 'chinosBajos', label: 'Chinos bajos' },
                   { key: 'chinos', label: 'Chinos' },
@@ -306,7 +314,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                 ].map(item => (
                   <div key={item.key} className="px-1 py-1 flex flex-col justify-center items-center">
                     <span className="text-[8px] font-semibold text-gray-500 whitespace-nowrap leading-tight uppercase tracking-wide">{item.label}</span>
-                    <input type="text" value={fields.equipo[item.key]} onChange={e => updateField(`equipo.${item.key}`, e.target.value)} className="text-xs font-bold text-red-600 text-center bg-transparent border-b border-gray-300 focus:border-red-500 outline-none w-full py-0.5" readOnly={showPreview} />
+                    <input type="text" value={fields.equipo[item.key]} onChange={e => updateField(`equipo.${item.key}`, e.target.value)} className="text-xs font-bold text-center bg-transparent border-b border-gray-300 outline-none w-full py-0.5 template-color-focus" style={{ color: corporateColor }} readOnly={showPreview} />
                   </div>
                 ))}
               </div>
@@ -314,7 +322,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
               {/* Main Content Area */}
               <div className="flex flex-1 min-h-0">
                 {/* Left: Task images area */}
-                <div className="flex-1 p-1 overflow-y-auto border-r border-red-600 bg-white">
+                <div className="flex-1 p-1 overflow-y-auto border-r bg-white" style={{ borderColor: corporateColor }}>
                   {sessionTasks.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-300 text-sm">
                       <div className="text-center">
@@ -338,7 +346,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                 </div>
 
                 {/* Right: Sidebar with CONTENIDOS, OBJETIVOS, FOCOS */}
-                <div className="w-52 flex flex-col divide-y divide-red-600 bg-white shrink-0">
+                <div className="w-52 flex flex-col bg-white shrink-0 template-sidebar">
                   {/* CONTENIDOS */}
                   <div className="p-2">
                     <div className="flex items-center justify-center gap-1.5 text-center text-[10px] font-bold text-gray-600 py-1.5 mb-1.5 rounded-sm bg-gradient-to-b from-gray-100 to-gray-50 border border-gray-200 shadow-sm uppercase tracking-wide">
@@ -387,13 +395,11 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                   </div>
 
                   {/* Logo footer */}
-                  <div className="flex justify-end items-end p-0">
-                    {secondaryImage ? (
+                  {secondaryImage && (
+                    <div className="flex justify-end items-end p-0">
                       <img src={secondaryImage} alt="Imagen secundaria" className="w-32 h-auto object-contain" />
-                    ) : (
-                      <img src={`${import.meta.env.BASE_URL}images/espirito_loitador.webp`} alt="Espíritu Loitador" className="w-32 h-auto object-contain" />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
