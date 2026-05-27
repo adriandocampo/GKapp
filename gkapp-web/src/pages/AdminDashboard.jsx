@@ -333,11 +333,15 @@ export default function AdminDashboard() {
                       <Trash2 size={16} />
                     </button>
                   </div>
-                  {backupDates[u.uid] && (
-                    <div className="text-[10px] text-gk-text-tertiary text-right shrink-0 w-28 leading-tight">
-                      Backup: {formatBackupDate(backupDates[u.uid])}
-                    </div>
-                  )}
+                  <div className="text-[10px] text-right shrink-0 w-28 leading-tight">
+                    {forcingBackup[u.uid] ? (
+                      <span className="text-cyan-400">Creando backup...</span>
+                    ) : backupDates[u.uid] ? (
+                      <span className="text-gk-text-tertiary">Backup: {formatBackupDate(backupDates[u.uid])}</span>
+                    ) : (
+                      <span className="text-gk-text-tertiary/40">Sin backup</span>
+                    )}
+                  </div>
                 </div>
               );
             })}

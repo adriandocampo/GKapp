@@ -7,6 +7,7 @@ import {
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { firestore, storage } from '../firebase';
 
+const BACKUP_TIMEOUT_MS = 60000;
 const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings', 'analyses', 'porteros'];
 
 function userCol(uid, table) {
@@ -209,43 +210,76 @@ export async function hasActivitySince(uid, sinceDate) {
 
 /** Create a backup to Firebase Storage and store lightweight metadata in Firestore */
 export async function createBackup(uid, adminUid = null) {
-  const data = await exportAllUserData(uid);
-  const json = JSON.stringify(data);
-  const encoder = new TextEncoder();
-  const compressed = pako.gzip(encoder.encode(json));
-  const filename = `gkapp_backup_${uid}_${Date.now()}.json.gz`;
-  const path = `backups/${uid}/${filename}`;
+  const label = `[backup ${uid.slice(0, 6)}]`;
 
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, compressed);
+  const withTimeout = (promise, step) =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${step} excedió ${BACKUP_TIMEOUT_MS / 1000}s`)), BACKUP_TIMEOUT_MS)
+      ),
+    ]);
 
-  // Metadatos ligeros en Firestore (sin data)
-  const metaRef = doc(firestore, 'users', uid, 'backups', 'latest');
-  await setDoc(metaRef, {
-    _createdAt: serverTimestamp(),
-    _size: compressed.length,
-    _filename: filename,
-    _triggeredBy: adminUid || 'auto',
-  });
+  try {
+    console.time(`${label} exportAllUserData`);
+    const data = await withTimeout(exportAllUserData(uid), 'exportAllUserData');
+    console.timeEnd(`${label} exportAllUserData`);
 
-  // Notificar a n8n si está configurado
-  const webhookUrl = import.meta.env.VITE_BACKUP_WEBHOOK_URL;
-  if (webhookUrl) {
-    const downloadUrl = await getDownloadURL(storageRef);
-    fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        uid,
-        filename,
-        size: compressed.length,
-        downloadUrl,
-        triggeredBy: adminUid || 'auto',
+    console.time(`${label} JSON.stringify`);
+    const json = JSON.stringify(data);
+    console.timeEnd(`${label} JSON.stringify`);
+
+    console.time(`${label} pako.gzip`);
+    const encoder = new TextEncoder();
+    const compressed = pako.gzip(encoder.encode(json));
+    console.timeEnd(`${label} pako.gzip`);
+
+    const KB = (compressed.length / 1024).toFixed(1);
+    console.log(`${label} Tamaño comprimido: ${KB} KB (${data.tasks?.length || 0} tareas, ${data.sessions?.length || 0} sesiones, ${data.analyses?.length || 0} análisis)`);
+
+    const filename = `gkapp_backup_${uid}_${Date.now()}.json.gz`;
+    const path = `backups/${uid}/${filename}`;
+    const storageRef = ref(storage, path);
+
+    console.time(`${label} uploadBytes`);
+    await withTimeout(uploadBytes(storageRef, compressed), 'uploadBytes');
+    console.timeEnd(`${label} uploadBytes`);
+
+    console.time(`${label} setDoc (metadatos)`);
+    const metaRef = doc(firestore, 'users', uid, 'backups', 'latest');
+    await withTimeout(
+      setDoc(metaRef, {
+        _createdAt: serverTimestamp(),
+        _size: compressed.length,
+        _filename: filename,
+        _triggeredBy: adminUid || 'auto',
       }),
-    }).catch(err => console.warn('[backup] n8n webhook failed:', err));
-  }
+      'setDoc'
+    );
+    console.timeEnd(`${label} setDoc (metadatos)`);
 
-  return { size: compressed.length, filename, path };
+    // Notificar a n8n si está configurado
+    const webhookUrl = import.meta.env.VITE_BACKUP_WEBHOOK_URL;
+    if (webhookUrl) {
+      const downloadUrl = await getDownloadURL(storageRef);
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid, filename, size: compressed.length, downloadUrl, triggeredBy: adminUid || 'auto' }),
+      }).catch(err => console.warn('[backup] n8n webhook failed:', err));
+    }
+
+    console.log(`${label} Backup completado (${KB} KB)`);
+    return { size: compressed.length, filename, path };
+  } catch (err) {
+    console.error(`${label} Error:`, err.message);
+    console.timeEnd(`${label} exportAllUserData`);
+    console.timeEnd(`${label} JSON.stringify`);
+    console.timeEnd(`${label} pako.gzip`);
+    console.timeEnd(`${label} uploadBytes`);
+    console.timeEnd(`${label} setDoc (metadatos)`);
+    throw err;
+  }
 }
 
 /** Restore all user data from the latest Storage backup */
