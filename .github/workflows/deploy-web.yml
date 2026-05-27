@@ -40,7 +40,8 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID:             ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_YOUTUBE_CLIENT_ID:           ${{ secrets.VITE_YOUTUBE_CLIENT_ID }}
-          VITE_BACKUP_WEBHOOK_URL:          ${{ secrets.VITE_BACKUP_WEBHOOK_URL }}
+          VITE_GITHUB_BACKUP_REPO:          ${{ secrets.VITE_GITHUB_BACKUP_REPO }}
+          VITE_GITHUB_BACKUP_TOKEN:         ${{ secrets.VITE_GITHUB_BACKUP_TOKEN }}
         run: npm run web:build
 
       - name: Create 404.html for SPA routing

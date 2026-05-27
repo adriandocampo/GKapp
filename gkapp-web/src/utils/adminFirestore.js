@@ -222,7 +222,64 @@ function binaryToBase64(bytes) {
   });
 }
 
-/** Create a backup and send it via webhook (Pipedream with the file as base64 attachment) */
+/** Upload base64 file to a GitHub repo via Git Data API (100 MB limit) */
+async function uploadToGitHub(owner, repo, token, path, base64Content, message) {
+  const GH = 'https://api.github.com';
+
+  async function gh(url, body) {
+    const res = await fetch(url, {
+      method: body ? 'POST' : 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': body ? 'application/json' : undefined,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`GitHub API ${res.status}: ${text.slice(0, 200)}`);
+    }
+    return res.json();
+  }
+
+  // 1. Create blob with the file content
+  const blob = await gh(`${GH}/repos/${owner}/${repo}/git/blobs`, {
+    content: base64Content,
+    encoding: 'base64',
+  });
+
+  // 2. Get current commit SHA of main branch
+  const ref = await gh(`${GH}/repos/${owner}/${repo}/git/refs/heads/main`);
+  const parentSha = ref.object.sha;
+
+  // 3. Get current tree SHA
+  const parentCommit = await gh(`${GH}/repos/${owner}/${repo}/git/commits/${parentSha}`);
+  const baseTreeSha = parentCommit.tree.sha;
+
+  // 4. Create a new tree with the backup file
+  const tree = await gh(`${GH}/repos/${owner}/${repo}/git/trees`, {
+    base_tree: baseTreeSha,
+    tree: [{ path, mode: '100644', type: 'blob', sha: blob.sha }],
+  });
+
+  // 5. Create a commit
+  const commit = await gh(`${GH}/repos/${owner}/${repo}/git/commits`, {
+    message,
+    tree: tree.sha,
+    parents: [parentSha],
+  });
+
+  // 6. Update main branch
+  await gh(`${GH}/repos/${owner}/${repo}/git/refs/heads/main`, {
+    sha: commit.sha,
+    force: false,
+  });
+
+  return commit.sha;
+}
+
+/** Create a backup and push it to the GitHub backup repo via Git Data API */
 export async function createBackup(uid, adminUid = null) {
   const label = `[backup ${uid.slice(0, 6)}]`;
 
@@ -243,10 +300,10 @@ export async function createBackup(uid, adminUid = null) {
     const json = JSON.stringify(data);
     console.timeEnd(`${label} JSON.stringify`);
 
-    console.time(`${label} pako.gzip`);
+    console.time(`${label} pako.gzip (level 9)`);
     const encoder = new TextEncoder();
-    const compressed = pako.gzip(encoder.encode(json));
-    console.timeEnd(`${label} pako.gzip`);
+    const compressed = pako.gzip(encoder.encode(json), { level: 9 });
+    console.timeEnd(`${label} pako.gzip (level 9)`);
 
     const KB = (compressed.length / 1024).toFixed(1);
     const totalTasks = data.tasks?.length || 0;
@@ -258,36 +315,23 @@ export async function createBackup(uid, adminUid = null) {
     const backupBase64 = await binaryToBase64(compressed);
     console.timeEnd(`${label} base64 encode`);
 
+    const repoFull = import.meta.env.VITE_GITHUB_BACKUP_REPO;
+    const token = import.meta.env.VITE_GITHUB_BACKUP_TOKEN;
+    if (!repoFull || !token) {
+      throw new Error('GitHub backup repo no configurado (VITE_GITHUB_BACKUP_REPO / VITE_GITHUB_BACKUP_TOKEN)');
+    }
+    const [owner, repo] = repoFull.split('/');
+
     const filename = `gkapp_backup_${uid}_${Date.now()}.json.gz`;
+    const ghPath = `backups/${uid}/${filename}`;
+    const commitMessage = `Backup ${uid} - ${KB} KB (${totalTasks} tasks, ${totalSessions} sessions, ${totalAnalyses} analyses)`;
 
-    // Send via webhook (Pipedream)
-    const webhookUrl = import.meta.env.VITE_BACKUP_WEBHOOK_URL;
-    if (!webhookUrl) {
-      throw new Error('No hay webhook configurado (VITE_BACKUP_WEBHOOK_URL)');
-    }
-
-    console.time(`${label} webhook POST`);
-    const response = await withTimeout(
-      fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid,
-          filename,
-          size: compressed.length,
-          backupBase64,
-          totalTasks,
-          totalSessions,
-          totalAnalyses,
-          triggeredBy: adminUid || 'auto',
-        }),
-      }),
-      'webhook POST'
+    console.time(`${label} GitHub upload`);
+    await withTimeout(
+      uploadToGitHub(owner, repo, token, ghPath, backupBase64, commitMessage),
+      'GitHub upload'
     );
-    if (!response.ok) {
-      throw new Error(`Webhook respondió ${response.status}: ${response.statusText}`);
-    }
-    console.timeEnd(`${label} webhook POST`);
+    console.timeEnd(`${label} GitHub upload`);
 
     // Save metadata to Firestore
     console.time(`${label} setDoc (metadatos)`);
@@ -298,21 +342,21 @@ export async function createBackup(uid, adminUid = null) {
         _size: compressed.length,
         _filename: filename,
         _triggeredBy: adminUid || 'auto',
-        _via: 'webhook',
+        _via: 'github',
       }),
       'setDoc'
     );
     console.timeEnd(`${label} setDoc (metadatos)`);
 
-    console.log(`${label} Backup enviado por webhook (${KB} KB)`);
+    console.log(`${label} Backup subido a GitHub (${KB} KB)`);
     return { size: compressed.length, filename };
   } catch (err) {
     console.error(`${label} Error:`, err.message);
     console.timeEnd(`${label} exportAllUserData`);
     console.timeEnd(`${label} JSON.stringify`);
-    console.timeEnd(`${label} pako.gzip`);
+    console.timeEnd(`${label} pako.gzip (level 9)`);
     console.timeEnd(`${label} base64 encode`);
-    console.timeEnd(`${label} webhook POST`);
+    console.timeEnd(`${label} GitHub upload`);
     console.timeEnd(`${label} setDoc (metadatos)`);
     throw err;
   }
