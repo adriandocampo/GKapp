@@ -81,6 +81,9 @@ async function stripBlobs(obj) {
   delete rest.imageBlob;
   delete rest.videoBlob;
   delete rest.imageBase64;
+  delete rest.goalkeeperPhoto;
+  delete rest.rawXml;
+  delete rest.sofascoreData;
 
   let finalImageBase64 = undefined;
 
