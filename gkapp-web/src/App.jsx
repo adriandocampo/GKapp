@@ -15,6 +15,7 @@ import SettingsPage from './pages/Settings';
 import AnalysisPage from './pages/Analysis';
 import AnalysisListPage from './pages/AnalysisList';
 import PorterosPage from './pages/Porteros';
+import AdminDashboard from './pages/AdminDashboard';
 import { ToastProvider, useToast } from './components/Toast';
 import { ModalProvider } from './components/Modal';
 import { SyncProvider } from './contexts/SyncContext';
@@ -297,6 +298,7 @@ function Layout() {
           <Route path="/analysis/new" element={<AnalysisPage />} />
           <Route path="/analysis/:id" element={<AnalysisPage />} />
                   <Route path="/porteros" element={<PorterosPage />} />
+                  {isAdmin && <Route path="/admin" element={<AdminDashboard />} />}
 </Routes>
       </main>
 
