@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield, BarChart3 } from 'lucide-react';
 import { initDatabase, ensureSeedTasks, ensureDefaultTags } from './db';
@@ -14,6 +14,7 @@ import SessionBuilder from './pages/SessionBuilder';
 import SettingsPage from './pages/Settings';
 import AnalysisPage from './pages/Analysis';
 import AnalysisListPage from './pages/AnalysisList';
+import PorterosPage from './pages/Porteros';
 import { ToastProvider, useToast } from './components/Toast';
 import { ModalProvider } from './components/Modal';
 import { SyncProvider } from './contexts/SyncContext';
@@ -25,8 +26,8 @@ function Layout() {
   const { user, isGuest, isAdmin, exitGuestMode, performForceSignout } = useAuth();
   const { addToast } = useToast();
 
-  const navActive = isDev ? 'dev-nav-active' : 'text-gk-accent border-b-2 border-gk-accent bg-gk-elevated/50';
-  const navActiveAdmin = isDev ? 'dev-nav-active' : 'text-gk-accent border-b-2 border-gk-accent bg-gk-elevated/50';
+  const navActive = isDev ? 'dev-nav-active' : 'bg-gk-accent-muted text-gk-accent shadow-[inset_0_1px_0_0_rgba(212,165,116,0.2)] font-medium';
+  const navActiveAdmin = isDev ? 'dev-nav-active' : 'bg-gk-accent-muted text-gk-accent shadow-[inset_0_1px_0_0_rgba(212,165,116,0.2)] font-medium';
 
   useEffect(() => {
     async function init() {
@@ -52,7 +53,7 @@ function Layout() {
         setupFirestoreSync(user.uid);
 
         setupSessionGuard(user.uid, () => {
-          performForceSignout('Sesión iniciada en otro dispositivo');
+          performForceSignout('SesiÃ³n iniciada en otro dispositivo');
           const bc = new BroadcastChannel('gkapp_sync');
           try { bc.postMessage({ type: 'force-signout' }); } catch { /* ignore */ }
         });
@@ -84,7 +85,7 @@ function Layout() {
                 const hasActivity = lastBackupDate ? await hasActivitySince(user.uid, lastBackupDate) : true;
                 if (hasActivity) {
                   await createBackup(user.uid);
-                  addToast('Backup automático completado', 'success');
+                  addToast('Backup automÃ¡tico completado', 'success');
                 }
               }
             }
@@ -96,7 +97,7 @@ function Layout() {
         try {
           const hasFailures = await hasImageSyncFailures(user.uid);
           if (hasFailures) {
-            addToast('Algunas imágenes son demasiado grandes para sincronizarse entre dispositivos y solo están disponibles localmente.', 'warning', 6000);
+            addToast('Algunas imÃ¡genes son demasiado grandes para sincronizarse entre dispositivos y solo estÃ¡n disponibles localmente.', 'warning', 6000);
           }
         } catch { /* ignore */ }
       }
@@ -188,6 +189,17 @@ function Layout() {
                 <BarChart3 size={18} />
                 <span>Análisis</span>
               </NavLink>
+              <NavLink
+                to="/porteros"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
+                  }`
+                }
+              >
+                <Shield size={18} />
+                <span>Porteros</span>
+              </NavLink>
             </div>
             <div className="flex items-center gap-2">
               {/* Guest mode indicator */}
@@ -230,7 +242,7 @@ function Layout() {
                   {user && (
                     <button
                       onClick={handleSignOut}
-                      title={`Cerrar sesión (${user.email})`}
+                      title={`Cerrar sesiÃ³n (${user.email})`}
                       className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gk-text-tertiary hover:bg-gk-elevated hover:text-white transition-colors"
                     >
                       {user.photoURL && (
@@ -243,7 +255,7 @@ function Layout() {
                     <>
                       <button
                         onClick={signInWithGoogle}
-                        title="Iniciar sesión con Google para guardar tus datos"
+                        title="Iniciar sesiÃ³n con Google para guardar tus datos"
                         className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-gk-accent/15 text-gk-accent hover:bg-gk-accent/20 border border-gk-accent/30 transition-colors"
                       >
                         <svg viewBox="0 0 24 24" className="w-4 h-4" xmlns="http://www.w3.org/2000/svg">
@@ -256,7 +268,7 @@ function Layout() {
                       </button>
                       <button
                         onClick={exitGuestMode}
-                        title="Salir del modo invitado (se borrarán los datos)"
+                        title="Salir del modo invitado (se borrarÃ¡n los datos)"
                         className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-amber-400 hover:bg-amber-900/30 hover:text-amber-300 transition-colors"
                       >
                         <LogOut size={16} />
@@ -280,7 +292,8 @@ function Layout() {
           <Route path="/analysis" element={<AnalysisListPage />} />
           <Route path="/analysis/new" element={<AnalysisPage />} />
           <Route path="/analysis/:id" element={<AnalysisPage />} />
-        </Routes>
+                  <Route path="/porteros" element={<PorterosPage />} />
+</Routes>
       </main>
 
     </div>
@@ -307,3 +320,6 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
+
+

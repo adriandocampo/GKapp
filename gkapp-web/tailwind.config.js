@@ -1,4 +1,4 @@
-/** @type {import('tailwindcss').Config} */
+﻿/** @type {import('tailwindcss').Config} */
 export default {
   content: [
     "./index.html",
@@ -12,17 +12,17 @@ export default {
       },
       colors: {
         gk: {
-          page: '#080c14',
-          card: '#0f1419',
-          elevated: '#141b24',
-          border: '#1e293b',
-          'border-hover': '#2d3a4a',
-          'text-primary': '#f1f5f9',
-          'text-secondary': '#94a3b8',
-          'text-tertiary': '#64748b',
-          accent: '#d4a574',
-          'accent-hover': '#e8b87a',
-          'accent-muted': 'rgba(212, 165, 116, 0.15)',
+          page: '#0c0b09',
+          card: 'rgba(22, 20, 16, 0.85)',
+          elevated: 'rgba(22, 20, 16, 0.6)',
+          border: 'rgba(185, 165, 135, 0.10)',
+          'border-hover': 'rgba(185, 165, 135, 0.20)',
+          'text-primary': '#f1ede7',
+          'text-secondary': '#baa587',
+          'text-tertiary': '#997b66',
+          accent: '#e8ac65',
+          'accent-hover': '#ecbd83',
+          'accent-muted': 'rgba(232, 172, 101, 0.15)',
         },
         stat: {
           teal: '#5a9e8f',

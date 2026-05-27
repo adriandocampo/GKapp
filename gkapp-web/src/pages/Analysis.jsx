@@ -552,9 +552,15 @@ export default function AnalysisPage() {
           <button
             onClick={async () => {
               if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-              const requiredMissing = !goalkeeperName.trim() || !seasonId || !parsed || !microciclo.trim();
+              const missing = [];
+              if (!goalkeeperName.trim()) missing.push('Portero');
+              if (!seasonId) missing.push('Temporada');
+              if (!parsed) missing.push('XML');
+              if (!microciclo.trim()) missing.push('Microciclo');
+              const requiredMissing = missing.length > 0;
               if (requiredMissing) {
-                const ok = await confirm('Hay campos obligatorios sin completar (portero, temporada, XML, microciclo). Si sales no se guardarán los cambios. ¿Salir?', { title: 'Campos obligatorios' });
+                const html = `Hay campos obligatorios sin completar:<br/><br/>${missing.map(f => `<span style="color:#ef4444">- ${f}</span>`).join('<br/>')}<br/><br/>Si sales no se guardarán los cambios. ¿Salir?`;
+                const ok = await confirm('', { title: 'Campos obligatorios', messageHtml: html });
                 if (!ok) return;
               } else {
                 await autoSaveRef.current();

@@ -300,9 +300,15 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
 
   async function handleClose() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const requiredMissing = !name.trim() || !seasonId || !microciclo.trim() || !tipoMD;
+    const missing = [];
+    if (!name.trim()) missing.push('Nombre');
+    if (!seasonId) missing.push('Temporada');
+    if (!microciclo.trim()) missing.push('Microciclo');
+    if (!tipoMD) missing.push('Tipo MD');
+    const requiredMissing = missing.length > 0;
     if (requiredMissing && confirm) {
-      const ok = await confirm('Hay campos obligatorios sin completar (nombre, temporada, microciclo, tipo MD). Si sales no se guardarán los cambios. ¿Salir?', { title: 'Campos obligatorios' });
+      const html = `Hay campos obligatorios sin completar:<br/><br/>${missing.map(f => `<span style="color:#ef4444">- ${f}</span>`).join('<br/>')}<br/><br/>Si sales no se guardarán los cambios. ¿Salir?`;
+      const ok = await confirm('', { title: 'Campos obligatorios', messageHtml: html });
       if (!ok) return;
     } else if (!requiredMissing) {
       await autoSaveRef.current(true);

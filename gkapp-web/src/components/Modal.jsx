@@ -33,7 +33,9 @@ export function ModalProvider({ children }) {
               </div>
             )}
             <div className="p-5">
-              {modal.message && <p className="text-sm mb-4" style={{color: '#baa587'}}>{modal.message}</p>}
+              {modal.messageHtml ? (
+                <div className="text-sm mb-4" style={{color: '#baa587', lineHeight: 1.6}} dangerouslySetInnerHTML={{ __html: modal.messageHtml }} />
+              ) : modal.message && <p className="text-sm mb-4" style={{color: '#baa587'}}>{modal.message}</p>}
               {modal.type === 'confirm' && (
                 <div className="flex gap-3">
                   <button
@@ -151,7 +153,8 @@ export function useConfirm() {
     return showModal({
       type: 'confirm',
       title: options.title || 'Confirmar',
-      message,
+      message: options.messageHtml ? undefined : message,
+      messageHtml: options.messageHtml,
       confirmText: options.confirmText || 'Confirmar',
       cancelText: options.cancelText || 'Cancelar',
       cancelValue: false,

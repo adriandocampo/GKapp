@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Upload, X, Trash2, ArrowLeft, Plus, GripVertical, DownloadCloud, RotateCcw, Loader2 } from 'lucide-react';
+import { Save, Upload, X, Trash2, ArrowLeft, Plus, GripVertical, DownloadCloud, RotateCcw, Loader2, User } from 'lucide-react';
 import { db, getSetting, setSetting } from '../db';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Modal';
@@ -16,6 +16,7 @@ export default function Settings() {
   const { user } = useAuth();
   const crestInputRef = useRef();
   const secondaryInputRef = useRef();
+  const porteroPhotoRefs = useRef([]);
   const { refreshKey } = useSyncRefresh();
 
   const [teamName, setTeamName] = useState('Club Deportivo Lugo');
@@ -32,16 +33,28 @@ export default function Settings() {
   const [dragOverPorteroIdx, setDragOverPorteroIdx] = useState(null);
   const [lastBackup, setLastBackup] = useState(null);
   const [restoring, setRestoring] = useState(false);
+  const [defaultAttributes, setDefaultAttributes] = useState([]);
+  const [newAttrName, setNewAttrName] = useState('');
+  const [editingAttrIdx, setEditingAttrIdx] = useState(null);
+  const [editingAttrName, setEditingAttrName] = useState('');
+  const [corporateColor, setCorporateColor] = useState('#dc2626');
+  const [applyTemplateToAll, setApplyTemplateToAll] = useState(false);
 
   async function loadSettings() {
     const name = await getSetting('teamName');
     const crest = await getSetting('teamCrest');
     const secondary = await getSetting('secondaryImage');
     const porterosData = await getSetting('defaultPorteros');
+    const attrsData = await getSetting('defaultAttributes');
     if (name !== null) setTeamName(name);
     if (crest) setTeamCrest(crest);
     if (secondary) setSecondaryImage(secondary);
     if (porterosData) setPorteros(porterosData);
+    if (attrsData) setDefaultAttributes(attrsData);
+    const color = await getSetting('corporateColor');
+    if (color) setCorporateColor(color);
+    const applyAll = await getSetting('applyTemplateToAll');
+    if (applyAll !== null) setApplyTemplateToAll(applyAll);
   }
 
   async function loadTags() {
@@ -90,8 +103,21 @@ export default function Settings() {
 
   function addPortero() {
     if (!newPorteroName.trim()) return;
-    setPorteros(prev => [...prev, { name: newPorteroName.trim().toUpperCase(), active: false }]);
+    setPorteros(prev => [...prev, { name: newPorteroName.trim().toUpperCase(), active: false, photo: null }]);
     setNewPorteroName('');
+  }
+
+  function handlePorteroPhotoUpload(index, file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setPorteros(prev => prev.map((p, i) => i === index ? { ...p, photo: e.target.result } : p));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function removePorteroPhoto(index) {
+    setPorteros(prev => prev.map((p, i) => i === index ? { ...p, photo: null } : p));
   }
 
   function removePortero(index) {
@@ -105,6 +131,9 @@ export default function Settings() {
       await setSetting('teamCrest', teamCrest);
       await setSetting('secondaryImage', secondaryImage);
       await setSetting('defaultPorteros', porteros);
+      await setSetting('defaultAttributes', defaultAttributes);
+      await setSetting('corporateColor', corporateColor);
+      await setSetting('applyTemplateToAll', applyTemplateToAll);
       addToast('Ajustes guardados', 'success');
     } catch (err) {
       addToast('Error al guardar: ' + err.message, 'error');
@@ -259,6 +288,25 @@ export default function Settings() {
     );
   }
 
+  function addAttribute() {
+    if (!newAttrName.trim()) return;
+    setDefaultAttributes(prev => [...prev, { name: newAttrName.trim(), value: 70 }]);
+    setNewAttrName('');
+  }
+
+  function removeAttribute(index) {
+    setDefaultAttributes(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function updateAttrValue(index, value) {
+    setDefaultAttributes(prev => prev.map((a, i) => i === index ? { ...a, value } : a));
+  }
+
+  function renameAttribute(index, name) {
+    setDefaultAttributes(prev => prev.map((a, i) => i === index ? { ...a, name } : a));
+    setEditingAttrIdx(null);
+  }
+
   async function handleRestore() {
     if (!user?.uid) return;
     const ok = await confirm(
@@ -348,6 +396,39 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Corporate Color */}
+        <div>
+          <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Color corporativo</h3>
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={corporateColor}
+              onChange={e => setCorporateColor(e.target.value)}
+              className="h-10 w-16 rounded-lg cursor-pointer"
+              style={{ border: '1px solid rgba(185,165,135,0.15)', background: 'transparent', padding: 2 }}
+            />
+            <span className="text-sm font-mono text-gk-text-primary">{corporateColor}</span>
+            <span className="text-xs text-gk-text-tertiary">Se usa en las líneas de la plantilla de sesión</span>
+          </div>
+        </div>
+
+        {/* Aplicar cambios de plantilla */}
+        <div>
+          <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Plantilla de sesión</h3>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <button
+              onClick={() => setApplyTemplateToAll(!applyTemplateToAll)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${applyTemplateToAll ? 'bg-green-600' : 'bg-red-600'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${applyTemplateToAll ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+            <div>
+              <span className="text-sm font-medium block text-gk-text-primary">Aplicar cambios a sesiones anteriores</span>
+              <span className="text-xs text-gk-text-tertiary">Al guardar la plantilla, los cambios se aplicarán a todas las sesiones de la temporada</span>
+            </div>
+          </label>
+        </div>
+
         {/* Porteros */}
         <div>
           <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Porteros por defecto</h3>
@@ -368,7 +449,37 @@ export default function Settings() {
                   }`}
                 >
                 <GripVertical size={14} className="text-gk-text-tertiary shrink-0" />
-                <span className="text-sm text-gk-text-primary flex-1">{p.name}</span>
+                <div className="relative shrink-0">
+                  {p.photo ? (
+                    <div className="relative group">
+                      <img src={p.photo} alt={p.name} className="w-9 h-9 rounded-lg object-cover border border-gk-border" />
+                      <button
+                        onClick={() => removePorteroPhoto(i)}
+                        className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ background: 'rgba(208,140,96,0.9)', color: 'white' }}
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => porteroPhotoRefs.current[i]?.click()}
+                      className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
+                      style={{ background: 'rgba(22,20,16,0.8)', border: '1px dashed rgba(185,165,135,0.2)', color: '#997b66' }}
+                      title="Añadir foto"
+                    >
+                      <User size={14} />
+                    </button>
+                  )}
+                  <input
+                    ref={el => porteroPhotoRefs.current[i] = el}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => handlePorteroPhotoUpload(i, e.target.files?.[0])}
+                  />
+                </div>
+                <span className="text-sm text-gk-text-primary flex-1 min-w-0 truncate">{p.name}</span>
                 {porteros.length > 1 && (
                   <button onClick={() => removePortero(i)} className="p-1 hover:bg-red-900/30 rounded text-gk-text-tertiary hover:text-stat-rose transition-colors">
                     <Trash2 size={14} />
@@ -386,6 +497,46 @@ export default function Settings() {
               className="flex-1 px-3 py-2 bg-gk-page border border-gk-border rounded-lg text-sm text-gk-text-primary placeholder-gk-text-tertiary focus:outline-none focus:border-gk-accent"
             />
             <button onClick={addPortero} className="px-4 py-2 bg-gk-accent hover:bg-gk-accent rounded-lg text-sm text-white flex items-center gap-1 transition-colors">
+              <Plus size={14} /> Añadir
+            </button>
+          </div>
+        </div>
+
+        {/* Atributos Personalizados por defecto */}
+        <div>
+          <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Atributos Personalizados por defecto</h3>
+          <p className="text-xs text-gk-text-tertiary mb-3">Estos atributos se usarán al crear un nuevo portero</p>
+          <div className="space-y-2 mb-3">
+            {defaultAttributes.map((attr, i) => (
+              <div key={i} className="flex items-center gap-2 bg-gk-page px-4 py-2 rounded-lg">
+                {editingAttrIdx === i ? (
+                  <input type="text" value={editingAttrName}
+                    onChange={e => setEditingAttrName(e.target.value)}
+                    onBlur={() => renameAttribute(i, editingAttrName)}
+                    onKeyDown={e => e.key === 'Enter' && renameAttribute(i, editingAttrName)}
+                    className="flex-1 px-2 py-1 bg-gk-card border border-gk-border rounded text-sm text-gk-text-primary focus:outline-none focus:border-gk-accent"
+                    autoFocus />
+                ) : (
+                  <span className="text-sm text-gk-text-primary flex-1 min-w-0 truncate cursor-pointer"
+                    onClick={() => { setEditingAttrIdx(i); setEditingAttrName(attr.name); }}>
+                    {attr.name}
+                  </span>
+                )}
+                <input type="range" min="0" max="100" value={attr.value}
+                  onChange={e => updateAttrValue(i, parseInt(e.target.value))}
+                  className="v2-rpe" style={{ width: 80 }} />
+                <span className="text-xs font-bold w-6 text-right text-gk-accent">{attr.value}</span>
+                <button onClick={() => removeAttribute(i)} className="p-1 hover:bg-red-900/30 rounded text-gk-text-tertiary hover:text-stat-rose transition-colors">
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input value={newAttrName} onChange={e => setNewAttrName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addAttribute()}
+              placeholder="Nuevo atributo" className="flex-1 px-3 py-2 bg-gk-page border border-gk-border rounded-lg text-sm text-gk-text-primary placeholder-gk-text-tertiary focus:outline-none focus:border-gk-accent" />
+            <button onClick={addAttribute} className="px-4 py-2 bg-gk-accent hover:bg-gk-accent rounded-lg text-sm text-white flex items-center gap-1 transition-colors">
               <Plus size={14} /> Añadir
             </button>
           </div>
