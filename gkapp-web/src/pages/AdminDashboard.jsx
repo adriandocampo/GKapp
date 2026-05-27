@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   listUserProfiles,
@@ -11,6 +11,7 @@ import {
   setBackupConfig,
   createBackup,
   getBackup,
+  restoreFromFile,
 } from '../utils/adminFirestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
@@ -18,7 +19,7 @@ import { useConfirm, useAlert } from '../components/Modal';
 import {
   Shield, Users, Download, Trash2, Eye, ArrowLeft,
   Database, ClipboardList, Tag, Calendar, Settings,
-  Loader2, Search, FileJson, RotateCcw
+  Loader2, Search, FileJson, RotateCcw, Upload
 } from 'lucide-react';
 import UserDataViewer from '../components/UserDataViewer';
 
@@ -47,6 +48,8 @@ export default function AdminDashboard() {
   const [backupConfigs, setBackupConfigs] = useState({});
   const [backupDates, setBackupDates] = useState({});
   const [forcingBackup, setForcingBackup] = useState({});
+  const [restoringFile, setRestoringFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -194,11 +197,42 @@ export default function AdminDashboard() {
       const result = await createBackup(uid);
       const now = new Date();
       setBackupDates(prev => ({ ...prev, [uid]: now }));
-      addToast(`Backup completado (${(result.size / 1024).toFixed(1)} KB)`, 'success');
+      addToast(`Backup enviado (${(result.size / 1024).toFixed(1)} KB)`, 'success');
     } catch (err) {
       addToast('Error en backup: ' + err.message, 'error');
     } finally {
       setForcingBackup(prev => ({ ...prev, [uid]: false }));
+    }
+  }
+
+  function handleRestoreFromFile(uid) {
+    fileInputRef.current._restoreUid = uid;
+    fileInputRef.current.click();
+  }
+
+  async function onFileSelected(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const uid = fileInputRef.current._restoreUid;
+    if (!uid) return;
+
+    const ok = await confirm(
+      `Se van a SOBREESCRIBIR los datos actuales de este usuario con los del backup. ¿Continuar?`,
+      { title: 'Restaurar backup', confirmText: 'Restaurar', confirmColor: 'amber' }
+    );
+    if (!ok) return;
+
+    setRestoringFile(uid);
+    try {
+      await restoreFromFile(uid, file);
+      addToast('Datos restaurados correctamente', 'success');
+      const newCounts = await getUserDataCounts(uid);
+      setCounts(prev => ({ ...prev, [uid]: newCounts }));
+    } catch (err) {
+      addToast('Error restaurando: ' + err.message, 'error');
+    } finally {
+      setRestoringFile(null);
     }
   }
 
@@ -303,6 +337,21 @@ export default function AdminDashboard() {
                     >
                       <Download size={16} />
                     </button>
+                    <button
+                      onClick={() => handleRestoreFromFile(u.uid)}
+                      disabled={restoringFile === u.uid}
+                      title={restoringFile === u.uid ? 'Restaurando...' : 'Restaurar desde archivo'}
+                      className="p-2 bg-gk-card hover:bg-gk-elevated rounded-lg text-emerald-400 transition-colors disabled:opacity-40"
+                    >
+                      {restoringFile === u.uid ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json.gz"
+                      className="hidden"
+                      onChange={onFileSelected}
+                    />
                     <button
                       onClick={() => handleForceBackup(u.uid)}
                       disabled={forcingBackup[u.uid]}

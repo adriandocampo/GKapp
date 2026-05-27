@@ -318,6 +318,20 @@ export async function createBackup(uid, adminUid = null) {
   }
 }
 
+/** Restore user data from a local .json.gz backup file */
+export async function restoreFromFile(uid, file) {
+  const buffer = await file.arrayBuffer();
+  const decompressed = pako.ungzip(new Uint8Array(buffer));
+  const data = JSON.parse(new TextDecoder().decode(decompressed));
+
+  if (data.uid && data.uid !== uid) {
+    throw new Error(`El backup pertenece a ${data.uid}, no a ${uid}`);
+  }
+
+  await importAllUserData(uid, data);
+  return true;
+}
+
 /** Restore all user data from the latest Storage backup */
 export async function restoreFromBackup(uid) {
   const metaRef = doc(firestore, 'users', uid, 'backups', 'latest');
