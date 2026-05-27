@@ -208,7 +208,21 @@ export async function hasActivitySince(uid, sinceDate) {
   return false;
 }
 
-/** Create a backup to Firebase Storage and store lightweight metadata in Firestore */
+/** Compress binary data to base64 string */
+function binaryToBase64(bytes) {
+  return new Promise((resolve, reject) => {
+    const blob = new Blob([bytes]);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error('Error reading blob for base64'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Create a backup and send it via webhook (Pipedream with the file as base64 attachment) */
 export async function createBackup(uid, adminUid = null) {
   const label = `[backup ${uid.slice(0, 6)}]`;
 
@@ -235,16 +249,47 @@ export async function createBackup(uid, adminUid = null) {
     console.timeEnd(`${label} pako.gzip`);
 
     const KB = (compressed.length / 1024).toFixed(1);
-    console.log(`${label} Tamaño comprimido: ${KB} KB (${data.tasks?.length || 0} tareas, ${data.sessions?.length || 0} sesiones, ${data.analyses?.length || 0} análisis)`);
+    const totalTasks = data.tasks?.length || 0;
+    const totalSessions = data.sessions?.length || 0;
+    const totalAnalyses = data.analyses?.length || 0;
+    console.log(`${label} Tamaño comprimido: ${KB} KB (${totalTasks} tareas, ${totalSessions} sesiones, ${totalAnalyses} análisis)`);
+
+    console.time(`${label} base64 encode`);
+    const backupBase64 = await binaryToBase64(compressed);
+    console.timeEnd(`${label} base64 encode`);
 
     const filename = `gkapp_backup_${uid}_${Date.now()}.json.gz`;
-    const path = `backups/${uid}/${filename}`;
-    const storageRef = ref(storage, path);
 
-    console.time(`${label} uploadBytes`);
-    await withTimeout(uploadBytes(storageRef, compressed), 'uploadBytes');
-    console.timeEnd(`${label} uploadBytes`);
+    // Send via webhook (Pipedream)
+    const webhookUrl = import.meta.env.VITE_BACKUP_WEBHOOK_URL;
+    if (!webhookUrl) {
+      throw new Error('No hay webhook configurado (VITE_BACKUP_WEBHOOK_URL)');
+    }
 
+    console.time(`${label} webhook POST`);
+    const response = await withTimeout(
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid,
+          filename,
+          size: compressed.length,
+          backupBase64,
+          totalTasks,
+          totalSessions,
+          totalAnalyses,
+          triggeredBy: adminUid || 'auto',
+        }),
+      }),
+      'webhook POST'
+    );
+    if (!response.ok) {
+      throw new Error(`Webhook respondió ${response.status}: ${response.statusText}`);
+    }
+    console.timeEnd(`${label} webhook POST`);
+
+    // Save metadata to Firestore
     console.time(`${label} setDoc (metadatos)`);
     const metaRef = doc(firestore, 'users', uid, 'backups', 'latest');
     await withTimeout(
@@ -253,30 +298,21 @@ export async function createBackup(uid, adminUid = null) {
         _size: compressed.length,
         _filename: filename,
         _triggeredBy: adminUid || 'auto',
+        _via: 'webhook',
       }),
       'setDoc'
     );
     console.timeEnd(`${label} setDoc (metadatos)`);
 
-    // Notificar a n8n si está configurado
-    const webhookUrl = import.meta.env.VITE_BACKUP_WEBHOOK_URL;
-    if (webhookUrl) {
-      const downloadUrl = await getDownloadURL(storageRef);
-      fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid, filename, size: compressed.length, downloadUrl, triggeredBy: adminUid || 'auto' }),
-      }).catch(err => console.warn('[backup] n8n webhook failed:', err));
-    }
-
-    console.log(`${label} Backup completado (${KB} KB)`);
-    return { size: compressed.length, filename, path };
+    console.log(`${label} Backup enviado por webhook (${KB} KB)`);
+    return { size: compressed.length, filename };
   } catch (err) {
     console.error(`${label} Error:`, err.message);
     console.timeEnd(`${label} exportAllUserData`);
     console.timeEnd(`${label} JSON.stringify`);
     console.timeEnd(`${label} pako.gzip`);
-    console.timeEnd(`${label} uploadBytes`);
+    console.timeEnd(`${label} base64 encode`);
+    console.timeEnd(`${label} webhook POST`);
     console.timeEnd(`${label} setDoc (metadatos)`);
     throw err;
   }
