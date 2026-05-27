@@ -4,8 +4,7 @@ import {
   setDoc, updateDoc, deleteDoc,
   writeBatch, serverTimestamp,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { firestore, storage } from '../firebase';
+import { firestore } from '../firebase';
 
 const BACKUP_TIMEOUT_MS = 60000;
 const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings', 'analyses', 'porteros'];
@@ -323,7 +322,7 @@ export async function restoreFromFile(uid, file) {
   return true;
 }
 
-/** Restore all user data from the latest Storage backup */
+/** Restore all user data from the latest GitHub backup via Cloudflare Worker */
 export async function restoreFromBackup(uid) {
   const metaRef = doc(firestore, 'users', uid, 'backups', 'latest');
   const metaSnap = await getDoc(metaRef);
@@ -331,9 +330,14 @@ export async function restoreFromBackup(uid) {
   const meta = metaSnap.data();
   if (!meta._filename) throw new Error('No hay backup disponible');
 
-  const storageRef = ref(storage, `backups/${uid}/${meta._filename}`);
-  const url = await getDownloadURL(storageRef);
-  const response = await fetch(url);
+  const workerUrl = import.meta.env.VITE_BACKUP_WORKER_URL;
+  if (!workerUrl) throw new Error('Backup Worker no configurado');
+
+  const response = await fetch(`${workerUrl}/backups/${uid}/${meta._filename}`);
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Error descargando backup: ${response.status} ${text.slice(0, 200)}`);
+  }
   const buffer = await response.arrayBuffer();
   const decompressed = pako.ungzip(new Uint8Array(buffer));
   const data = JSON.parse(new TextDecoder().decode(decompressed));
