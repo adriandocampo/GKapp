@@ -26,9 +26,6 @@ function Layout() {
   const { user, isGuest, isAdmin, exitGuestMode, performForceSignout } = useAuth();
   const { addToast } = useToast();
 
-  const navActive = isDev ? 'dev-nav-active' : 'bg-gk-accent-muted text-gk-accent shadow-[inset_0_1px_0_0_rgba(212,165,116,0.2)] font-medium';
-  const navActiveAdmin = isDev ? 'dev-nav-active' : 'bg-gk-accent-muted text-gk-accent shadow-[inset_0_1px_0_0_rgba(212,165,116,0.2)] font-medium';
-
   useEffect(() => {
     async function init() {
       await initDatabase();
@@ -137,67 +134,72 @@ function Layout() {
 
   return (
     <div className={`min-h-screen text-gk-text-primary flex flex-col ${isDev ? 'dev-bg dev-grid-pattern dev-scrollbar' : 'bg-gk-page'}`}>
-      <nav className={`sticky top-0 z-50 ${isDev ? 'dev-navbar' : 'bg-gk-page/95 backdrop-blur-sm border-b border-gk-border'}`}>
+      <nav className={`sticky top-0 z-50 ${isDev ? 'dev-navbar' : 'bg-gk-page/95 backdrop-blur-sm border-b border-gk-border'}`} style={{fontSize: 16}}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center">
+              <div className="flex items-center gap-2 shrink-0">
                 <span className={`text-xl font-bold ${isDev ? 'dev-gradient-text' : 'text-gk-accent'}`}>GKApp</span>
                 {isDev && <span className="dev-badge">DEV</span>}
               </div>
               <NavLink
                 to="/"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
-                  }`
-                }
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
+                style={({ isActive }) => ({
+                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
+                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
+                  color: isActive ? '#e8ac65' : '#baa587',
+                })}
               >
-                <Database size={18} />
+                <Database size={20} />
                 <span>Base de Datos</span>
               </NavLink>
               <NavLink
                 to="/editor"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
-                  }`
-                }
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
+                style={({ isActive }) => ({
+                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
+                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
+                  color: isActive ? '#e8ac65' : '#baa587',
+                })}
               >
-                <PlusCircle size={18} />
+                <PlusCircle size={20} />
                 <span>Nueva Tarea</span>
               </NavLink>
               <NavLink
                 to="/sessions"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
-                  }`
-                }
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
+                style={({ isActive }) => ({
+                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
+                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
+                  color: isActive ? '#e8ac65' : '#baa587',
+                })}
               >
-                <ClipboardList size={18} />
+                <ClipboardList size={20} />
                 <span>Sesiones</span>
               </NavLink>
               <NavLink
                 to="/analysis"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
-                  }`
-                }
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
+                style={({ isActive }) => ({
+                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
+                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
+                  color: isActive ? '#e8ac65' : '#baa587',
+                })}
               >
-                <BarChart3 size={18} />
+                <BarChart3 size={20} />
                 <span>Análisis</span>
               </NavLink>
               <NavLink
                 to="/porteros"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
-                  }`
-                }
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
+                style={({ isActive }) => ({
+                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
+                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
+                  color: isActive ? '#e8ac65' : '#baa587',
+                })}
               >
-                <Shield size={18} />
+                <Shield size={20} />
                 <span>Porteros</span>
               </NavLink>
             </div>
@@ -213,26 +215,28 @@ function Layout() {
               {isAdmin && (
                 <NavLink
                   to="/admin"
-                  className={({ isActive }) =>
-                    `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isActive ? navActiveAdmin : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
-                    }`
-                  }
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
+                  style={({ isActive }) => ({
+                    background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
+                    borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
+                    color: isActive ? '#e8ac65' : '#baa587',
+                  })}
                 >
-                  <Shield size={18} />
+                  <Shield size={20} />
                   <span>Admin</span>
                 </NavLink>
               )}
 
               <NavLink
                 to="/settings"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive ? navActive : 'text-gk-text-secondary hover:bg-gk-elevated hover:text-gk-text-primary'
-                  }`
-                }
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
+                style={({ isActive }) => ({
+                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
+                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
+                  color: isActive ? '#e8ac65' : '#baa587',
+                })}
               >
-                <Settings size={18} />
+                <Settings size={20} />
                 <span>Ajustes</span>
               </NavLink>
 
@@ -281,7 +285,7 @@ function Layout() {
           </div>
         </div>
       </nav>
-      <main className={`flex-1 max-w-7xl w-full mx-auto px-4 py-6 ${isDev ? 'dev-page-enter' : ''}`}>
+      <main className={`flex-1 max-w-7xl w-full mx-auto px-4 lg:px-6 py-4 lg:py-5 ${isDev ? 'dev-page-enter' : ''}`}>
         <Routes>
           <Route path="/" element={<DatabasePage />} />
           <Route path="/editor" element={<TaskEditor />} />

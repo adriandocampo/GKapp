@@ -1,5 +1,13 @@
 ﻿@import "tailwindcss";
 
+/* Desktop base font-size reduction so content doesn't feel oversized */
+@media (min-width: 1280px) {
+  html { font-size: 14px; }
+}
+@media (min-width: 1920px) {
+  html { font-size: 13px; }
+}
+
 :root {
   color-scheme: dark;
   --gk-page: #0c0b09;

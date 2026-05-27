@@ -22,18 +22,19 @@ function calculateAge(dob) {
   return age;
 }
 
-function CustomRadarChart({ data, color = '#e8ac65', height = 220 }) {
+function CustomRadarChart({ data, color = '#e8ac65', height = undefined }) {
   const allZero = data.every(d => d.value === 0);
   if (allZero) {
-    return (
-      <div className="flex items-center justify-center" style={{ height, color: '#997b66' }}>
-        <p className="text-sm">Sin datos</p>
-      </div>
-    );
-  }
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <RadarChart cx="50%" cy="50%" outerRadius="68%" data={data}>
+    <div className="flex items-center justify-center" style={{ height: height || 220, color: '#997b66' }}>
+      <p className="text-sm">Sin datos</p>
+    </div>
+  );
+}
+const chartHeight = height || (typeof window !== 'undefined' && window.innerWidth >= 1280 ? 280 : 220);
+return (
+  <ResponsiveContainer width="100%" height={chartHeight}>
+    <RadarChart cx="50%" cy="50%" outerRadius="68%" data={data}>
         <PolarGrid stroke="rgba(185,165,135,0.15)" />
         <PolarAngleAxis dataKey="name" tick={{ fill: '#baa587', fontSize: 10 }} />
         <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
@@ -156,7 +157,7 @@ function SofaScoreStats({ careerData, heatmapData, loadingHeatmap, compareGk, co
             )}
           </div>
         </div>
-        <div className={compareGk ? 'grid grid-cols-2 gap-4' : ''}>
+        <div className={compareGk ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : ''}>
           <div>
             {compareGk && <p className="text-xs text-center mb-1 font-medium" style={{color: '#e8ac65'}}>{porteroName || ''}</p>}
             <CustomRadarChart data={radarData} color="#5ab4e6" />
@@ -174,7 +175,7 @@ function SofaScoreStats({ careerData, heatmapData, loadingHeatmap, compareGk, co
         <SectionTitle icon={BarChart3} color="#d4a574" subtitle="Métricas detalladas de la temporada">
           Estadísticas {careerData[0]?.year || ''}
         </SectionTitle>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
           {stats.map(s => (
             <StatRow key={s.label} label={s.label} value={s.value} unit={s.unit} />
           ))}
@@ -257,55 +258,55 @@ function CareerTable({ careerData }) {
       <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: '0 4px' }}>
         <thead>
           <tr className="text-xs" style={{ color: '#997b66' }}>
-            <th className="text-left py-2 px-2">Temp.</th>
-            <th className="text-left py-2 px-2">Equipo</th>
-            <th className="text-left py-2 px-2">Comp.</th>
-            <th className="text-center py-2 px-2">PJ</th>
-            <th className="text-center py-2 px-2">Min.</th>
-            <th className="text-center py-2 px-2">G.Enc.</th>
-            <th className="text-center py-2 px-2">P.0</th>
+            <th className="text-left py-2 px-2 lg:px-4">Temp.</th>
+            <th className="text-left py-2 px-2 lg:px-4">Equipo</th>
+            <th className="text-left py-2 px-2 lg:px-4">Comp.</th>
+            <th className="text-center py-2 px-2 lg:px-4">PJ</th>
+            <th className="text-center py-2 px-2 lg:px-4">Min.</th>
+            <th className="text-center py-2 px-2 lg:px-4">G.Enc.</th>
+            <th className="text-center py-2 px-2 lg:px-4">P.0</th>
             <th className="w-6"></th>
           </tr>
         </thead>
         <tbody>
           {groups.map((g, i) => (
             <Fragment key={i}>
-              <tr
-                onClick={() => g.details.length > 1 && setExpanded(prev => ({ ...prev, [i]: !prev[i] }))}
-                className="rounded-xl transition-all cursor-pointer"
-                style={{
-                  background: g.details.length > 1 ? 'rgba(232,172,101,0.06)' : 'rgba(22,20,16,0.5)',
-                  display: 'table-row',
-                }}
-              >
-                <td className="py-2.5 px-2 font-medium" style={{ color: '#f1ede7' }}>{g.year || '-'}</td>
-                <td className="py-2.5 px-2" style={{ color: '#baa587' }}>{g.teamName || '-'}</td>
-                <td className="py-2.5 px-2" style={{ color: '#baa587' }}>{g.tournament || '-'}</td>
-                <td className="text-center py-2.5 px-2" style={{ color: '#f1ede7', fontWeight: 600 }}>{g.stats.appearances}</td>
-                <td className="text-center py-2.5 px-2" style={{ color: '#f1ede7' }}>{g.stats.minutesPlayed}</td>
-                <td className="text-center py-2.5 px-2" style={{ color: '#f1ede7' }}>{g.stats.goalsConceded}</td>
-                <td className="text-center py-2.5 px-2 font-semibold" style={{ color: '#9b9b7a' }}>{g.stats.cleanSheet}</td>
-                <td className="py-2.5 px-1">
-                  {g.details.length > 1 && (
-                    expanded[i] ? <ChevronUp size={14} style={{color: '#e8ac65'}} /> : <ChevronDown size={14} style={{color: '#997b66'}} />
-                  )}
-                </td>
-              </tr>
-              {expanded[i] && g.details.map((d, j) => {
-                const st = d.statistics || {};
-                return (
-                  <tr key={`${i}-${j}`} style={{ background: 'rgba(22,20,16,0.3)', display: 'table-row' }}>
-                    <td className="py-1.5 px-2 text-xs" style={{ color: '#997b66' }}></td>
-                    <td className="py-1.5 px-2 text-xs" style={{ color: '#997b66' }}></td>
-                    <td className="py-1.5 px-2 text-xs" style={{ color: '#baa587' }}>{d.uniqueTournament?.name || '-'}</td>
-                    <td className="text-center py-1.5 px-2 text-xs" style={{ color: '#baa587' }}>{st.appearances || 0}</td>
-                    <td className="text-center py-1.5 px-2 text-xs" style={{ color: '#baa587' }}>{st.minutesPlayed || 0}</td>
-                    <td className="text-center py-1.5 px-2 text-xs" style={{ color: '#baa587' }}>{st.goalsConceded || 0}</td>
-                    <td className="text-center py-1.5 px-2 text-xs" style={{ color: '#9b9b7a' }}>{st.cleanSheet || 0}</td>
-                    <td></td>
-                  </tr>
-                );
-              })}
+                <tr
+                  onClick={() => g.details.length > 1 && setExpanded(prev => ({ ...prev, [i]: !prev[i] }))}
+                  className="rounded-xl transition-all cursor-pointer"
+                  style={{
+                    background: g.details.length > 1 ? 'rgba(232,172,101,0.06)' : 'rgba(22,20,16,0.5)',
+                    display: 'table-row',
+                  }}
+                >
+                  <td className="py-2.5 px-2 lg:px-4 font-medium" style={{ color: '#f1ede7' }}>{g.year || '-'}</td>
+                  <td className="py-2.5 px-2 lg:px-4" style={{ color: '#baa587' }}>{g.teamName || '-'}</td>
+                  <td className="py-2.5 px-2 lg:px-4" style={{ color: '#baa587' }}>{g.tournament || '-'}</td>
+                  <td className="text-center py-2.5 px-2 lg:px-4" style={{ color: '#f1ede7', fontWeight: 600 }}>{g.stats.appearances}</td>
+                  <td className="text-center py-2.5 px-2 lg:px-4" style={{ color: '#f1ede7' }}>{g.stats.minutesPlayed}</td>
+                  <td className="text-center py-2.5 px-2 lg:px-4" style={{ color: '#f1ede7' }}>{g.stats.goalsConceded}</td>
+                  <td className="text-center py-2.5 px-2 lg:px-4 font-semibold" style={{ color: '#9b9b7a' }}>{g.stats.cleanSheet}</td>
+                  <td className="py-2.5 px-1 lg:px-3">
+                    {g.details.length > 1 && (
+                      expanded[i] ? <ChevronUp size={14} style={{color: '#e8ac65'}} /> : <ChevronDown size={14} style={{color: '#997b66'}} />
+                    )}
+                  </td>
+                </tr>
+                {expanded[i] && g.details.map((d, j) => {
+                  const st = d.statistics || {};
+                  return (
+                    <tr key={`${i}-${j}`} style={{ background: 'rgba(22,20,16,0.3)', display: 'table-row' }}>
+                      <td className="py-1.5 px-2 lg:px-4 text-xs" style={{ color: '#997b66' }}></td>
+                      <td className="py-1.5 px-2 lg:px-4 text-xs" style={{ color: '#997b66' }}></td>
+                      <td className="py-1.5 px-2 lg:px-4 text-xs" style={{ color: '#baa587' }}>{d.uniqueTournament?.name || '-'}</td>
+                      <td className="text-center py-1.5 px-2 lg:px-4 text-xs" style={{ color: '#baa587' }}>{st.appearances || 0}</td>
+                      <td className="text-center py-1.5 px-2 lg:px-4 text-xs" style={{ color: '#baa587' }}>{st.minutesPlayed || 0}</td>
+                      <td className="text-center py-1.5 px-2 lg:px-4 text-xs" style={{ color: '#baa587' }}>{st.goalsConceded || 0}</td>
+                      <td className="text-center py-1.5 px-2 lg:px-4 text-xs" style={{ color: '#9b9b7a' }}>{st.cleanSheet || 0}</td>
+                      <td></td>
+                    </tr>
+                  );
+                })}
             </Fragment>
           ))}
         </tbody>
@@ -445,28 +446,28 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-start justify-center p-4 pt-12" style={{background: 'rgba(0,0,0,0.7)'}}>
-      <div className="glass-card-static w-full max-w-4xl" style={{borderRadius: 20, maxHeight: '90vh', overflow: 'hidden'}}>
-        <div className="p-6 flex flex-col items-center text-center" style={{borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
-          <div className="flex items-center gap-4 mb-1">
+    <div className="fixed inset-0 z-[90] flex items-start justify-center p-4 lg:p-8 pt-12 lg:pt-16" style={{background: 'rgba(0,0,0,0.7)'}}>
+      <div className="glass-card-static w-full max-w-6xl flex flex-col" style={{borderRadius: 20, maxHeight: '90vh', overflow: 'hidden'}}>
+        <div className="p-6 lg:p-8 flex flex-col items-center text-center" style={{borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
+          <div className="flex items-center gap-4 lg:gap-6 mb-1">
             {portero.photo ? (
-              <img src={portero.photo} alt="" className="w-18 h-18 rounded-full object-cover"
+              <img src={portero.photo} alt="" className="w-18 h-18 rounded-full object-cover lg:w-20 lg:h-20"
                 style={{width: 72, height: 72, background: 'rgba(185,165,135,0.1)'}}
                 onError={e => { e.currentTarget.style.display = 'none'; }} />
             ) : (
-              <div className="rounded-full flex items-center justify-center" style={{width: 72, height: 72, background: 'rgba(232,172,101,0.1)'}}>
+              <div className="rounded-full flex items-center justify-center lg:w-20 lg:h-20" style={{width: 72, height: 72, background: 'rgba(232,172,101,0.1)'}}>
                 <User size={36} style={{color: '#e8ac65'}} />
               </div>
             )}
             <div>
-              <h3 className="font-bold" style={{color: '#f1ede7', fontSize: '1.75rem', lineHeight: 1.2}}>{portero.name}</h3>
-              <p className="font-medium" style={{color: '#baa587', fontSize: '1.05rem'}}>{portero.team || 'Sin equipo'}</p>
+              <h3 className="font-bold" style={{color: '#f1ede7', fontSize: 'clamp(1.25rem, 2.5vw, 2rem)', lineHeight: 1.2}}>{portero.name}</h3>
+              <p className="font-medium" style={{color: '#baa587', fontSize: 'clamp(0.9rem, 1.2vw, 1.15rem)'}}>{portero.team || 'Sin equipo'}</p>
             </div>
           </div>
-          <button onClick={onClose} className="v2-btn-ghost p-1.5 rounded-lg absolute" style={{top: 20, right: 20}}><X size={22} /></button>
+          <button onClick={onClose} className="v2-btn-ghost p-1.5 rounded-lg absolute" style={{top: 'clamp(12px, 2vw, 24px)', right: 'clamp(12px, 2vw, 24px)'}}><X size={22} /></button>
         </div>
 
-        <div className="flex justify-center px-5 gap-2 pb-3 pt-2" style={{borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
+        <div className="flex justify-center px-5 gap-2 pb-3 pt-2 flex-wrap" style={{borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
           {TABS.map(t => {
             const Icon = t.icon;
             const isActive = tab === t.key;
@@ -479,10 +480,9 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
             return (
               <button key={t.key} onClick={() => setTab(t.key)}
                 style={{
-                  flex: 'none',
-                  padding: '12px 28px',
+                  padding: 'clamp(8px, 1.2vw, 14px) clamp(14px, 2vw, 28px)',
                   borderRadius: 16,
-                  fontSize: '1rem',
+                  fontSize: 'clamp(0.8rem, 1vw, 1rem)',
                   fontWeight: isActive ? 600 : 500,
                   cursor: 'pointer',
                   border: 'none',
@@ -490,48 +490,48 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
                   color: isActive ? c.text : '#997b66',
                   transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
                 }}>
-                <Icon size={22} style={{marginRight: 8, display: 'inline', verticalAlign: 'middle'}} />
+                <Icon size={20} style={{marginRight: 8, display: 'inline', verticalAlign: 'middle'}} />
                 {t.label}
               </button>
             );
           })}
         </div>
 
-        <div className="p-5 overflow-y-auto v2-scrollbar" style={{maxHeight: '65vh'}}>
+        <div className="p-5 lg:p-8 overflow-y-auto v2-scrollbar flex-1 min-h-0">
           {tab === 'profile' && (
             <div className="space-y-5">
               <div className="glass-card-static p-4">
                 <SectionTitle icon={User} color="#e8ac65" subtitle="Información básica del jugador">
                   Información General
                 </SectionTitle>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-5">
                 {portero.dateOfBirth && (
-                  <div className="glass-card-static p-3 text-center">
-                    <p className="text-xs" style={{color: '#997b66'}}>Edad</p>
-                    <p className="text-lg font-bold" style={{color: '#f1ede7'}}>{age || '-'} años</p>
+                  <div className="glass-card-static p-3 lg:p-4 text-center">
+                    <p className="text-xs lg:text-sm" style={{color: '#997b66'}}>Edad</p>
+                    <p className="text-lg lg:text-xl font-bold" style={{color: '#f1ede7'}}>{age || '-'} años</p>
                   </div>
                 )}
                 {portero.height && (
-                  <div className="glass-card-static p-3 text-center">
-                    <p className="text-xs" style={{color: '#997b66'}}>Altura</p>
-                    <p className="text-lg font-bold" style={{color: '#f1ede7'}}>{portero.height} cm</p>
+                  <div className="glass-card-static p-3 lg:p-4 text-center">
+                    <p className="text-xs lg:text-sm" style={{color: '#997b66'}}>Altura</p>
+                    <p className="text-lg lg:text-xl font-bold" style={{color: '#f1ede7'}}>{portero.height} cm</p>
                   </div>
                 )}
                 {portero.preferredFoot && (
-                  <div className="glass-card-static p-3 text-center">
-                    <p className="text-xs" style={{color: '#997b66'}}>Lateralidad</p>
-                    <p className="text-lg font-bold" style={{color: '#f1ede7'}}>{portero.preferredFoot}</p>
+                  <div className="glass-card-static p-3 lg:p-4 text-center">
+                    <p className="text-xs lg:text-sm" style={{color: '#997b66'}}>Lateralidad</p>
+                    <p className="text-lg lg:text-xl font-bold" style={{color: '#f1ede7'}}>{portero.preferredFoot}</p>
                   </div>
                 )}
                 {portero.nationality && (
-                  <div className="glass-card-static p-3 text-center">
-                    <p className="text-xs" style={{color: '#997b66'}}>Nacionalidad</p>
+                  <div className="glass-card-static p-3 lg:p-4 text-center">
+                    <p className="text-xs lg:text-sm" style={{color: '#997b66'}}>Nacionalidad</p>
                     <div className="flex items-center justify-center gap-2">
                       {portero.nationalityFlag && (
                         <img src={`https://flagcdn.com/24x18/${portero.nationalityFlag.toLowerCase()}.png`}
-                          alt="" className="w-5" />
+                          alt="" className="w-5 lg:w-6" />
                       )}
-                      <p className="text-lg font-bold" style={{color: '#f1ede7'}}>{portero.nationality}</p>
+                      <p className="text-lg lg:text-xl font-bold" style={{color: '#f1ede7'}}>{portero.nationality}</p>
                     </div>
                   </div>
                 )}
@@ -592,7 +592,7 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
                     </button>
                   </div>
                 </div>
-                <div className={compareGk ? 'grid grid-cols-2 gap-4' : ''}>
+                <div className={compareGk ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : ''}>
                   <div>
                     <p className="text-xs text-center mb-1 font-medium" style={{color: '#e8ac65'}}>{portero.name}</p>
                     <CustomRadarChart data={attrs} />
@@ -683,11 +683,11 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
           )}
         </div>
 
-        <div className="p-4 flex justify-between" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
-          <button onClick={onDelete} className="v2-btn-danger text-xs py-2 px-4">
+        <div className="p-4 lg:p-5 flex justify-between" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
+          <button onClick={onDelete} className="v2-btn-danger text-xs lg:text-sm py-2 lg:py-2.5 px-4 lg:px-6">
             Eliminar Portero
           </button>
-          <button onClick={onClose} className="v2-btn-ghost text-xs py-2 px-4">
+          <button onClick={onClose} className="v2-btn-ghost text-xs lg:text-sm py-2 lg:py-2.5 px-4 lg:px-6">
             Cerrar
           </button>
         </div>

@@ -248,43 +248,49 @@ export default function Settings() {
   function renderTagSection(type, label) {
     const isOver = dragOverType === type;
     return (
-      <div
-        className={`bg-gk-page rounded-lg p-4 transition-colors ${isOver ? 'ring-2 ring-gk-accent/50 bg-gk-card' : ''}`}
-        onDragOver={(e) => handleDragOver(e, type)}
-        onDragLeave={() => handleDragLeave(type)}
-        onDrop={(e) => handleDrop(e, type)}
-      >
-        <h4 className="text-sm font-medium text-gk-text-secondary mb-3">{label}</h4>
-        <div className="flex flex-wrap gap-2 mb-3 min-h-[32px]">
-          {tags[type].length === 0 && (
-            <span className="text-xs text-gk-text-tertiary">No hay etiquetas</span>
-          )}
-          {tags[type].map(name => (
-            <span
-              key={name}
-              draggable
-              onDragStart={(e) => handleDragStart(e, name, type)}
-              className={`inline-flex items-center gap-1 px-3 py-1 bg-gk-card border border-gk-border rounded-lg text-sm text-gk-text-secondary cursor-grab active:cursor-grabbing ${draggedTag?.name === name && draggedTag?.type === type ? 'opacity-50' : ''}`}
-            >
-              {name}
-              <button onClick={() => deleteTag(type, name)} className="text-stat-rose hover:text-stat-rose ml-1">
-                <X size={14} />
+          <div
+            className={`glass-card-static p-4 transition-colors ${isOver ? 'ring-2 ring-gk-accent/50' : ''}`}
+            onDragOver={(e) => handleDragOver(e, type)}
+            onDragLeave={() => handleDragLeave(type)}
+            onDrop={(e) => handleDrop(e, type)}
+          >
+            <h4 className="text-sm font-medium mb-3" style={{color: '#baa587'}}>{label}</h4>
+            <div className="flex flex-wrap gap-2 mb-3 min-h-[32px]">
+              {tags[type].length === 0 && (
+                <span className="text-xs" style={{color: '#997b66'}}>No hay etiquetas</span>
+              )}
+              {tags[type].map(name => (
+                <span
+                  key={name}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, name, type)}
+                  className="inline-flex items-center gap-1 px-3 py-1 border rounded-lg text-sm cursor-grab active:cursor-grabbing"
+                  style={{
+                    background: 'rgba(22,20,16,0.6)',
+                    borderColor: 'rgba(185,165,135,0.1)',
+                    color: '#baa587',
+                    opacity: draggedTag?.name === name && draggedTag?.type === type ? 0.5 : 1,
+                  }}
+                >
+                  {name}
+                  <button onClick={() => deleteTag(type, name)} className="hover:text-stat-rose ml-1" style={{color: '#997b66'}}>
+                    <X size={14} />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={newTagInputs[type]}
+                onChange={e => setNewTagInputs(prev => ({ ...prev, [type]: e.target.value }))}
+                placeholder={`Nueva ${label.toLowerCase()}`}
+                className="v2-input flex-1"
+              />
+              <button onClick={() => addTag(type)} className="v2-btn-ghost" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
+                <Plus size={14} /> Añadir
               </button>
-            </span>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <input
-            value={newTagInputs[type]}
-            onChange={e => setNewTagInputs(prev => ({ ...prev, [type]: e.target.value }))}
-            placeholder={`Nueva ${label.toLowerCase()}`}
-            className="flex-1 px-3 py-1.5 bg-gk-card border border-gk-border rounded-lg text-sm text-gk-text-primary placeholder-gk-text-tertiary focus:outline-none focus:border-gk-accent"
-          />
-          <button onClick={() => addTag(type)} className="px-3 py-1.5 bg-gk-accent hover:bg-gk-accent rounded-lg text-sm text-white flex items-center gap-1 transition-colors">
-            <Plus size={14} /> Añadir
-          </button>
-        </div>
-      </div>
+            </div>
+          </div>
     );
   }
 
@@ -331,39 +337,40 @@ export default function Settings() {
   }
 
   return (
+    <div className="animate-v2-fade-in-up -mx-4 -my-6 px-4 py-6 min-h-[calc(100vh-4rem)]" style={{ backgroundColor: '#0c0b09' }}>
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate('/')} className="p-2 hover:bg-gk-card rounded-lg text-gk-text-tertiary">
+        <button onClick={() => navigate('/')} className="v2-btn-ghost p-2 rounded-lg">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-xl font-bold font-serif text-gk-text-primary tracking-tight">Ajustes</h1>
+        <h1 className="text-2xl font-bold" style={{color: '#f1ede7'}}>Ajustes</h1>
       </div>
 
-      <div className="bg-gk-card rounded-xl border border-gk-border p-6 space-y-8">
+      <div className="glass-card-static p-6 lg:p-8 space-y-8">
         {/* Team info */}
         <div>
-          <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Equipo</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Equipo</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gk-text-tertiary mb-2">Nombre del equipo</label>
+              <label className="block text-sm font-medium mb-2" style={{color: '#baa587'}}>Nombre del equipo</label>
               <input
                 value={teamName}
                 onChange={e => setTeamName(e.target.value)}
                 placeholder="Mi equipo"
-                className="w-full px-4 py-2 bg-gk-page border border-gk-border rounded-lg text-gk-text-primary focus:outline-none focus:border-gk-accent"
+                className="v2-input w-full"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gk-text-tertiary mb-2">Escudo</label>
+              <label className="block text-sm font-medium mb-2" style={{color: '#baa587'}}>Escudo</label>
               <div className="flex items-center gap-4 flex-wrap">
                 <button
                   onClick={() => crestInputRef.current?.click()}
-                  className="px-4 py-2 bg-gk-elevated hover:bg-gk-elevated rounded-lg text-gk-text-primary flex items-center gap-2 transition-colors"
+                  className="v2-btn-ghost"
                 >
                   <Upload size={16} /> {teamCrest ? 'Cambiar escudo' : 'Subir escudo'}
                 </button>
                 {teamCrest && (
-                  <button onClick={() => removeImage('teamCrest')} className="px-4 py-2 bg-red-900/50 hover:bg-red-900/80 rounded-lg text-stat-rose flex items-center gap-2 transition-colors">
+                  <button onClick={() => removeImage('teamCrest')} className="v2-btn-danger">
                     <X size={16} /> Eliminar
                   </button>
                 )}
@@ -374,16 +381,16 @@ export default function Settings() {
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gk-text-tertiary mb-2">Imagen secundaria</label>
+              <label className="block text-sm font-medium mb-2" style={{color: '#baa587'}}>Imagen secundaria</label>
               <div className="flex items-center gap-4 flex-wrap">
                 <button
                   onClick={() => secondaryInputRef.current?.click()}
-                  className="px-4 py-2 bg-gk-elevated hover:bg-gk-elevated rounded-lg text-gk-text-primary flex items-center gap-2 transition-colors"
+                  className="v2-btn-ghost"
                 >
                   <Upload size={16} /> {secondaryImage ? 'Cambiar imagen' : 'Subir imagen'}
                 </button>
                 {secondaryImage && (
-                  <button onClick={() => removeImage('secondaryImage')} className="px-4 py-2 bg-red-900/50 hover:bg-red-900/80 rounded-lg text-stat-rose flex items-center gap-2 transition-colors">
+                  <button onClick={() => removeImage('secondaryImage')} className="v2-btn-danger">
                     <X size={16} /> Eliminar
                   </button>
                 )}
@@ -398,7 +405,7 @@ export default function Settings() {
 
         {/* Corporate Color */}
         <div>
-          <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Color corporativo</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Color corporativo</h3>
           <div className="flex items-center gap-3">
             <input
               type="color"
@@ -408,13 +415,13 @@ export default function Settings() {
               style={{ border: '1px solid rgba(185,165,135,0.15)', background: 'transparent', padding: 2 }}
             />
             <span className="text-sm font-mono text-gk-text-primary">{corporateColor}</span>
-            <span className="text-xs text-gk-text-tertiary">Se usa en las líneas de la plantilla de sesión</span>
+            <span className="text-xs" style={{color: '#997b66'}}>Se usa en las líneas de la plantilla de sesión</span>
           </div>
         </div>
 
         {/* Aplicar cambios de plantilla */}
         <div>
-          <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Plantilla de sesión</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Plantilla de sesión</h3>
           <label className="flex items-center gap-3 cursor-pointer">
             <button
               onClick={() => setApplyTemplateToAll(!applyTemplateToAll)}
@@ -423,15 +430,15 @@ export default function Settings() {
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${applyTemplateToAll ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
             <div>
-              <span className="text-sm font-medium block text-gk-text-primary">Aplicar cambios a sesiones anteriores</span>
-              <span className="text-xs text-gk-text-tertiary">Al guardar la plantilla, los cambios se aplicarán a todas las sesiones de la temporada</span>
+              <span className="text-sm font-medium block" style={{color: '#f1ede7'}}>Aplicar cambios a sesiones anteriores</span>
+              <span className="text-xs" style={{color: '#997b66'}}>Al guardar la plantilla, los cambios se aplicarán a todas las sesiones de la temporada</span>
             </div>
           </label>
         </div>
 
         {/* Porteros */}
         <div>
-          <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Porteros por defecto</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Porteros por defecto</h3>
           <div className="space-y-2 mb-3">
               {porteros.map((p, i) => (
                 <div
@@ -494,9 +501,9 @@ export default function Settings() {
               onChange={e => setNewPorteroName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addPortero()}
               placeholder="Nombre del portero"
-              className="flex-1 px-3 py-2 bg-gk-page border border-gk-border rounded-lg text-sm text-gk-text-primary placeholder-gk-text-tertiary focus:outline-none focus:border-gk-accent"
+              className="v2-input flex-1"
             />
-            <button onClick={addPortero} className="px-4 py-2 bg-gk-accent hover:bg-gk-accent rounded-lg text-sm text-white flex items-center gap-1 transition-colors">
+            <button onClick={addPortero} className="v2-btn-ghost" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
               <Plus size={14} /> Añadir
             </button>
           </div>
@@ -504,8 +511,8 @@ export default function Settings() {
 
         {/* Atributos Personalizados por defecto */}
         <div>
-          <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Atributos Personalizados por defecto</h3>
-          <p className="text-xs text-gk-text-tertiary mb-3">Estos atributos se usarán al crear un nuevo portero</p>
+          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Atributos Personalizados</h3>
+          <p className="text-xs mb-3" style={{color: '#997b66'}}>Estos atributos se usarán al crear un nuevo portero</p>
           <div className="space-y-2 mb-3">
             {defaultAttributes.map((attr, i) => (
               <div key={i} className="flex items-center gap-2 bg-gk-page px-4 py-2 rounded-lg">
@@ -514,7 +521,7 @@ export default function Settings() {
                     onChange={e => setEditingAttrName(e.target.value)}
                     onBlur={() => renameAttribute(i, editingAttrName)}
                     onKeyDown={e => e.key === 'Enter' && renameAttribute(i, editingAttrName)}
-                    className="flex-1 px-2 py-1 bg-gk-card border border-gk-border rounded text-sm text-gk-text-primary focus:outline-none focus:border-gk-accent"
+                    className="v2-input flex-1 text-sm py-1 px-2"
                     autoFocus />
                 ) : (
                   <span className="text-sm text-gk-text-primary flex-1 min-w-0 truncate cursor-pointer"
@@ -535,8 +542,8 @@ export default function Settings() {
           <div className="flex gap-2">
             <input value={newAttrName} onChange={e => setNewAttrName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addAttribute()}
-              placeholder="Nuevo atributo" className="flex-1 px-3 py-2 bg-gk-page border border-gk-border rounded-lg text-sm text-gk-text-primary placeholder-gk-text-tertiary focus:outline-none focus:border-gk-accent" />
-            <button onClick={addAttribute} className="px-4 py-2 bg-gk-accent hover:bg-gk-accent rounded-lg text-sm text-white flex items-center gap-1 transition-colors">
+              placeholder="Nuevo atributo" className="v2-input flex-1" />
+            <button onClick={addAttribute} className="v2-btn-ghost" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
               <Plus size={14} /> Añadir
             </button>
           </div>
@@ -544,7 +551,7 @@ export default function Settings() {
 
         {/* Etiquetas */}
         <div>
-          <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">Etiquetas</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Etiquetas</h3>
           <div className="space-y-4">
             {renderTagSection('phase', 'Fases')}
             {renderTagSection('category', 'Categorías')}
@@ -555,15 +562,15 @@ export default function Settings() {
         {/* Backup */}
         {user?.uid && (
           <div>
-            <h3 className="text-sm font-semibold text-gk-text-tertiary uppercase tracking-wider mb-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
               <DownloadCloud size={16} className="inline mr-2" />
               Copia de seguridad
             </h3>
             {lastBackup ? (
               <div className="space-y-3">
-                <p className="text-sm text-gk-text-tertiary">
+                <p className="text-sm" style={{color: '#997b66'}}>
                   Último backup:{' '}
-                  <span className="text-gk-text-primary font-medium">
+                  <span className="font-medium" style={{color: '#f1ede7'}}>
                     {lastBackup._createdAt?.toDate?.()?.toLocaleDateString('es-ES', {
                       day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
                     }) || 'desconocida'}
@@ -572,7 +579,8 @@ export default function Settings() {
                 <button
                   onClick={handleRestore}
                   disabled={restoring}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+                  className="v2-btn-ghost"
+                  style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}
                 >
                   {restoring ? (
                     <Loader2 size={16} className="animate-spin" />
@@ -588,15 +596,24 @@ export default function Settings() {
           </div>
         )}
 
-        <div className="flex gap-3 pt-4 border-t border-gk-border">
+        <div className="flex gap-3 pt-4" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
           <button
             onClick={saveSettings}
             disabled={saving}
-            className="flex-1 px-4 py-2 bg-gk-accent hover:bg-gk-accent disabled:opacity-50 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+            className="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 hover:shadow-lg hover:-translate-y-0.5"
+            style={{
+              background: 'linear-gradient(135deg, #e8ac65, #ecbd83)',
+              color: '#0c0b09',
+              fontSize: '0.95rem',
+              opacity: saving ? 0.5 : 1,
+              boxShadow: saving ? 'none' : '0 4px 20px rgba(232,172,101,0.3)',
+              cursor: saving ? 'not-allowed' : 'pointer',
+            }}
           >
-            <Save size={16} /> {saving ? 'Guardando...' : 'Guardar ajustes'}
+            <Save size={18} /> {saving ? 'Guardando...' : 'Guardar ajustes'}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );
