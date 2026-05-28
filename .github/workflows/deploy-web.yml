@@ -41,7 +41,6 @@ jobs:
           VITE_FIREBASE_APP_ID:             ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_YOUTUBE_CLIENT_ID:           ${{ secrets.VITE_YOUTUBE_CLIENT_ID }}
           VITE_BACKUP_WORKER_URL:            ${{ secrets.VITE_BACKUP_WORKER_URL }}
-          VITE_SOFASCORE_PROXY_URL:        ${{ secrets.VITE_SOFASCORE_PROXY_URL }}
         run: npm run web:build
 
       - name: Create 404.html for SPA routing

@@ -15,12 +15,6 @@ export default defineConfig({
   },
   server: {
     port: 5174,
-    proxy: {
-      '/api/v1': {
-        target: 'https://www.sofascore.com',
-        changeOrigin: true,
-      },
-    },
   },
   test: {
     environment: 'jsdom',

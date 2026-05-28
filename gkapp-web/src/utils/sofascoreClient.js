@@ -1,37 +1,4 @@
-function getApiBase() {
-  const proxyUrl = import.meta.env.VITE_SOFASCORE_PROXY_URL;
-  if (proxyUrl) return proxyUrl;
-  if (import.meta.env.DEV) return '';
-  return 'https://www.sofascore.com';
-}
-
-const API_BASE = getApiBase();
-
-const HEALTH_POLL_INTERVAL = 2000;
-
-function getHealthBase() {
-  const proxyUrl = import.meta.env.VITE_SOFASCORE_PROXY_URL;
-  if (proxyUrl) return proxyUrl;
-  return null;
-}
-
-export async function waitForBridgeReady(timeoutMs = 25000) {
-  const base = getHealthBase();
-  if (!base) return;
-  const deadline = Date.now() + timeoutMs;
-  let lastError;
-  while (Date.now() < deadline) {
-    try {
-      const r = await fetch(`${base}/health`, { signal: AbortSignal.timeout(timeoutMs) });
-      const body = await r.json();
-      if (body.ready) return;
-    } catch (err) {
-      lastError = err;
-    }
-    await new Promise(r => setTimeout(r, HEALTH_POLL_INTERVAL));
-  }
-  throw lastError || new Error('Timeout esperando al bridge de SofaScore');
-}
+const API_BASE = 'https://www.sofascore.com';
 
 function normalizeName(name) {
   return String(name || '')
@@ -146,10 +113,6 @@ export async function fetchPlayerSeasonStats(playerId, seasonId) {
 }
 
 export function getPlayerImageUrl(playerId) {
-  const proxyUrl = import.meta.env.VITE_SOFASCORE_PROXY_URL;
-  if (proxyUrl) {
-    return `${proxyUrl}/img/player/${playerId}/image`;
-  }
   return `https://img.sofascore.com/api/v1/player/${playerId}/image`;
 }
 
