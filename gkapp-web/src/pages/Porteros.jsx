@@ -255,7 +255,8 @@ export default function PorterosPage() {
                 <div className="flex items-center gap-3 mb-3">
                   <div className="flex-1 min-w-0 flex items-center gap-3">
                     {p.photo ? (
-                      <img src={p.photo} alt="" className="w-12 h-12 rounded-full object-cover"
+                      <img src={p.photo} alt="" referrerpolicy="no-referrer"
+                        className="w-12 h-12 rounded-full object-cover"
                         style={{background: 'rgba(185,165,135,0.1)'}}
                         onError={e => { e.currentTarget.style.display = 'none'; }} />
                     ) : (

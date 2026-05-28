@@ -459,7 +459,8 @@ export default function Settings() {
                 <div className="relative shrink-0">
                   {p.photo ? (
                     <div className="relative group">
-                      <img src={p.photo} alt={p.name} className="w-9 h-9 rounded-lg object-cover border border-gk-border" />
+                      <img src={p.photo} alt={p.name} referrerpolicy="no-referrer"
+                        className="w-9 h-9 rounded-lg object-cover border border-gk-border" />
                       <button
                         onClick={() => removePorteroPhoto(i)}
                         className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"

@@ -463,7 +463,8 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
           <div className="flex items-center gap-4 lg:gap-6 mb-1">
             <div className="relative group cursor-pointer" onClick={() => photoInputRef.current?.click()}>
               {portero.photo ? (
-                <img src={portero.photo} alt="" className="w-18 h-18 rounded-full object-cover lg:w-20 lg:h-20"
+                <img src={portero.photo} alt="" referrerpolicy="no-referrer"
+                  className="w-18 h-18 rounded-full object-cover lg:w-20 lg:h-20"
                   style={{width: 72, height: 72, background: 'rgba(185,165,135,0.1)'}}
                   onError={e => { e.currentTarget.style.display = 'none'; }} />
               ) : (

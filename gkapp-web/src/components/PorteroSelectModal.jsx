@@ -165,6 +165,7 @@ export default function PorteroSelectModal({ onClose, onSave }) {
                       <img
                         src={getPlayerImageUrl(player.id)}
                         alt=""
+                        referrerpolicy="no-referrer"
                         className="w-10 h-10 rounded-full object-cover"
                         style={{background: 'rgba(185,165,135,0.1)'}}
                         onError={e => { e.currentTarget.style.display = 'none'; }}
