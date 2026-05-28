@@ -64,8 +64,11 @@ app.get('/api/v1/*', async (req, res) => {
         timeout: 30000,
       });
       const status = resp.status();
+      const ct = resp.headers()['content-type'] || 'unknown';
+      console.log(`[Bridge] Status: ${status}, Content-Type: ${ct}`);
       if (status !== 200) {
-        throw new Error(`HTTP ${status}`);
+        const text = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${status}: ${text.slice(0, 300)}`);
       }
       const data = await resp.json();
       console.log(`[Bridge] OK: ${path}`);
