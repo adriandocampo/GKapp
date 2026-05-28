@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from 'react';
-import { X, User, BarChart3, Briefcase, Plus, Trash2, Star, Loader2, ChevronDown, ChevronUp, GitCompare } from 'lucide-react';
+import { X, User, BarChart3, Briefcase, Plus, Trash2, Star, Loader2, ChevronDown, ChevronUp, GitCompare, Camera } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 import StarRating from './StarRating';
 import GoalkeeperHeatmap from './GoalkeeperHeatmap';
@@ -53,10 +53,10 @@ function StatRow({ label, value, unit }) {
   );
 }
 
-function SectionTitle({ icon: Icon, children, color, subtitle }) {
+function SectionTitle({ icon: Icon, children, color, subtitle, center }) {
   return (
-    <div className="mb-4 pb-3" style={{borderBottom: `1px solid ${color}15`}}>
-      <div className="flex items-center gap-2">
+    <div className={`mb-4 pb-3 ${center ? 'text-center' : ''}`} style={{borderBottom: `1px solid ${color}15`}}>
+      <div className={`flex items-center gap-2 ${center ? 'justify-center' : ''}`}>
         {Icon && <Icon size={16} style={{color}} />}
         <h4 className="text-sm font-semibold tracking-wide" style={{color: '#f1ede7'}}>{children}</h4>
       </div>
@@ -332,6 +332,7 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
   const [showGkList, setShowGkList] = useState(false);
   const [searchGkQuery, setSearchGkQuery] = useState('');
   const dropdownRef = useRef(null);
+  const photoInputRef = useRef(null);
   const careerData = portero.sofascoreData?.career || [];
   const age = calculateAge(portero.dateOfBirth);
   const saveTimer = useRef(null);
@@ -445,20 +446,36 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
     setShowGkList(false);
   }
 
+  function handlePhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      onUpdate({ ...portero, photo: ev.target.result, updatedAt: new Date() });
+    };
+    reader.readAsDataURL(file);
+  }
+
   return (
     <div className="fixed inset-0 z-[90] flex items-start justify-center p-4 lg:p-8 pt-12 lg:pt-16" style={{background: 'rgba(0,0,0,0.7)'}}>
       <div className="glass-card-static w-full max-w-6xl flex flex-col" style={{borderRadius: 20, maxHeight: '90vh', overflow: 'hidden'}}>
         <div className="p-6 lg:p-8 flex flex-col items-center text-center" style={{borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
           <div className="flex items-center gap-4 lg:gap-6 mb-1">
-            {portero.photo ? (
-              <img src={portero.photo} alt="" className="w-18 h-18 rounded-full object-cover lg:w-20 lg:h-20"
-                style={{width: 72, height: 72, background: 'rgba(185,165,135,0.1)'}}
-                onError={e => { e.currentTarget.style.display = 'none'; }} />
-            ) : (
-              <div className="rounded-full flex items-center justify-center lg:w-20 lg:h-20" style={{width: 72, height: 72, background: 'rgba(232,172,101,0.1)'}}>
-                <User size={36} style={{color: '#e8ac65'}} />
+            <div className="relative group cursor-pointer" onClick={() => photoInputRef.current?.click()}>
+              {portero.photo ? (
+                <img src={portero.photo} alt="" className="w-18 h-18 rounded-full object-cover lg:w-20 lg:h-20"
+                  style={{width: 72, height: 72, background: 'rgba(185,165,135,0.1)'}}
+                  onError={e => { e.currentTarget.style.display = 'none'; }} />
+              ) : (
+                <div className="rounded-full flex items-center justify-center lg:w-20 lg:h-20" style={{width: 72, height: 72, background: 'rgba(232,172,101,0.1)'}}>
+                  <User size={36} style={{color: '#e8ac65'}} />
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera size={22} style={{color: 'white'}} />
               </div>
-            )}
+            </div>
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
             <div>
               <h3 className="font-bold" style={{color: '#f1ede7', fontSize: 'clamp(1.25rem, 2.5vw, 2rem)', lineHeight: 1.2}}>{portero.name}</h3>
               <p className="font-medium" style={{color: '#baa587', fontSize: 'clamp(0.9rem, 1.2vw, 1.15rem)'}}>{portero.team || 'Sin equipo'}</p>
@@ -501,7 +518,7 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
           {tab === 'profile' && (
             <div className="space-y-5">
               <div className="glass-card-static p-4">
-                <SectionTitle icon={User} color="#e8ac65" subtitle="Información básica del jugador">
+                <SectionTitle icon={User} color="#e8ac65" subtitle="Información básica del jugador" center>
                   Información General
                 </SectionTitle>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-5">
@@ -539,11 +556,11 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
               </div>
 
               <div className="glass-card-static p-4">
-                <SectionTitle icon={Star} color="#e8ac65" subtitle="Valoración global del jugador">
+                <SectionTitle icon={Star} color="#e8ac65" subtitle="Valoración global del jugador" center>
                   Valoración Personal
                 </SectionTitle>
-                <div className="flex items-center justify-between">
-                  <StarRating value={rating} onChange={handleRatingChange} size={22} />
+                <div className="flex flex-col items-center gap-2">
+                  <StarRating value={rating} onChange={handleRatingChange} size={28} />
                   <span className="text-xs" style={{color: '#997b66'}}>
                     {rating === 0 ? 'Sin valorar' : `${rating} / 5`}
                   </span>
@@ -551,12 +568,13 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
               </div>
 
               <div className="glass-card-static p-4">
-                <div className="flex items-center justify-between mb-4 pb-3" style={{borderBottom: '1px solid rgba(167,139,250,0.08)'}}>
+                <div className="flex items-center mb-4 pb-3" style={{borderBottom: '1px solid rgba(167,139,250,0.08)'}}>
+                  <div className="flex-1"></div>
                   <div className="flex items-center gap-2">
                     <Star size={16} style={{color: '#a78bfa'}} />
                     <h4 className="text-sm font-semibold tracking-wide" style={{color: '#f1ede7'}}>Atributos Personalizados</h4>
                   </div>
-                  <div className="flex items-center gap-2 relative">
+                  <div className="flex-1 flex items-center justify-end gap-2 relative">
                     {compareGk && (
                       <button onClick={() => setCompareGk(null)} className="v2-btn-ghost text-xs py-1 px-2" style={{color: '#d08c60'}}>
                         <X size={12} /> Cerrar

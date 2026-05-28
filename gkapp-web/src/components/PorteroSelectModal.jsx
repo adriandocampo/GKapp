@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Search, User, Shield, Loader2 } from 'lucide-react';
+import { X, Search, User, Shield, Loader2, Camera } from 'lucide-react';
 import { searchPlayer, fetchPlayerProfile, fetchPlayerSeasons, fetchPlayerSeasonStats, getPlayerImageUrl } from '../utils/sofascoreClient';
 import { getSetting } from '../db';
 
@@ -28,8 +28,9 @@ export default function PorteroSelectModal({ onClose, onSave }) {
   const [searching, setSearching] = useState(false);
   const [manual, setManual] = useState({
     name: '', team: '', height: '', preferredFoot: 'Diestro',
-    nationality: '', dateOfBirth: '',
+    nationality: '', dateOfBirth: '', photo: '',
   });
+  const fileInputRef = useRef(null);
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -99,7 +100,7 @@ export default function PorteroSelectModal({ onClose, onSave }) {
       preferredFoot: manual.preferredFoot,
       nationality: manual.nationality,
       nationalityFlag: '',
-      photo: '',
+      photo: manual.photo,
       personalRating: 0,
       customAttributes: defaults,
       sofascoreData: null,
@@ -197,6 +198,45 @@ export default function PorteroSelectModal({ onClose, onSave }) {
           ) : (
             <>
               <div className="space-y-3">
+                <div className="flex flex-col items-center mb-2">
+                  <div className="relative mb-2">
+                    {manual.photo ? (
+                      <div className="relative group">
+                        <img src={manual.photo} alt="" className="w-20 h-20 rounded-full object-cover"
+                          style={{background: 'rgba(185,165,135,0.1)'}} />
+                        <button
+                          onClick={() => setManual(p => ({ ...p, photo: '' }))}
+                          className="absolute -top-1 -right-1 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          style={{ background: 'rgba(208,140,96,0.9)', color: 'white' }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-20 h-20 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+                        style={{ background: 'rgba(22,20,16,0.8)', border: '1px dashed rgba(185,165,135,0.2)', color: '#997b66' }}
+                        title="Añadir foto"
+                      >
+                        <Camera size={24} />
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = ev => setManual(p => ({ ...p, photo: ev.target.result }));
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </div>
                 <div>
                   <label className="text-xs font-medium mb-1 block" style={{color: '#baa587'}}>Nombre *</label>
                   <input type="text" className="v2-input w-full" placeholder="Nombre del portero"
