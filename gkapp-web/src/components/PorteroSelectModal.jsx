@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Search, User, Shield, Loader2 } from 'lucide-react';
-import { searchPlayer, fetchPlayerProfile, fetchPlayerSeasons, fetchPlayerSeasonStats, getPlayerImageUrl } from '../utils/sofascoreClient';
+import { X, Search, User, Shield, Loader2, WifiOff, RefreshCw } from 'lucide-react';
+import { searchPlayer, fetchPlayerProfile, fetchPlayerSeasons, fetchPlayerSeasonStats, getPlayerImageUrl, waitForBridgeReady } from '../utils/sofascoreClient';
 import { getSetting } from '../db';
 
 const FALLBACK_ATTRIBUTES = [
@@ -21,6 +21,7 @@ async function getDefaultAttributes() {
 }
 
 export default function PorteroSelectModal({ onClose, onSave }) {
+  const [bridgeStatus, setBridgeStatus] = useState('connecting');
   const [mode, setMode] = useState('search');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -31,18 +32,36 @@ export default function PorteroSelectModal({ onClose, onSave }) {
     nationality: '', dateOfBirth: '',
   });
   const debounceRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  function tryConnect() {
+    setBridgeStatus('connecting');
+    waitForBridgeReady().then(() => {
+      if (mountedRef.current) setBridgeStatus('ready');
+    }).catch(() => {
+      if (mountedRef.current) setBridgeStatus('error');
+    });
+  }
 
   useEffect(() => {
+    mountedRef.current = true;
+    tryConnect();
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (bridgeStatus !== 'ready') return;
     if (!query.trim()) { setResults([]); return; }
     setSearching(true);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       const res = await searchPlayer(query.trim());
+      if (!mountedRef.current) return;
       setResults(res.filter(r => r.position === 'G'));
       setSearching(false);
     }, 500);
     return () => clearTimeout(debounceRef.current);
-  }, [query]);
+  }, [query, bridgeStatus]);
 
   async function handleSelectPlayer(entity) {
     setLoading(true);
@@ -110,6 +129,119 @@ export default function PorteroSelectModal({ onClose, onSave }) {
     onClose();
   }
 
+  function renderConnecting() {
+    return (
+      <div className="text-center py-10">
+        <Loader2 size={32} className="mx-auto mb-3 animate-spin" style={{color: '#e8ac65'}} />
+        <p className="text-sm font-medium mb-1" style={{color: '#f1ede7'}}>Conectando con SofaScore...</p>
+        <p className="text-xs" style={{color: '#997b66'}}>Esto puede tardar unos segundos</p>
+      </div>
+    );
+  }
+
+  function renderError() {
+    return (
+      <div className="text-center py-10">
+        <WifiOff size={32} className="mx-auto mb-3" style={{color: '#d08c60'}} />
+        <p className="text-sm font-medium mb-1" style={{color: '#f1ede7'}}>No se pudo conectar con SofaScore</p>
+        <p className="text-xs mb-5" style={{color: '#997b66'}}>Puedes introducir los datos manualmente o reintentar</p>
+        <div className="flex gap-3 justify-center">
+          <button onClick={tryConnect} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium"
+            style={{background: 'rgba(232,172,101,0.12)', border: '1px solid rgba(232,172,101,0.15)', color: '#e8ac65'}}>
+            <RefreshCw size={14} /> Reintentar
+          </button>
+          <button onClick={() => setMode('manual')} className="v2-btn-ghost px-4 py-2 text-sm">
+            <Shield size={14} className="inline mr-1.5" />
+            Manual
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderSearch() {
+    return (
+      <>
+        <div className="relative mb-4">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{color: '#997b66'}} />
+          <input
+            type="text"
+            className="v2-input w-full" style={{paddingLeft: 36}}
+            placeholder="Busca por nombre o equipo"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        {searching && (
+          <div className="flex items-center justify-center py-8 gap-2" style={{color: '#baa587'}}>
+            <Loader2 size={18} className="animate-spin" />
+            Buscando...
+          </div>
+        )}
+
+        {!searching && results.length === 0 && query.trim() && (
+          <div className="text-center py-6" style={{color: '#997b66'}}>
+            <User size={32} className="mx-auto mb-2 opacity-40" />
+            <p className="text-sm">No se encontraron porteros</p>
+          </div>
+        )}
+
+        {!searching && results.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {results.map(player => (
+              <button
+                key={player.id}
+                onClick={() => handleSelectPlayer(player)}
+                disabled={loading}
+                className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all"
+                style={{background: 'rgba(22,20,16,0.6)', border: '1px solid rgba(185,165,135,0.08)'}}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(232,172,101,0.2)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(185,165,135,0.08)'}
+              >
+                <img
+                  src={getPlayerImageUrl(player.id)}
+                  alt=""
+                  className="w-10 h-10 rounded-full object-cover"
+                  style={{background: 'rgba(185,165,135,0.1)'}}
+                  onError={e => { e.currentTarget.style.display = 'none'; }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate" style={{color: '#f1ede7'}}>{player.name}</p>
+                  <p className="text-xs truncate" style={{color: '#baa587'}}>
+                    {player.team?.name || 'Sin equipo'}
+                    {player.country?.name ? ` · ${player.country.name}` : ''}
+                  </p>
+                </div>
+                {loading && <Loader2 size={16} className="animate-spin" style={{color: '#e8ac65'}} />}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!query.trim() && (
+          <div className="text-center py-6" style={{color: '#997b66'}}>
+            <p className="text-sm mb-4">Busca por nombre o equipo</p>
+          </div>
+        )}
+
+        <div className="pt-3" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
+          <button onClick={() => setMode('manual')} className="v2-btn-ghost w-full justify-center py-2.5">
+            <Shield size={16} />
+            Introducir manualmente
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  function renderBody() {
+    if (bridgeStatus === 'connecting') return renderConnecting();
+    if (bridgeStatus === 'error') return renderError();
+    return renderSearch();
+  }
+
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" style={{background: 'rgba(0,0,0,0.7)'}}>
       <div className="glass-card-static w-full max-w-lg" style={{borderRadius: 20, maxHeight: '85vh', overflow: 'hidden'}}>
@@ -121,80 +253,7 @@ export default function PorteroSelectModal({ onClose, onSave }) {
         </div>
 
         <div className="p-5 overflow-y-auto" style={{maxHeight: '70vh'}}>
-          {mode === 'search' ? (
-            <>
-              <div className="relative mb-4">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{color: '#997b66'}} />
-                <input
-                  type="text"
-                  className="v2-input w-full" style={{paddingLeft: 36}}
-                  placeholder="Buscar portero en SofaScore..."
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  autoFocus
-                />
-              </div>
-
-              {searching && (
-                <div className="flex items-center justify-center py-8 gap-2" style={{color: '#baa587'}}>
-                  <Loader2 size={18} className="animate-spin" />
-                  Buscando...
-                </div>
-              )}
-
-              {!searching && results.length === 0 && query.trim() && (
-                <div className="text-center py-6" style={{color: '#997b66'}}>
-                  <User size={32} className="mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">No se encontraron porteros</p>
-                </div>
-              )}
-
-              {!searching && results.length > 0 && (
-                <div className="space-y-2 mb-4">
-                  {results.map(player => (
-                    <button
-                      key={player.id}
-                      onClick={() => handleSelectPlayer(player)}
-                      disabled={loading}
-                      className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all"
-                      style={{background: 'rgba(22,20,16,0.6)', border: '1px solid rgba(185,165,135,0.08)'}}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(232,172,101,0.2)'}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(185,165,135,0.08)'}
-                    >
-                      <img
-                        src={getPlayerImageUrl(player.id)}
-                        alt=""
-                        className="w-10 h-10 rounded-full object-cover"
-                        style={{background: 'rgba(185,165,135,0.1)'}}
-                        onError={e => { e.currentTarget.style.display = 'none'; }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate" style={{color: '#f1ede7'}}>{player.name}</p>
-                        <p className="text-xs truncate" style={{color: '#baa587'}}>
-                          {player.team?.name || 'Sin equipo'}
-                          {player.country?.name ? ` · ${player.country.name}` : ''}
-                        </p>
-                      </div>
-                      {loading && <Loader2 size={16} className="animate-spin" style={{color: '#e8ac65'}} />}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {!query.trim() && (
-                <div className="text-center py-6" style={{color: '#997b66'}}>
-                  <p className="text-sm mb-4">Escribe el nombre del portero para buscarlo en SofaScore</p>
-                </div>
-              )}
-
-              <div className="pt-3" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
-                <button onClick={() => setMode('manual')} className="v2-btn-ghost w-full justify-center py-2.5">
-                  <Shield size={16} />
-                  Introducir manualmente
-                </button>
-              </div>
-            </>
-          ) : (
+          {mode === 'search' ? renderBody() : (
             <>
               <div className="space-y-3">
                 <div>

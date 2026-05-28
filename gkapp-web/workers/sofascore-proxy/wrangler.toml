@@ -1,0 +1,7 @@
+name = "gkapp-sofascore-proxy"
+main = "src/index.js"
+compatibility_date = "2025-05-28"
+account_id = "c17a18a0c06ded7038474766e481458d"
+
+[vars]
+SOFASCORE_BRIDGE_URL = "https://gkapp-sofascore-bridge.onrender.com"
