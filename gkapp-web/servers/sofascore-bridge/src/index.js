@@ -20,7 +20,14 @@ async function init() {
     try { await browser.close(); } catch {}
   }
   browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-accelerated-2d-canvas',
+      '--single-process',
+    ],
     headless: true,
   });
   page = await browser.newPage();
@@ -28,9 +35,17 @@ async function init() {
   await page.setExtraHTTPHeaders({
     'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
   });
-  await page.goto(SOFASCORE_ORIGIN, { waitUntil: 'networkidle0', timeout: 30000 });
+  await page.goto(SOFASCORE_ORIGIN, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  try {
+    await page.waitForNetworkIdle({ idleTime: 2000, timeout: 30000 });
+  } catch (e) {
+    console.log(`[Bridge] network idle timeout (esperando challenge Cloudflare): ${e.message}`);
+  }
+  await new Promise(r => setTimeout(r, 2000));
+  const currentUrl = page.url();
+  console.log(`[Bridge] URL actual: ${currentUrl}`);
   ready = true;
-  console.log('[Bridge] Listo — Cloudflare challenge superado');
+  console.log('[Bridge] Listo');
 }
 
 async function ensureReady() {
@@ -41,8 +56,11 @@ async function ensureReady() {
 
 function keepalive() {
   if (!page || page.isClosed()) { ready = false; return; }
-  page.goto(SOFASCORE_ORIGIN, { waitUntil: 'networkidle0', timeout: 15000 })
-    .then(() => { ready = true; })
+  page.goto(SOFASCORE_ORIGIN, { waitUntil: 'domcontentloaded', timeout: 20000 })
+    .then(async () => {
+      try { await page.waitForNetworkIdle({ idleTime: 2000, timeout: 5000 }); } catch {}
+      ready = true;
+    })
     .catch(() => { ready = false; });
 }
 
@@ -85,7 +103,7 @@ app.listen(PORT, async () => {
     setInterval(async () => {
       if (!ready) {
         console.log('[Bridge] Detectado caído, reintentando...');
-        try { await init(); } catch {}
+        try { await init(); } catch (err) { console.error(`[Bridge] Reinit falló: ${err.message}`); }
       }
     }, 60 * 1000);
   } catch (err) {
