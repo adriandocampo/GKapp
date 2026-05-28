@@ -19,10 +19,10 @@ function fuzzyMatch(str1, str2) {
 
 async function fetchJson(path) {
   const res = await fetch(`${API_BASE}${path}`, {
+    referrerPolicy: 'no-referrer',
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       'Accept': 'application/json',
-      'Referer': 'https://www.sofascore.com/',
     },
   });
   if (!res.ok) {
