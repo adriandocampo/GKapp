@@ -325,6 +325,11 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
     getSetting('applyTemplateToAll').then(v => {
       if (v !== null) setApplyTemplateToAll(v);
     });
+    if (!session?.templateFields?.corporateColor) {
+      getSetting('corporateColor').then(c => {
+        if (c) setSessionCorporateColor(c);
+      });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save, Trash2, ArrowLeft, Upload, X, Paintbrush, ClipboardList, Video, Link, CloudUpload, Loader2 } from 'lucide-react';
-import { db } from '../db';
+import { db, getSetting } from '../db';
 import ImageEditor from '../components/ImageEditor';
 import MultiSelectDropdown from '../components/MultiSelectDropdown';
 import { useTags } from '../hooks/useTags';
@@ -44,6 +44,7 @@ export default function TaskEditor() {
   const [saving, setSaving]               = useState(false);
   const [showImageEditor, setShowImageEditor] = useState(false);
   const [hasChanges, setHasChanges]       = useState(false);
+  const [corporateColor, setCorporateColor] = useState('#dc2626');
 
   const { upload: ytUpload, uploading: ytUploading, progress: ytProgress, error: ytError } = useYouTubeUpload();
 
@@ -109,6 +110,10 @@ export default function TaskEditor() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, refreshKey]);
+
+  useEffect(() => {
+    getSetting('corporateColor').then(c => { if (c) setCorporateColor(c); });
+  }, []);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -535,6 +540,7 @@ export default function TaskEditor() {
             <ImageEditor
               taskData={{ title: task.title, subtitle: task.subtitle, time: task.time, reps: task.reps, focus: task.focus, description: task.description }}
               initialElements={task.imageElements || null}
+              corporateColor={corporateColor}
               onSave={(blob, elements) => {
                 setTask(prev => ({ ...prev, imageBlob: blob, imageElements: elements }));
                 if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
@@ -610,6 +616,7 @@ export default function TaskEditor() {
           <ImageEditor
             taskData={{ title: task.title, subtitle: task.subtitle, time: task.time, reps: task.reps, focus: task.focus, description: task.description }}
             initialElements={task.imageElements || null}
+            corporateColor={corporateColor}
             onSave={(blob, elements) => {
               setTask(prev => ({ ...prev, imageBlob: blob, imageElements: elements }));
               if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);

@@ -333,7 +333,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                   ) : (
                     <div className={`grid gap-1 ${sessionTasks.length === 1 ? 'grid-cols-1' : sessionTasks.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                       {sessionTasks.map((task) => (
-                        <div key={task.id} className="overflow-hidden bg-white">
+                        <div key={task.id} className="overflow-hidden bg-white rounded-sm" style={{ border: `3px solid ${corporateColor}` }}>
                           {taskImageUrls[task.id] && (
                             <div className="flex items-center justify-center bg-white w-full h-full" style={{ minHeight: '140px' }}>
                               <img src={taskImageUrls[task.id]} alt={task.title} className="w-full h-full object-contain" />
