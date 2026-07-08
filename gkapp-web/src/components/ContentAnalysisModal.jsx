@@ -172,7 +172,7 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
     return m;
   }, [sortedSessions, taskMap]);
 
-  const cellW = 64;
+  const cellW = 36;
   const cellH = 28;
 
   return createPortal(
@@ -270,11 +270,11 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
               </div>
             </div>
             {sortedSessions.length > 0 && displayKeys.length > 0 ? (
-              <div className="overflow-x-auto pb-2" style={{ maxHeight: 480 }}>
-                <div className="inline-flex" style={{ minWidth: sortedSessions.length * (cellW + 4) + 140 }}>
+              <div className="overflow-x-auto pb-2 v2-scrollbar" style={{ maxHeight: 480 }}>
+                <div className="inline-flex" style={{ minWidth: sortedSessions.length * (cellW + 3) + 140 }}>
                   {/* Left column: Y-axis labels */}
                   <div style={{ width: 140, flexShrink: 0, position: 'sticky', left: 0, zIndex: 2, background: 'rgba(22,20,16,0.4)' }}>
-                    <div style={{ height: 42 }} />
+                    <div style={{ height: 70 }} />
                     {displayKeys.map(key => (
                       <div
                         key={key}
@@ -300,7 +300,7 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
                   {/* Grid */}
                   <div>
                     {/* Header row */}
-                    <div style={{ display: 'flex', gap: 4, height: 42, alignItems: 'flex-end', paddingBottom: 4 }}>
+                    <div style={{ display: 'flex', gap: 4, height: 70, alignItems: 'flex-end', paddingBottom: 4, borderBottom: '1px solid rgba(185,165,135,0.06)' }}>
                       {sortedSessions.map((s, i) => {
                         const n = (sessionAllTasks[s.id] || []).length;
                         return (
@@ -309,15 +309,14 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
                             title={`${i + 1}. ${s.name} (${n} tareas)`}
                             style={{
                               width: cellW,
-                              fontSize: 8,
-                              color: '#997b66',
+                              fontSize: 9,
+                              color: '#baa587',
                               textAlign: 'center',
                               whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
                               writingMode: 'vertical-rl',
                               transform: 'rotate(180deg)',
-                              lineHeight: '28px',
+                              lineHeight: 1.1,
+                              fontWeight: 500,
                             }}
                           >
                             {s.name}
@@ -328,7 +327,7 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
 
                     {/* Data rows */}
                     {displayKeys.map(catKey => (
-                      <div key={catKey} style={{ display: 'flex', gap: 4, marginBottom: 2 }}>
+                      <div key={catKey} style={{ display: 'flex', gap: 3, marginBottom: 2 }}>
                         {sortedSessions.map(s => {
                           const tasks = sessionAllTasks[s.id] || [];
                           const n = tasks.length;
