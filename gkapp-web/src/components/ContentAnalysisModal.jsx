@@ -1,48 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, PieChart as PieChartIcon } from 'lucide-react';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
 import { db } from '../db';
 
 const CATEGORY_COLORS = {
-  'Agarres': '#3b82f6',
-  'Desvíos': '#ef4444',
-  '1c1': '#22c55e',
-  'Coberturas': '#eab308',
-  'Juego ofensivo': '#c084fc',
-  'Velocidad de reacción': '#f97316',
+  'Agarres': '#4c85ed',
+  'Desvíos': '#e25252',
+  '1c1': '#33b960',
+  'Coberturas': '#e1ae1f',
+  'Juego ofensivo': '#c08df8',
+  'Velocidad de reacción': '#ef7928',
 };
 
 const SITUATION_COLORS = {
-  'Centro lateral': '#3b82f6',
-  'Centro lateral cercano': '#ef4444',
-  'Tiro cercano': '#22c55e',
-  'Tiro lejano': '#eab308',
+  'Centro lateral': '#4c85ed',
+  'Centro lateral cercano': '#e25252',
+  'Tiro cercano': '#33b960',
+  'Tiro lejano': '#e1ae1f',
 };
 
 const OTHER_COLOR = '#6b7280';
-
-function PieTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-gk-page border border-gk-border rounded-lg px-3 py-2 shadow-lg">
-      {payload.map((p, i) => {
-        const total = p.payload?.total || 1;
-        return (
-          <div key={i} className="text-sm font-medium" style={{ color: p.color }}>
-            {p.name}: {p.value} ({(p.value / total * 100).toFixed(1)}%)
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+const EMPTY_CELL = 'rgba(185,165,135,0.06)';
 
 function WaffleChart({ data, total }) {
   const cells = [];
@@ -55,7 +33,7 @@ function WaffleChart({ data, total }) {
     }
   }
   while (idx < 100) {
-    cells.push({ color: 'rgba(185,165,135,0.08)', label: '', idx: idx++ });
+    cells.push({ color: EMPTY_CELL, label: '', idx: idx++ });
   }
 
   return (
@@ -75,7 +53,6 @@ function WaffleChart({ data, total }) {
             aspectRatio: 1,
             borderRadius: 2,
             backgroundColor: cell.color,
-            transition: 'all 0.1s',
           }}
         />
       ))}
@@ -184,54 +161,19 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
       .sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [sessions]);
 
-  const catMatrix = useMemo(() => {
-    const m = {};
-    sortedSessions.forEach(s => {
-      const row = {};
-      catKeys.forEach(k => row[k] = 0);
-      const tasks = (s.tasks || []).map(tid => taskMap[tid]).filter(Boolean);
-      tasks.forEach(t => {
-        const cat = t.category || 'Otras';
-        if (row[cat] !== undefined) row[cat]++;
-      });
-      m[s.id] = row;
-    });
-    return m;
-  }, [sortedSessions, taskMap, catKeys]);
-
-  const sitMatrix = useMemo(() => {
-    const m = {};
-    sortedSessions.forEach(s => {
-      const row = {};
-      sitKeys.forEach(k => row[k] = 0);
-      const tasks = (s.tasks || []).map(tid => taskMap[tid]).filter(Boolean);
-      tasks.forEach(t => {
-        const sits = Array.isArray(t.situation) ? t.situation : [];
-        sits.forEach(sit => {
-          if (sit && row[sit] !== undefined) row[sit]++;
-        });
-      });
-      m[s.id] = row;
-    });
-    return m;
-  }, [sortedSessions, taskMap, sitKeys]);
-
   const displayKeys = timelineView === 'categorias' ? catKeys : sitKeys;
-  const matrix = timelineView === 'categorias' ? catMatrix : sitMatrix;
   const colorMap = timelineView === 'categorias' ? categoryColors : situationColors;
 
-  const maxPerKey = useMemo(() => {
+  const sessionAllTasks = useMemo(() => {
     const m = {};
-    displayKeys.forEach(k => {
-      let max = 0;
-      sortedSessions.forEach(s => {
-        const v = matrix[s.id]?.[k] || 0;
-        if (v > max) max = v;
-      });
-      m[k] = max || 1;
+    sortedSessions.forEach(s => {
+      m[s.id] = (s.tasks || []).map(tid => taskMap[tid]).filter(Boolean);
     });
     return m;
-  }, [displayKeys, sortedSessions, matrix]);
+  }, [sortedSessions, taskMap]);
+
+  const cellW = 64;
+  const cellH = 28;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)' }}>
@@ -250,60 +192,6 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-6 v2-scrollbar">
-          {/* Pie charts row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.4)', border: '1px solid rgba(185,165,135,0.08)' }}>
-              <h3 className="text-sm font-semibold mb-3" style={{ color: '#e8ac65' }}>Categorías</h3>
-              {categoryData.length > 0 ? (
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={categoryData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {categoryData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                      </Pie>
-                      <Tooltip content={<PieTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <p className="text-sm text-center py-8" style={{ color: '#997b66' }}>Sin datos</p>
-              )}
-            </div>
-            <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.4)', border: '1px solid rgba(185,165,135,0.08)' }}>
-              <h3 className="text-sm font-semibold mb-3" style={{ color: '#e8ac65' }}>Situaciones</h3>
-              {situationData.length > 0 ? (
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={situationData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {situationData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                      </Pie>
-                      <Tooltip content={<PieTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <p className="text-sm text-center py-8" style={{ color: '#997b66' }}>Sin datos</p>
-              )}
-            </div>
-          </div>
-
           {/* Waffle charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.4)', border: '1px solid rgba(185,165,135,0.08)' }}>
@@ -360,7 +248,6 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
                     cursor: 'pointer',
                     background: timelineView === 'categorias' ? 'rgba(232,172,101,0.10)' : 'transparent',
                     color: timelineView === 'categorias' ? '#e8ac65' : '#997b66',
-                    transition: 'all 0.2s',
                   }}
                 >
                   Categorías
@@ -376,7 +263,6 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
                     cursor: 'pointer',
                     background: timelineView === 'situaciones' ? 'rgba(232,172,101,0.10)' : 'transparent',
                     color: timelineView === 'situaciones' ? '#e8ac65' : '#997b66',
-                    transition: 'all 0.2s',
                   }}
                 >
                   Situaciones
@@ -384,22 +270,23 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
               </div>
             </div>
             {sortedSessions.length > 0 && displayKeys.length > 0 ? (
-              <div className="overflow-x-auto pb-2" style={{ maxHeight: 420 }}>
-                <div className="inline-flex" style={{ minWidth: sortedSessions.length * 30 + 130 }}>
-                  {/* Left column: Y-axis labels (sticky) */}
-                  <div style={{ width: 130, flexShrink: 0, position: 'sticky', left: 0, zIndex: 2, background: 'rgba(22,20,16,0.4)' }}>
-                    <div style={{ height: 36 }} />
+              <div className="overflow-x-auto pb-2" style={{ maxHeight: 480 }}>
+                <div className="inline-flex" style={{ minWidth: sortedSessions.length * (cellW + 4) + 140 }}>
+                  {/* Left column: Y-axis labels */}
+                  <div style={{ width: 140, flexShrink: 0, position: 'sticky', left: 0, zIndex: 2, background: 'rgba(22,20,16,0.4)' }}>
+                    <div style={{ height: 42 }} />
                     {displayKeys.map(key => (
                       <div
                         key={key}
                         style={{
-                          height: 30,
+                          height: cellH + 4,
                           display: 'flex',
                           alignItems: 'center',
                           fontSize: 11,
                           color: '#baa587',
                           paddingRight: 8,
                           fontWeight: 500,
+                          marginBottom: 2,
                         }}
                       >
                         <span className="inline-flex items-center gap-1.5 truncate">
@@ -410,61 +297,70 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
                     ))}
                   </div>
 
-                  {/* Grid area */}
+                  {/* Grid */}
                   <div>
                     {/* Header row */}
-                    <div style={{ display: 'flex', gap: 2, height: 36, alignItems: 'flex-end', paddingBottom: 4 }}>
-                      {sortedSessions.map((s, i) => (
-                        <div
-                          key={s.id}
-                          title={`${i + 1}. ${s.name}`}
-                          style={{
-                            width: 28,
-                            fontSize: 8,
-                            color: '#997b66',
-                            textAlign: 'center',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            writingMode: 'vertical-rl',
-                            transform: 'rotate(180deg)',
-                            lineHeight: '28px',
-                          }}
-                        >
-                          {s.name}
-                        </div>
-                      ))}
+                    <div style={{ display: 'flex', gap: 4, height: 42, alignItems: 'flex-end', paddingBottom: 4 }}>
+                      {sortedSessions.map((s, i) => {
+                        const n = (sessionAllTasks[s.id] || []).length;
+                        return (
+                          <div
+                            key={s.id}
+                            title={`${i + 1}. ${s.name} (${n} tareas)`}
+                            style={{
+                              width: cellW,
+                              fontSize: 8,
+                              color: '#997b66',
+                              textAlign: 'center',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              writingMode: 'vertical-rl',
+                              transform: 'rotate(180deg)',
+                              lineHeight: '28px',
+                            }}
+                          >
+                            {s.name}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Data rows */}
-                    {displayKeys.map(key => (
-                      <div key={key} style={{ display: 'flex', gap: 2, marginBottom: 2 }}>
+                    {displayKeys.map(catKey => (
+                      <div key={catKey} style={{ display: 'flex', gap: 4, marginBottom: 2 }}>
                         {sortedSessions.map(s => {
-                          const count = matrix[s.id]?.[key] || 0;
-                          const max = maxPerKey[key] || 1;
-                          const intensity = count > 0 ? 0.25 + (count / max) * 0.75 : 0;
-                          const color = colorMap[key] || OTHER_COLOR;
-                          const bg = count > 0 ? color : 'rgba(185,165,135,0.06)';
+                          const tasks = sessionAllTasks[s.id] || [];
+                          const n = tasks.length;
                           return (
                             <div
                               key={s.id}
-                              title={`${key}: ${count} tarea${count !== 1 ? 's' : ''} en ${s.name}`}
+                              title={`${catKey} en ${s.name}`}
                               style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: 4,
-                                backgroundColor: bg,
-                                opacity: count > 0 ? intensity : 1,
+                                width: cellW,
+                                height: cellH,
+                                borderRadius: 3,
+                                backgroundColor: EMPTY_CELL,
                                 display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: 9,
-                                fontWeight: 600,
-                                color: count > 0 && intensity > 0.5 ? '#fff' : 'transparent',
-                                transition: 'all 0.1s',
+                                overflow: 'hidden',
                               }}
                             >
-                              {count > 0 ? count : ''}
+                              {n > 0 && tasks.map((t, i) => {
+                                const isMatch = timelineView === 'categorias'
+                                  ? (t.category || 'Otras') === catKey
+                                  : (Array.isArray(t.situation) ? t.situation : []).includes(catKey);
+                                return (
+                                  <div
+                                    key={i}
+                                    title={isMatch ? `${t.title}` : ''}
+                                    style={{
+                                      flex: 1,
+                                      backgroundColor: isMatch ? (colorMap[catKey] || OTHER_COLOR) : 'transparent',
+                                      borderRight: i < n - 1 ? '1px solid rgba(0,0,0,0.25)' : 'none',
+                                    }}
+                                  />
+                                );
+                              })}
                             </div>
                           );
                         })}
