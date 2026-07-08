@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, ArrowUp, ArrowDown, Trash2, X, Search, Calendar, Printer, LayoutTemplate, Eye, ArrowLeft, User, FolderOpen, ChevronLeft, ChevronRight, Star, Video, Play, BookOpen, Target, Eye as EyeIcon, Film, Link, CloudUpload, Loader2, BarChart3, Pencil } from 'lucide-react';
+import { Plus, ArrowUp, ArrowDown, Trash2, X, Search, Calendar, Printer, LayoutTemplate, Eye, ArrowLeft, User, FolderOpen, ChevronLeft, ChevronRight, Star, Video, Play, BookOpen, Target, Eye as EyeIcon, Film, Link, CloudUpload, Loader2, BarChart3, PieChart, Pencil } from 'lucide-react';
 import { db, getSetting } from '../db';
 import { useToast } from '../components/Toast';
 import { useConfirm, usePrompt } from '../components/Modal';
 import SessionTemplateEditor from '../components/SessionTemplateEditor';
 import RPEStatsModal from '../components/RPEStatsModal';
+import ContentAnalysisModal from '../components/ContentAnalysisModal';
 import { formatDateDDMMYY, todayISO, tomorrowISO } from '../utils/date';
 import { extractYouTubeId, youtubeEmbedUrl, useYouTubeUpload } from '../hooks/useYouTubeUpload';
 import { isFirebaseEnabled } from '../firebase';
@@ -1185,6 +1186,7 @@ export default function SessionBuilder() {
   const [selectedSessionTasks, setSelectedSessionTasks] = useState([]);
   const [listVideoUrl, setListVideoUrl] = useState(null);
   const [showRPEStats, setShowRPEStats] = useState(false);
+  const [showContentAnalysis, setShowContentAnalysis] = useState(false);
   const [refreshSessions, setRefreshSessions] = useState(0);
   const [selectedPorteros, setSelectedPorteros] = useState([]);
   const [editingSeasonId, setEditingSeasonId] = useState(null);
@@ -1440,6 +1442,12 @@ export default function SessionBuilder() {
                 <BarChart3 size={16} /> RPE
               </button>
               <button
+                onClick={() => setShowContentAnalysis(true)}
+                className="v2-btn-ghost"
+              >
+                <PieChart size={16} /> Análisis
+              </button>
+              <button
                 onClick={openNewSession}
                 className="v2-btn-ghost"
                 style={{
@@ -1528,6 +1536,14 @@ export default function SessionBuilder() {
           analyses={seasonAnalyses}
           seasonName={selectedSeason?.name || ''}
           onClose={() => setShowRPEStats(false)}
+        />
+      )}
+
+      {showContentAnalysis && (
+        <ContentAnalysisModal
+          sessions={sessions}
+          seasonName={selectedSeason?.name || ''}
+          onClose={() => setShowContentAnalysis(false)}
         />
       )}
 

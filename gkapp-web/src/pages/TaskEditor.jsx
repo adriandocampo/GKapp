@@ -45,6 +45,7 @@ export default function TaskEditor() {
   const [showImageEditor, setShowImageEditor] = useState(false);
   const [hasChanges, setHasChanges]       = useState(false);
   const [corporateColor, setCorporateColor] = useState('#dc2626');
+  const [autoRepair, setAutoRepair] = useState(false);
 
   const { upload: ytUpload, uploading: ytUploading, progress: ytProgress, error: ytError } = useYouTubeUpload();
 
@@ -77,6 +78,10 @@ export default function TaskEditor() {
         setVideoMode('local');
       } else {
         setVideoUrl(null);
+      }
+      if (t.imageElements && !t.imageBlob) {
+        setAutoRepair(true);
+        setShowImageEditor(true);
       }
     } else {
       addToast('Tarea no encontrada', 'error');
@@ -541,14 +546,24 @@ export default function TaskEditor() {
               taskData={{ title: task.title, subtitle: task.subtitle, time: task.time, reps: task.reps, focus: task.focus, description: task.description }}
               initialElements={task.imageElements || null}
               corporateColor={corporateColor}
-              onSave={(blob, elements) => {
-                setTask(prev => ({ ...prev, imageBlob: blob, imageElements: elements }));
-                if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
-                setPreviewUrl(URL.createObjectURL(blob));
-                setShowImageEditor(false);
-                setHasChanges(true);
+              autoRepair={autoRepair}
+              onSave={async (blob, elements) => {
+                if (autoRepair) {
+                  setAutoRepair(false);
+                  await db.tasks.update(id, { imageBlob: blob, imageElements: elements, updatedAt: new Date() });
+                  if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                  setPreviewUrl(URL.createObjectURL(blob));
+                  setShowImageEditor(false);
+                  addToast('Imagen reparada automáticamente', 'success');
+                } else {
+                  setTask(prev => ({ ...prev, imageBlob: blob, imageElements: elements }));
+                  if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                  setPreviewUrl(URL.createObjectURL(blob));
+                  setShowImageEditor(false);
+                  setHasChanges(true);
+                }
               }}
-              onCancel={() => setShowImageEditor(false)}
+              onCancel={() => { setAutoRepair(false); setShowImageEditor(false); }}
             />
         </div>
       )}
@@ -617,14 +632,24 @@ export default function TaskEditor() {
             taskData={{ title: task.title, subtitle: task.subtitle, time: task.time, reps: task.reps, focus: task.focus, description: task.description }}
             initialElements={task.imageElements || null}
             corporateColor={corporateColor}
-            onSave={(blob, elements) => {
-              setTask(prev => ({ ...prev, imageBlob: blob, imageElements: elements }));
-              if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
-              setPreviewUrl(URL.createObjectURL(blob));
-              setShowImageEditor(false);
-              setHasChanges(true);
+            autoRepair={autoRepair}
+            onSave={async (blob, elements) => {
+              if (autoRepair) {
+                setAutoRepair(false);
+                await db.tasks.update(id, { imageBlob: blob, imageElements: elements, updatedAt: new Date() });
+                if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                setPreviewUrl(URL.createObjectURL(blob));
+                setShowImageEditor(false);
+                addToast('Imagen reparada automáticamente', 'success');
+              } else {
+                setTask(prev => ({ ...prev, imageBlob: blob, imageElements: elements }));
+                if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+                setPreviewUrl(URL.createObjectURL(blob));
+                setShowImageEditor(false);
+                setHasChanges(true);
+              }
             }}
-            onCancel={() => setShowImageEditor(false)}
+            onCancel={() => { setAutoRepair(false); setShowImageEditor(false); }}
           />
         </div>
       )}
