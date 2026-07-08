@@ -574,13 +574,44 @@ export async function ensureDefaultTags() {
 
 async function ensureDefaultSettings() {
   const count = await db.settings.count();
-  const defaultAttributes = [
-    { name: 'Reflejos', value: 70 },
-    { name: 'Juego Aéreo', value: 70 },
-    { name: 'Juego con Pies', value: 70 },
-    { name: '1 vs 1', value: 70 },
-    { name: 'Liderazgo', value: 70 },
-  ];
+  const defaultAttributes = {
+    dimensions: [
+      {
+        name: 'Defensa de Portería',
+        microItems: [
+          { name: 'Parada en portería', value: 70 },
+          { name: '1 contra 1', value: 70 },
+          { name: 'Velocidad de reacción', value: 70 },
+          { name: 'Impulso', value: 70 },
+        ],
+      },
+      {
+        name: 'Defensa de Espacio',
+        microItems: [
+          { name: 'Altura en relación a línea defensiva', value: 70 },
+          { name: 'Juego aéreo', value: 70 },
+          { name: 'Coberturas', value: 70 },
+        ],
+      },
+      {
+        name: 'Juego Ofensivo',
+        microItems: [
+          { name: 'Continuidad', value: 70 },
+          { name: 'Reinicios', value: 70 },
+          { name: 'Saque de volea', value: 70 },
+          { name: 'Saque de mano', value: 70 },
+        ],
+      },
+      {
+        name: 'Perfil Psicológico',
+        microItems: [
+          { name: 'Liderazgo', value: 70 },
+          { name: 'Compostura', value: 70 },
+          { name: 'Asertividad', value: 70 },
+        ],
+      },
+    ],
+  };
   if (count === 0) {
     const defaultPorteros = [
       { name: 'MARC', active: true, photo: null },
@@ -879,21 +910,66 @@ db.version(26).stores({
   const count = await trans.table('porteros').count();
   if (count === 0) {
     const defaultPorteros = [
-      { name: 'MARC', slug: 'marc', isManual: true, team: 'CD Lugo', personalRating: 0, customAttributes: [
-        { name: 'Reflejos', value: 70 }, { name: 'Juego Aéreo', value: 70 },
-        { name: 'Juego con Pies', value: 70 }, { name: '1 vs 1', value: 70 },
-        { name: 'Liderazgo', value: 70 },
-      ], createdAt: new Date(), updatedAt: new Date() },
-      { name: 'IKER', slug: 'iker', isManual: true, team: 'CD Lugo', personalRating: 0, customAttributes: [
-        { name: 'Reflejos', value: 70 }, { name: 'Juego Aéreo', value: 70 },
-        { name: 'Juego con Pies', value: 70 }, { name: '1 vs 1', value: 70 },
-        { name: 'Liderazgo', value: 70 },
-      ], createdAt: new Date(), updatedAt: new Date() },
-      { name: 'CANDAL', slug: 'candal', isManual: true, team: 'CD Lugo', personalRating: 0, customAttributes: [
-        { name: 'Reflejos', value: 70 }, { name: 'Juego Aéreo', value: 70 },
-        { name: 'Juego con Pies', value: 70 }, { name: '1 vs 1', value: 70 },
-        { name: 'Liderazgo', value: 70 },
-      ], createdAt: new Date(), updatedAt: new Date() },
+      { name: 'MARC', slug: 'marc', isManual: true, team: 'CD Lugo', personalRating: 0, customAttributes: {
+        dimensions: [
+          { name: 'Defensa de Portería', microItems: [
+            { name: 'Parada en portería', value: 70 }, { name: '1 contra 1', value: 70 },
+            { name: 'Velocidad de reacción', value: 70 }, { name: 'Impulso', value: 70 },
+          ]},
+          { name: 'Defensa de Espacio', microItems: [
+            { name: 'Altura en relación a línea defensiva', value: 70 },
+            { name: 'Juego aéreo', value: 70 }, { name: 'Coberturas', value: 70 },
+          ]},
+          { name: 'Juego Ofensivo', microItems: [
+            { name: 'Continuidad', value: 70 }, { name: 'Reinicios', value: 70 },
+            { name: 'Saque de volea', value: 70 }, { name: 'Saque de mano', value: 70 },
+          ]},
+          { name: 'Perfil Psicológico', microItems: [
+            { name: 'Liderazgo', value: 70 }, { name: 'Compostura', value: 70 },
+            { name: 'Asertividad', value: 70 },
+          ]},
+        ],
+      }, createdAt: new Date(), updatedAt: new Date() },
+      { name: 'IKER', slug: 'iker', isManual: true, team: 'CD Lugo', personalRating: 0, customAttributes: {
+        dimensions: [
+          { name: 'Defensa de Portería', microItems: [
+            { name: 'Parada en portería', value: 70 }, { name: '1 contra 1', value: 70 },
+            { name: 'Velocidad de reacción', value: 70 }, { name: 'Impulso', value: 70 },
+          ]},
+          { name: 'Defensa de Espacio', microItems: [
+            { name: 'Altura en relación a línea defensiva', value: 70 },
+            { name: 'Juego aéreo', value: 70 }, { name: 'Coberturas', value: 70 },
+          ]},
+          { name: 'Juego Ofensivo', microItems: [
+            { name: 'Continuidad', value: 70 }, { name: 'Reinicios', value: 70 },
+            { name: 'Saque de volea', value: 70 }, { name: 'Saque de mano', value: 70 },
+          ]},
+          { name: 'Perfil Psicológico', microItems: [
+            { name: 'Liderazgo', value: 70 }, { name: 'Compostura', value: 70 },
+            { name: 'Asertividad', value: 70 },
+          ]},
+        ],
+      }, createdAt: new Date(), updatedAt: new Date() },
+      { name: 'CANDAL', slug: 'candal', isManual: true, team: 'CD Lugo', personalRating: 0, customAttributes: {
+        dimensions: [
+          { name: 'Defensa de Portería', microItems: [
+            { name: 'Parada en portería', value: 70 }, { name: '1 contra 1', value: 70 },
+            { name: 'Velocidad de reacción', value: 70 }, { name: 'Impulso', value: 70 },
+          ]},
+          { name: 'Defensa de Espacio', microItems: [
+            { name: 'Altura en relación a línea defensiva', value: 70 },
+            { name: 'Juego aéreo', value: 70 }, { name: 'Coberturas', value: 70 },
+          ]},
+          { name: 'Juego Ofensivo', microItems: [
+            { name: 'Continuidad', value: 70 }, { name: 'Reinicios', value: 70 },
+            { name: 'Saque de volea', value: 70 }, { name: 'Saque de mano', value: 70 },
+          ]},
+          { name: 'Perfil Psicológico', microItems: [
+            { name: 'Liderazgo', value: 70 }, { name: 'Compostura', value: 70 },
+            { name: 'Asertividad', value: 70 },
+          ]},
+        ],
+      }, createdAt: new Date(), updatedAt: new Date() },
     ];
     await trans.table('porteros').bulkAdd(defaultPorteros);
   }

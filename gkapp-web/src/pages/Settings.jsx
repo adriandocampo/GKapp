@@ -33,10 +33,13 @@ export default function Settings() {
   const [dragOverPorteroIdx, setDragOverPorteroIdx] = useState(null);
   const [lastBackup, setLastBackup] = useState(null);
   const [restoring, setRestoring] = useState(false);
-  const [defaultAttributes, setDefaultAttributes] = useState([]);
+  const [defaultAttributes, setDefaultAttributes] = useState({ dimensions: [] });
   const [newAttrName, setNewAttrName] = useState('');
-  const [editingAttrIdx, setEditingAttrIdx] = useState(null);
-  const [editingAttrName, setEditingAttrName] = useState('');
+  const [newDimName, setNewDimName] = useState('');
+  const [editingDimIdx, setEditingDimIdx] = useState(null);
+  const [editingDimName, setEditingDimName] = useState('');
+  const [editingMicroIdx, setEditingMicroIdx] = useState(null);
+  const [editingMicroName, setEditingMicroName] = useState('');
   const [corporateColor, setCorporateColor] = useState('#dc2626');
   const [applyTemplateToAll, setApplyTemplateToAll] = useState(false);
 
@@ -294,23 +297,67 @@ export default function Settings() {
     );
   }
 
-  function addAttribute() {
+  function addMicroItem(dimIdx) {
     if (!newAttrName.trim()) return;
-    setDefaultAttributes(prev => [...prev, { name: newAttrName.trim(), value: 70 }]);
+    setDefaultAttributes(prev => ({
+      ...prev,
+      dimensions: prev.dimensions.map((d, i) =>
+        i === dimIdx ? { ...d, microItems: [...d.microItems, { name: newAttrName.trim(), value: 70 }] } : d
+      )
+    }));
     setNewAttrName('');
   }
 
-  function removeAttribute(index) {
-    setDefaultAttributes(prev => prev.filter((_, i) => i !== index));
+  function removeMicroItem(dimIdx, microIdx) {
+    setDefaultAttributes(prev => ({
+      ...prev,
+      dimensions: prev.dimensions.map((d, i) =>
+        i === dimIdx ? { ...d, microItems: d.microItems.filter((_, mi) => mi !== microIdx) } : d
+      )
+    }));
   }
 
-  function updateAttrValue(index, value) {
-    setDefaultAttributes(prev => prev.map((a, i) => i === index ? { ...a, value } : a));
+  function updateMicroValue(dimIdx, microIdx, value) {
+    setDefaultAttributes(prev => ({
+      ...prev,
+      dimensions: prev.dimensions.map((d, i) =>
+        i === dimIdx ? { ...d, microItems: d.microItems.map((m, mi) => mi === microIdx ? { ...m, value } : m) } : d
+      )
+    }));
   }
 
-  function renameAttribute(index, name) {
-    setDefaultAttributes(prev => prev.map((a, i) => i === index ? { ...a, name } : a));
-    setEditingAttrIdx(null);
+  function renameMicroItem(dimIdx, microIdx, name) {
+    setDefaultAttributes(prev => ({
+      ...prev,
+      dimensions: prev.dimensions.map((d, i) =>
+        i === dimIdx ? { ...d, microItems: d.microItems.map((m, mi) => mi === microIdx ? { ...m, name } : m) } : d
+      )
+    }));
+    setEditingMicroIdx(null);
+  }
+
+  function addDimension() {
+    if (!newDimName.trim()) return;
+    setDefaultAttributes(prev => ({
+      ...prev,
+      dimensions: [...prev.dimensions, { name: newDimName.trim(), microItems: [{ name: 'Nuevo atributo', value: 70 }] }]
+    }));
+    setNewDimName('');
+  }
+
+  function removeDimension(dimIdx) {
+    setDefaultAttributes(prev => ({
+      ...prev,
+      dimensions: prev.dimensions.filter((_, i) => i !== dimIdx)
+    }));
+  }
+
+  function renameDimension(dimIdx, name) {
+    setDefaultAttributes(prev => ({
+      ...prev,
+      dimensions: prev.dimensions.map((d, i) => i === dimIdx ? { ...d, name } : d)
+    }));
+    setEditingDimIdx(null);
   }
 
   async function handleRestore() {
@@ -514,38 +561,68 @@ export default function Settings() {
         <div>
           <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Atributos Personalizados</h3>
           <p className="text-xs mb-3" style={{color: '#997b66'}}>Estos atributos se usarán al crear un nuevo portero</p>
-          <div className="space-y-2 mb-3">
-            {defaultAttributes.map((attr, i) => (
-              <div key={i} className="flex items-center gap-2 bg-gk-page px-4 py-2 rounded-lg">
-                {editingAttrIdx === i ? (
-                  <input type="text" value={editingAttrName}
-                    onChange={e => setEditingAttrName(e.target.value)}
-                    onBlur={() => renameAttribute(i, editingAttrName)}
-                    onKeyDown={e => e.key === 'Enter' && renameAttribute(i, editingAttrName)}
-                    className="v2-input flex-1 text-sm py-1 px-2"
-                    autoFocus />
-                ) : (
-                  <span className="text-sm text-gk-text-primary flex-1 min-w-0 truncate cursor-pointer"
-                    onClick={() => { setEditingAttrIdx(i); setEditingAttrName(attr.name); }}>
-                    {attr.name}
-                  </span>
-                )}
-                <input type="range" min="0" max="100" value={attr.value}
-                  onChange={e => updateAttrValue(i, parseInt(e.target.value))}
-                  className="v2-rpe" style={{ width: 80 }} />
-                <span className="text-xs font-bold w-6 text-right text-gk-accent">{attr.value}</span>
-                <button onClick={() => removeAttribute(i)} className="p-1 hover:bg-red-900/30 rounded text-gk-text-tertiary hover:text-stat-rose transition-colors">
-                  <Trash2 size={12} />
-                </button>
+          <div className="space-y-3">
+            {defaultAttributes.dimensions && defaultAttributes.dimensions.map((dim, di) => (
+              <div key={di} className="rounded-xl p-4" style={{background: 'rgba(22,20,16,0.4)'}}>
+                <div className="flex items-center justify-between mb-3 pb-2" style={{borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
+                  {editingDimIdx === di ? (
+                    <input type="text" value={editingDimName}
+                      onChange={e => setEditingDimName(e.target.value)}
+                      onBlur={() => { renameDimension(di, editingDimName); }}
+                      onKeyDown={e => e.key === 'Enter' && renameDimension(di, editingDimName)}
+                      className="v2-input text-sm py-1 px-2 flex-1" autoFocus />
+                  ) : (
+                    <h4 className="text-sm font-semibold cursor-pointer" style={{color: '#f1ede7'}}
+                      onClick={() => { setEditingDimIdx(di); setEditingDimName(dim.name); }}>
+                      {dim.name}
+                    </h4>
+                  )}
+                  <button onClick={() => removeDimension(di)} className="p-1 hover:bg-red-900/30 rounded transition-colors" style={{color: '#d08c60'}}>
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {dim.microItems.map((item, mi) => (
+                    <div key={mi} className="flex items-center gap-2">
+                      {editingMicroIdx?.dimIdx === di && editingMicroIdx?.microIdx === mi ? (
+                        <input type="text" value={editingMicroName}
+                          onChange={e => setEditingMicroName(e.target.value)}
+                          onBlur={() => { renameMicroItem(di, mi, editingMicroName); }}
+                          onKeyDown={e => e.key === 'Enter' && renameMicroItem(di, mi, editingMicroName)}
+                          className="v2-input text-xs py-1 px-2 flex-1" autoFocus />
+                      ) : (
+                        <span className="text-sm flex-1 min-w-0 truncate cursor-pointer" style={{color: '#baa587'}}
+                          onClick={() => { setEditingMicroIdx({ dimIdx: di, microIdx: mi }); setEditingMicroName(item.name); }}>
+                          {item.name}
+                        </span>
+                      )}
+                      <input type="range" min="0" max="100" value={item.value}
+                        onChange={e => updateMicroValue(di, mi, parseInt(e.target.value))}
+                        className="v2-rpe" style={{width: 80}} />
+                      <span className="text-xs font-bold w-6 text-right" style={{color: '#e8ac65'}}>{item.value}</span>
+                      <button onClick={() => removeMicroItem(di, mi)} className="p-1 hover:bg-red-900/30 rounded transition-colors" style={{color: '#997b66'}}>
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-3 pt-3" style={{borderTop: '1px solid rgba(185,165,135,0.06)'}}>
+                  <input value={newAttrName} onChange={e => setNewAttrName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addMicroItem(di)}
+                    placeholder={`Nuevo atributo en ${dim.name}`} className="v2-input flex-1 text-xs" />
+                  <button onClick={() => addMicroItem(di)} className="v2-btn-ghost text-xs py-1 px-2 shrink-0" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
+                    <Plus size={12} /> Añadir
+                  </button>
+                </div>
               </div>
             ))}
           </div>
-          <div className="flex gap-2">
-            <input value={newAttrName} onChange={e => setNewAttrName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addAttribute()}
-              placeholder="Nuevo atributo" className="v2-input flex-1" />
-            <button onClick={addAttribute} className="v2-btn-ghost" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
-              <Plus size={14} /> Añadir
+          <div className="flex gap-2 mt-4">
+            <input value={newDimName} onChange={e => setNewDimName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addDimension()}
+              placeholder="Nueva dimensión" className="v2-input flex-1" />
+            <button onClick={addDimension} className="v2-btn-ghost" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
+              <Plus size={14} /> Añadir dimensión
             </button>
           </div>
         </div>

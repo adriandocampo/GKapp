@@ -12,6 +12,50 @@ const TABS = [
   { key: 'career', label: 'Carrera', icon: Briefcase },
 ];
 
+const DIMENSION_COLORS = {
+  'Defensa de Portería': '#d08c60',
+  'Defensa de Espacio': '#5ab4e6',
+  'Juego Ofensivo': '#6b8f71',
+  'Perfil Psicológico': '#a78bfa',
+};
+
+const DEFAULT_DIMENSIONS = [
+  {
+    name: 'Defensa de Portería',
+    microItems: [
+      { name: 'Parada en portería', value: 70 },
+      { name: '1 contra 1', value: 70 },
+      { name: 'Velocidad de reacción', value: 70 },
+      { name: 'Impulso', value: 70 },
+    ],
+  },
+  {
+    name: 'Defensa de Espacio',
+    microItems: [
+      { name: 'Altura en relación a línea defensiva', value: 70 },
+      { name: 'Juego aéreo', value: 70 },
+      { name: 'Coberturas', value: 70 },
+    ],
+  },
+  {
+    name: 'Juego Ofensivo',
+    microItems: [
+      { name: 'Continuidad', value: 70 },
+      { name: 'Reinicios', value: 70 },
+      { name: 'Saque de volea', value: 70 },
+      { name: 'Saque de mano', value: 70 },
+    ],
+  },
+  {
+    name: 'Perfil Psicológico',
+    microItems: [
+      { name: 'Liderazgo', value: 70 },
+      { name: 'Compostura', value: 70 },
+      { name: 'Asertividad', value: 70 },
+    ],
+  },
+];
+
 function calculateAge(dob) {
   if (!dob) return null;
   const birth = new Date(dob);
@@ -42,6 +86,23 @@ return (
       </RadarChart>
     </ResponsiveContainer>
   );
+}
+
+function computeRadarData(dimensions) {
+  if (!dimensions || dimensions.length === 0) return [];
+  return dimensions.map(d => ({
+    name: d.name,
+    value: Math.round(d.microItems.reduce((s, m) => s + m.value, 0) / d.microItems.length),
+  }));
+}
+
+function migrateAttributes(data) {
+  if (!data || !data.dimensions) {
+    return { dimensions: DEFAULT_DIMENSIONS.map(d => ({ ...d, microItems: d.microItems.map(m => ({ ...m })) })) };
+  }
+  return {
+    dimensions: data.dimensions.map(d => ({ ...d, microItems: d.microItems.map(m => ({ ...m })) })),
+  };
 }
 
 function StatRow({ label, value, unit }) {
@@ -318,12 +379,13 @@ function CareerTable({ careerData }) {
 export default function PorteroProfile({ portero, onClose, onUpdate, onDelete }) {
   const [tab, setTab] = useState('profile');
   const [editing, setEditing] = useState(false);
-  const [attrs, setAttrs] = useState(portero.customAttributes || []);
+  const [attrs, setAttrs] = useState(() => migrateAttributes(portero.customAttributes));
   const [rating, setRating] = useState(portero.personalRating || 0);
-  const maxAttrWidth = useMemo(() => {
-    if (!attrs.length) return 80;
-    const longest = Math.max(...attrs.map(a => a.name.length));
-    return Math.max(longest * 7.5 + 8, 60);
+  const maxMicroWidth = useMemo(() => {
+    if (!attrs.dimensions) return 80;
+    const allNames = attrs.dimensions.flatMap(d => d.microItems.map(m => m.name.length));
+    const longest = Math.max(...allNames, 0);
+    return Math.max(longest * 7 + 8, 80);
   }, [attrs]);
   const [heatmapData, setHeatmapData] = useState([]);
   const [loadingHeatmap, setLoadingHeatmap] = useState(false);
@@ -352,22 +414,56 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
     saveTimer.current = setTimeout(() => persistChanges(currentAttrs, currentRating), 300);
   }
 
-  function handleEditAttr(index, value) {
-    const next = attrs.map((a, i) => i === index ? { ...a, value } : a);
+  function handleEditMicroItem(dimIndex, microIndex, value) {
+    const next = {
+      ...attrs,
+      dimensions: attrs.dimensions.map((d, di) =>
+        di === dimIndex
+          ? { ...d, microItems: d.microItems.map((m, mi) => mi === microIndex ? { ...m, value } : m) }
+          : d
+      )
+    };
     setAttrs(next);
     scheduleSave(next, rating);
   }
 
-  function handleAddAttr() {
+  function handleAddMicroItem(dimIndex) {
     const name = window.prompt('Nombre del nuevo atributo:');
     if (!name || !name.trim()) return;
-    const next = [...attrs, { name: name.trim(), value: 50 }];
+    const next = {
+      ...attrs,
+      dimensions: attrs.dimensions.map((d, di) =>
+        di === dimIndex
+          ? { ...d, microItems: [...d.microItems, { name: name.trim(), value: 50 }] }
+          : d
+      )
+    };
     setAttrs(next);
     persistChanges(next, rating);
   }
 
-  function handleDeleteAttr(index) {
-    const next = attrs.filter((_, i) => i !== index);
+  function handleDeleteMicroItem(dimIndex, microIndex) {
+    const next = {
+      ...attrs,
+      dimensions: attrs.dimensions.map((d, di) =>
+        di === dimIndex
+          ? { ...d, microItems: d.microItems.filter((_, mi) => mi !== microIndex) }
+          : d
+      )
+    };
+    setAttrs(next);
+    persistChanges(next, rating);
+  }
+
+  function handleAddDimension() {
+    const name = window.prompt('Nombre de la nueva dimensión:');
+    if (!name || !name.trim()) return;
+    const attrName = window.prompt(`Nombre del primer atributo para "${name.trim()}":`);
+    if (!attrName || !attrName.trim()) return;
+    const next = {
+      ...attrs,
+      dimensions: [...attrs.dimensions, { name: name.trim(), microItems: [{ name: attrName.trim(), value: 50 }] }]
+    };
     setAttrs(next);
     persistChanges(next, rating);
   }
@@ -611,50 +707,94 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
                     </button>
                   </div>
                 </div>
-                <div className={compareGk ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : ''}>
+
+                <div className={compareGk ? 'grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4' : 'mb-4'}>
                   <div>
                     <p className="text-xs text-center mb-1 font-medium" style={{color: '#e8ac65'}}>{portero.name}</p>
-                    <CustomRadarChart data={attrs} />
+                    <CustomRadarChart data={computeRadarData(attrs.dimensions)} />
                   </div>
                   {compareGk && (
                     <div>
                       <p className="text-xs text-center mb-1 font-medium" style={{color: '#5ab4e6'}}>{compareGk.name}</p>
-                      <CustomRadarChart data={compareGk.customAttributes || []} color="#5ab4e6" />
+                      <CustomRadarChart data={computeRadarData(migrateAttributes(compareGk.customAttributes).dimensions)} color="#5ab4e6" />
                     </div>
                   )}
                 </div>
-                {editing && (
-                  <div className="mt-3 pt-3 space-y-1" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
-                    {attrs.map((attr, i) => (
-                      <div key={i} className="flex items-center gap-2 py-0.5">
-                        <button onClick={() => handleDeleteAttr(i)}
-                          className="p-1 rounded-lg shrink-0 cursor-pointer transition-colors"
-                          style={{color: '#d08c60'}}
-                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(208,140,96,0.12)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <Trash2 size={14} />
-                        </button>
-                        <span className="text-sm whitespace-nowrap shrink-0 text-right" style={{color: '#baa587', width: maxAttrWidth}}>{attr.name}</span>
-                        <input type="range" min="0" max="100" value={attr.value}
-                          onChange={e => handleEditAttr(i, parseInt(e.target.value))}
-                          className="v2-rpe" style={{flex: '1 1 auto', minWidth: 0}} />
-                        <span className="text-sm font-bold w-8 text-right shrink-0" style={{color: '#e8ac65'}}>{attr.value}</span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {attrs.dimensions.map((dim, di) => {
+                    const dimColor = DIMENSION_COLORS[dim.name] || '#e8ac65';
+                    const avg = Math.round(dim.microItems.reduce((s, m) => s + m.value, 0) / dim.microItems.length);
+                    return (
+                      <div key={di} className="rounded-xl p-4" style={{background: 'rgba(22,20,16,0.6)'}}>
+                        <div className="flex items-center justify-between mb-3 pb-2" style={{borderBottom: `1px solid ${dimColor}30`}}>
+                          <h5 className="text-sm font-bold tracking-wide" style={{color: dimColor}}>{dim.name}</h5>
+                          <span className="text-sm font-bold px-2.5 py-1 rounded-lg" style={{background: dimColor, color: '#1a1815'}}>{avg}</span>
+                        </div>
+                        <div className="space-y-3">
+                          {dim.microItems.map((item, mi) => (
+                            editing ? (
+                              <div key={mi} className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs" style={{color: '#baa587'}}>{item.name}</span>
+                                  <button onClick={() => handleDeleteMicroItem(di, mi)}
+                                    className="p-0.5 rounded cursor-pointer transition-colors"
+                                    style={{color: '#d08c60'}}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(208,140,96,0.12)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                    <Trash2 size={10} />
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input type="range" min="0" max="100" value={item.value}
+                                    onChange={e => handleEditMicroItem(di, mi, parseInt(e.target.value))}
+                                    className="v2-rpe flex-1" />
+                                  <span className="text-xs font-bold w-7 text-right shrink-0 tabular-nums" style={{color: dimColor}}>{item.value}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div key={mi} className="space-y-1">
+                                <span className="text-xs" style={{color: '#baa587'}}>{item.name}</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-2 rounded-full overflow-hidden" style={{background: 'rgba(22,20,16,0.8)'}}>
+                                    <div className="h-full rounded-full transition-all duration-500" style={{width: `${item.value}%`, background: dimColor, opacity: 0.9}} />
+                                  </div>
+                                  <span className="text-xs font-bold w-7 text-right shrink-0 tabular-nums" style={{color: '#f1ede7'}}>{item.value}</span>
+                                </div>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                        {editing && (
+                          <button onClick={() => handleAddMicroItem(di)}
+                            className="flex items-center justify-center gap-1 w-full mt-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer"
+                            style={{
+                              background: 'rgba(232,172,101,0.06)',
+                              border: '1px dashed rgba(232,172,101,0.2)',
+                              color: '#e8ac65',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(232,172,101,0.1)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(232,172,101,0.06)'}>
+                            <Plus size={12} /> Añadir
+                          </button>
+                        )}
                       </div>
-                    ))}
-                    <button onClick={handleAddAttr}
-                      className="flex items-center gap-1.5 w-full justify-center py-2 mt-2 rounded-xl text-xs font-medium transition-all cursor-pointer"
+                    );
+                  })}
+                  {editing && (
+                    <button onClick={handleAddDimension}
+                      className="rounded-xl p-4 flex items-center justify-center gap-1.5 text-xs transition-all cursor-pointer min-h-[120px]"
                       style={{
-                        background: 'rgba(232,172,101,0.06)',
-                        border: '1px dashed rgba(232,172,101,0.2)',
-                        color: '#e8ac65',
+                        background: 'rgba(22,20,16,0.6)',
+                        border: '1px dashed rgba(185,165,135,0.15)',
+                        color: '#997b66',
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(232,172,101,0.1)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(232,172,101,0.06)'}>
-                      <Plus size={14} />
-                      Añadir atributo
+                      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(232,172,101,0.3)'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(185,165,135,0.15)'}>
+                      <Plus size={16} /> Añadir dimensión
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           )}

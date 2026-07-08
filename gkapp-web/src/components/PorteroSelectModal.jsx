@@ -3,20 +3,61 @@ import { X, Search, User, Shield, Loader2, Camera } from 'lucide-react';
 import { searchPlayer, fetchPlayerProfile, fetchPlayerSeasons, fetchPlayerSeasonStats, getPlayerImageUrl } from '../utils/sofascoreClient';
 import { getSetting } from '../db';
 
-const FALLBACK_ATTRIBUTES = [
-  { name: 'Reflejos', value: 70 },
-  { name: 'Juego Aéreo', value: 70 },
-  { name: 'Juego con Pies', value: 70 },
-  { name: '1 vs 1', value: 70 },
-  { name: 'Liderazgo', value: 70 },
-];
+const FALLBACK_ATTRIBUTES = {
+  dimensions: [
+    {
+      name: 'Defensa de Portería',
+      microItems: [
+        { name: 'Parada en portería', value: 70 },
+        { name: '1 contra 1', value: 70 },
+        { name: 'Velocidad de reacción', value: 70 },
+        { name: 'Impulso', value: 70 },
+      ],
+    },
+    {
+      name: 'Defensa de Espacio',
+      microItems: [
+        { name: 'Altura en relación a línea defensiva', value: 70 },
+        { name: 'Juego aéreo', value: 70 },
+        { name: 'Coberturas', value: 70 },
+      ],
+    },
+    {
+      name: 'Juego Ofensivo',
+      microItems: [
+        { name: 'Continuidad', value: 70 },
+        { name: 'Reinicios', value: 70 },
+        { name: 'Saque de volea', value: 70 },
+        { name: 'Saque de mano', value: 70 },
+      ],
+    },
+    {
+      name: 'Perfil Psicológico',
+      microItems: [
+        { name: 'Liderazgo', value: 70 },
+        { name: 'Compostura', value: 70 },
+        { name: 'Asertividad', value: 70 },
+      ],
+    },
+  ],
+};
+
+function cloneDimensions(dims) {
+  return dims.map(d => ({
+    ...d,
+    microItems: d.microItems.map(m => ({ ...m }))
+  }));
+}
 
 async function getDefaultAttributes() {
   try {
     const attrs = await getSetting('defaultAttributes');
-    return attrs && attrs.length > 0 ? attrs.map(a => ({ ...a })) : FALLBACK_ATTRIBUTES.map(a => ({ ...a }));
+    if (attrs && attrs.dimensions && attrs.dimensions.length > 0) {
+      return { dimensions: cloneDimensions(attrs.dimensions) };
+    }
+    return { dimensions: cloneDimensions(FALLBACK_ATTRIBUTES.dimensions) };
   } catch {
-    return FALLBACK_ATTRIBUTES.map(a => ({ ...a }));
+    return { dimensions: cloneDimensions(FALLBACK_ATTRIBUTES.dimensions) };
   }
 }
 
