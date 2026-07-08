@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, BarChart3 } from 'lucide-react';
+import { db } from '../db';
 import {
   LineChart,
   Line,
@@ -12,7 +13,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 
-const MD_ORDER = ['MD-5', 'MD-4', 'MD-3', 'MD-2', 'MD-1', 'MD', 'MD+1'];
+const MD_ORDER = ['Pretemporada', 'MD-5', 'MD-4', 'MD-3', 'MD-2', 'MD-1', 'MD', 'MD+1'];
 
 const PORTERO_COLORS = [
   '#ef4444',
@@ -61,75 +62,88 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 function buildAggregatedChartData(sessionsList, allPorteros, analyses = [], seasonId = null, microciclo = null) {
-  return MD_ORDER.map(md => {
+  const activeSessions = sessionsList.filter(s => !s.deletedAt);
+  const allPretemporada = activeSessions.length > 0 && activeSessions.every(
+    s => String(s.templateFields?.tipoMD || '').trim() === 'Pretemporada'
+  );
+
+  if (allPretemporada) {
+    const sorted = [...activeSessions]
+      .filter(s => s.date)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    return sorted.map((session, i) => {
+      const row = {
+        dia: `Día ${i + 1}`,
+        rpe: null,
+        sessionId: session.id,
+        _date: session.date,
+        _isPretemporada: true,
+      };
+      allPorteros.forEach(p => { row[`portero_${p}`] = null; });
+      row.rpe = computeRPEAvg(session.rpePorteros);
+      allPorteros.forEach(p => {
+        const val = session.rpePorteros?.[p];
+        row[`portero_${p}`] = val > 0 ? val : null;
+      });
+      return row;
+    });
+  }
+
+  const existingMDs = MD_ORDER.filter(md => {
+    if (md === 'MD') return true;
+    return sessionsList.some(s => String(s.templateFields?.tipoMD || '').trim() === md);
+  });
+
+  return existingMDs.map(md => {
     if (md === 'MD') {
       const row = { dia: md, rpe: null, sessionId: null };
-      allPorteros.forEach(p => {
-        row[`portero_${p}`] = null;
-      });
+      allPorteros.forEach(p => { row[`portero_${p}`] = null; });
 
       if (microciclo && seasonId) {
         const match = analyses.find(
           a => String(a.microciclo || '').trim() === String(microciclo).trim()
-            && a.seasonId === seasonId
-            && !a.deletedAt
+            && a.seasonId === seasonId && !a.deletedAt
         );
         if (match && match.rpe > 0) {
-            row.rpe = match.rpe;
-            row.matchName = match.matchName || null;
-            row.opponent = match.opponent || null;
-            const gkName = String(match.goalkeeperName || '').trim();
-            if (gkName) {
-              const matchedP = allPorteros.find(p => matchGoalkeeperName(gkName, p));
-              if (matchedP) {
-                row[`portero_${matchedP}`] = match.rpe;
-              }
-            }
+          row.rpe = match.rpe;
+          row.matchName = match.matchName || null;
+          row.opponent = match.opponent || null;
+          const gkName = String(match.goalkeeperName || '').trim();
+          if (gkName) {
+            const matchedP = allPorteros.find(p => matchGoalkeeperName(gkName, p));
+            if (matchedP) row[`portero_${matchedP}`] = match.rpe;
           }
+        }
       } else if (seasonId) {
-        const seasonMatches = analyses.filter(
-          a => a.seasonId === seasonId && !a.deletedAt && a.rpe > 0
-        );
+        const seasonMatches = analyses.filter(a => a.seasonId === seasonId && !a.deletedAt && a.rpe > 0);
         if (seasonMatches.length > 0) {
           row.rpe = seasonMatches.reduce((sum, a) => sum + a.rpe, 0) / seasonMatches.length;
         }
       }
-
       return row;
     }
 
     const sessionsForMd = sessionsList.filter(
       s => String(s.templateFields?.tipoMD || '').trim() === md
     );
-
     const row = { dia: md, rpe: null, sessionId: null };
-    allPorteros.forEach(p => {
-      row[`portero_${p}`] = null;
-    });
-
+    allPorteros.forEach(p => { row[`portero_${p}`] = null; });
     if (sessionsForMd.length === 0) return row;
 
     row.sessionId = sessionsForMd[0].id;
-
     const allRPEValues = [];
     sessionsForMd.forEach(s => {
-      Object.values(s.rpePorteros || {}).forEach(v => {
-        if (v > 0) allRPEValues.push(v);
-      });
+      Object.values(s.rpePorteros || {}).forEach(v => { if (v > 0) allRPEValues.push(v); });
     });
     if (allRPEValues.length > 0) {
       row.rpe = allRPEValues.reduce((a, b) => a + b, 0) / allRPEValues.length;
     }
-
     allPorteros.forEach(p => {
-      const values = sessionsForMd
-        .map(s => s.rpePorteros?.[p])
-        .filter(v => v > 0);
+      const values = sessionsForMd.map(s => s.rpePorteros?.[p]).filter(v => v > 0);
       if (values.length > 0) {
         row[`portero_${p}`] = values.reduce((a, b) => a + b, 0) / values.length;
       }
     });
-
     return row;
   });
 }
@@ -165,6 +179,17 @@ export default function RPEStatsModal({ sessions, analyses = [], seasonName, onC
   const [viewMode, setViewMode] = useState('unico');
   const [tramoView, setTramoView] = useState('media');
   const [hiddenLines, setHiddenLines] = useState(new Set(['rpe']));
+  const [matchRows, setMatchRows] = useState([]);
+  const [showMatchForm, setShowMatchForm] = useState(false);
+  const [matchFormRival, setMatchFormRival] = useState('');
+  const [matchFormDate, setMatchFormDate] = useState('');
+  const [matchFormRPE, setMatchFormRPE] = useState({});
+  const [dragId, setDragId] = useState(null);
+  const [editingMatchId, setEditingMatchId] = useState(null);
+  const [rowOrder, setRowOrder] = useState([]);
+  const chartDataRef = useRef([]);
+  const loadedRef = useRef(false);
+  const saveTimerRef = useRef(null);
 
   const microciclos = useMemo(() => {
     const set = new Set();
@@ -193,6 +218,7 @@ export default function RPEStatsModal({ sessions, analyses = [], seasonName, onC
     });
     return Array.from(set);
   }, [sessions]);
+
 
   useEffect(() => {
     setHiddenLines(new Set(['rpe']));
@@ -231,35 +257,116 @@ export default function RPEStatsModal({ sessions, analyses = [], seasonName, onC
     return null;
   }, [sessions]);
 
+  // Load saved match rows from Dexie on mount
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    if (!seasonId) return;
+    (async () => {
+      try {
+        const entry = await db.analyses.get({ seasonId, xmlFileName: 'manual_matches' });
+        if (entry?.manualMatchRows?.length > 0) {
+          setMatchRows(entry.manualMatchRows);
+        }
+      } catch (e) {}
+    })();
+  }, [seasonId]);
+
+  // Persist match rows to Dexie on change (debounced)
+  useEffect(() => {
+    if (!seasonId) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const existing = await db.analyses.get({ seasonId, xmlFileName: 'manual_matches' });
+        const data = {
+          seasonId,
+          xmlFileName: 'manual_matches',
+          matchName: 'Manual matches',
+          _manual: true,
+          manualMatchRows: matchRows,
+          updatedAt: new Date(),
+        };
+        if (existing) {
+          await db.analyses.update(existing.id, data);
+        } else {
+          await db.analyses.add({ ...data, createdAt: new Date() });
+        }
+      } catch (e) {}
+    }, 300);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [matchRows, seasonId]);
+
   const chartData = useMemo(() => {
+    let base;
+
     if (viewMode === 'unico') {
       const selectedMc = String(selectedMicrociclo).trim();
       const sessionsInMicro = sessions.filter(
         s => String(s.templateFields?.microciclo || '').trim() === selectedMc && !s.deletedAt
       );
-      return buildAggregatedChartData(sessionsInMicro, allPorteros, analyses, seasonId, selectedMc);
-    }
+      base = buildAggregatedChartData(sessionsInMicro, allPorteros, analyses, seasonId, selectedMc);
+    } else {
+      let filtered = sessions.filter(s => !s.deletedAt);
 
-    let filtered = sessions.filter(s => !s.deletedAt);
-
-    if (viewMode === 'tramo') {
-      const start = parseMicrocicloNum(rangeStart);
-      const end = parseMicrocicloNum(rangeEnd);
-      const min = Math.min(start, end);
-      const max = Math.max(start, end);
-      filtered = filtered.filter(s => {
-        const mc = parseMicrocicloNum(s.templateFields?.microciclo);
-        return mc >= min && mc <= max;
-      });
-      if (tramoView === 'evolucion') {
-        return buildTimelineChartData(filtered, allPorteros);
+      if (viewMode === 'tramo') {
+        const start = parseMicrocicloNum(rangeStart);
+        const end = parseMicrocicloNum(rangeEnd);
+        const min = Math.min(start, end);
+        const max = Math.max(start, end);
+        filtered = filtered.filter(s => {
+          const mc = parseMicrocicloNum(s.templateFields?.microciclo);
+          return mc >= min && mc <= max;
+        });
+        if (tramoView === 'evolucion') {
+          base = buildTimelineChartData(filtered, allPorteros);
+        } else {
+          base = buildAggregatedChartData(filtered, allPorteros, analyses, seasonId, null);
+        }
+      } else {
+        base = buildAggregatedChartData(filtered, allPorteros, analyses, seasonId, null);
       }
     }
 
-    // For tramo/temporada views without a single microciclo, pass microciclo=null
-    // so buildAggregatedChartData averages all match RPEs for the season
-    return buildAggregatedChartData(filtered, allPorteros, analyses, seasonId, null);
-  }, [sessions, analyses, seasonId, viewMode, selectedMicrociclo, rangeStart, rangeEnd, tramoView, allPorteros]);
+    // Assign stable row keys and sort by rowOrder
+    let rowIndexCounter = 0;
+    const allRows = [...(matchRows.length > 0 ? [...base, ...matchRows] : base)];
+    allRows.forEach(row => {
+      row._rowKey = row._match ? `match_${row.id}` : `base_${row.dia}_${row.id || rowIndexCounter++}`;
+    });
+
+    // Filter stale keys from rowOrder
+    const validKeys = new Set(allRows.map(r => r._rowKey));
+    const currentOrder = rowOrder.filter(k => validKeys.has(k));
+
+    const isPreSeason = base.length > 0 && base.every(r => r._isPretemporada);
+
+    // Sort: keys in rowOrder preserve their order; new keys sort by default
+    const keyOrderMap = {};
+    currentOrder.forEach((k, i) => { keyOrderMap[k] = i; });
+    allRows.sort((a, b) => {
+      const oa = keyOrderMap[a._rowKey];
+      const ob = keyOrderMap[b._rowKey];
+      if (oa !== undefined && ob !== undefined) return oa - ob;
+      if (oa !== undefined) return -1;
+      if (ob !== undefined) return 1;
+      if (isPreSeason) {
+        const dateA = a._matchDate || a._date || '';
+        const dateB = b._matchDate || b._date || '';
+        if (dateA !== dateB) return dateA < dateB ? -1 : 1;
+        const aIsMatch = a._match ? 1 : 0;
+        const bIsMatch = b._match ? 1 : 0;
+        return aIsMatch - bIsMatch;
+      }
+      if (a._match && !b._match) return 1;
+      if (!a._match && b._match) return -1;
+      if (a._match && b._match) return (a._matchOrder || 0) - (b._matchOrder || 0);
+      return MD_ORDER.indexOf(a.dia) - MD_ORDER.indexOf(b.dia);
+    });
+
+    chartDataRef.current = allRows;
+    return allRows;
+  }, [sessions, analyses, seasonId, viewMode, selectedMicrociclo, rangeStart, rangeEnd, tramoView, allPorteros, matchRows, rowOrder]);
 
   const stats = useMemo(() => {
     const values = chartData.map(d => d.rpe).filter(v => v !== null);
@@ -495,6 +602,7 @@ export default function RPEStatsModal({ sessions, analyses = [], seasonName, onC
             <table className="w-full text-sm">
               <thead>
                 <tr style={{borderBottom: '1px solid rgba(185,165,135,0.06)'}}>
+                  <th className="px-2 py-2.5 w-6" style={{color: '#997b66'}}></th>
                   {!isAggregated && (
                     <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider" style={{color: '#997b66'}}>Fecha</th>
                   )}
@@ -502,14 +610,15 @@ export default function RPEStatsModal({ sessions, analyses = [], seasonName, onC
                   {showSesionCol && (
                     <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider" style={{color: '#997b66'}}>Sesión</th>
                   )}
-                  <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wider" style={{color: '#997b66'}}>RPE Medio</th>
+                  <th className="px-4 py-2.5 text-center text-xs font-medium uppercase tracking-wider" style={{color: '#997b66'}}>RPE Medio</th>
                   {allPorteros.map(p => (
-                    <th key={p} className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wider" style={{color: '#997b66'}}>{p}</th>
+                    <th key={p} className="px-4 py-2.5 text-center text-xs font-medium uppercase tracking-wider" style={{color: '#997b66'}}>{p}</th>
                   ))}
+                  <th className="px-2 py-2.5 w-16" style={{color: '#997b66'}}></th>
                 </tr>
               </thead>
               <tbody>
-                {chartData.map((row) => {
+                {chartData.map((row, rowIndex) => {
                   const avg = row.rpe !== null ? row.rpe.toFixed(1) : '—';
                   const avgColor = row.rpe === null ? '#997b66' : row.rpe <= 3 ? '#3dd68c' : row.rpe <= 6 ? '#e8ac65' : '#e04a4a';
 
@@ -517,37 +626,239 @@ export default function RPEStatsModal({ sessions, analyses = [], seasonName, onC
                     ? sessions.find(s => s.id === row.id && !s.deletedAt)
                     : (row.sessionId ? sessions.find(s => s.id === row.sessionId && !s.deletedAt) : null);
 
-                  const isMdRow = row.dia === 'MD';
+                  const isMdRow = row.dia === 'MD' && !row._match;
+                  const isMatchRow = row._match;
+                  const isPretemporadaRow = row._isPretemporada;
+
+                  const rowBg = isMatchRow ? 'rgba(61,214,140,0.04)' : isMdRow ? 'rgba(232,172,101,0.04)' : isPretemporadaRow ? 'rgba(59,130,246,0.04)' : 'transparent';
+
+                  function handleDragStart(e) {
+                    setDragId(row._rowKey);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }
+
+                  function handleDragOver(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                  }
+
+                  function handleDrop(e) {
+                    e.preventDefault();
+                    if (!dragId || dragId === row._rowKey) return;
+                    const keys = chartDataRef.current.map(r => r._rowKey);
+                    const dragIdx = keys.indexOf(dragId);
+                    const dropIdx = keys.indexOf(row._rowKey);
+                    if (dragIdx < 0 || dropIdx < 0) return;
+                    const newKeys = [...keys];
+                    newKeys.splice(dragIdx, 1);
+                    newKeys.splice(dropIdx, 0, dragId);
+                    setRowOrder(newKeys);
+                    setDragId(null);
+                  }
+
+                  function handleDragEnd() {
+                    setDragId(null);
+                  }
 
                   return (
-                    <tr key={isAggregated ? row.dia : row.id} style={{borderBottom: '1px solid rgba(185,165,135,0.04)', background: isMdRow ? 'rgba(232,172,101,0.04)' : 'transparent'}}>
+                    <tr
+                      key={row._rowKey}
+                      draggable={true}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      onDragEnd={handleDragEnd}
+                      style={{
+                        borderBottom: '1px solid rgba(185,165,135,0.04)',
+                        background: rowBg,
+                        opacity: dragId === row._rowKey ? 0.4 : 1,
+                        cursor: 'grab',
+                      }}
+                    >
+                      <td className="px-2 py-2.5 text-center" style={{color: '#665b4e', fontSize: 10}}>⠿</td>
                       {!isAggregated && (
                         <td className="px-4 py-2.5" style={{color: '#997b66'}}>
-                          {session ? new Date(session.date).toLocaleDateString('es-ES') : '—'}
+                          {session ? new Date(session.date).toLocaleDateString('es-ES') : row._date ? new Date(row._date).toLocaleDateString('es-ES') : '—'}
                         </td>
                       )}
                       <td className="px-4 py-2.5 font-medium" style={{color: '#f1ede7'}}>{row.dia}</td>
                       {showSesionCol && (
-                        <td className="px-4 py-2.5" style={{color: '#997b66'}}>
-                          {session ? session.name : isMdRow ? (row.matchName ? `${row.matchName}` : 'Partido') : '—'}
+                        <td className="px-4 py-2.5" style={{color: '#997b66', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                          {session ? session.name : isMatchRow ? (row._rival || 'Partido') : isMdRow ? (row.matchName ? `${row.matchName}` : 'Partido') : isPretemporadaRow ? (session?.name || 'Pre-temporada') : '—'}
                         </td>
                       )}
-                      <td className="px-4 py-2.5 text-right font-bold" style={{color: avgColor}}>{avg}</td>
+                      <td className="px-4 py-2.5 text-center font-bold" style={{color: avgColor}}>{avg}</td>
                       {allPorteros.map(p => {
                         const val = row[`portero_${p}`];
                         const display = val !== null && val !== undefined ? val.toFixed(1) : '—';
                         const color = val === null || val === undefined ? '#997b66' : val <= 3 ? '#3dd68c' : val <= 6 ? '#e8ac65' : '#e04a4a';
                         return (
-                          <td key={p} className="px-4 py-2.5 text-right font-medium" style={{color}}>
+                          <td key={p} className="px-4 py-2.5 text-center font-medium" style={{color}}>
                             {display}
                           </td>
                         );
                       })}
+                      <td className="px-2 py-2.5 text-center whitespace-nowrap align-middle">
+                        {isMatchRow && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setEditingMatchId(row.id);
+                                setMatchFormRival(row._rival || '');
+                                setMatchFormDate(row._matchDate || '');
+                                const rpe = {};
+                                allPorteros.forEach(p => { rpe[p] = row[`portero_${p}`] || ''; });
+                                setMatchFormRPE(rpe);
+                                setShowMatchForm(true);
+                              }}
+                              className="v2-btn-ghost rounded"
+                              style={{color: '#baa587', fontSize: 11, lineHeight: 1, padding: '2px 4px'}}
+                              title="Editar"
+                            >✎</button>
+                            <button
+                              onClick={() => {
+                                setMatchRows(prev => prev.filter(r => r.id !== row.id));
+                                setMatchFormRival('');
+                              }}
+                              className="v2-btn-ghost rounded ml-1"
+                              style={{color: '#e04a4a', fontSize: 11, lineHeight: 1, padding: '2px 4px'}}
+                              title="Eliminar"
+                            >✕</button>
+                          </>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+
+            {viewMode === 'unico' && (
+              <div className="mt-3">
+                {!showMatchForm ? (
+                  <button
+                    onClick={() => {
+                      setEditingMatchId(null);
+                      setShowMatchForm(true);
+                      setMatchFormRPE({});
+                      setMatchFormRival('');
+                      setMatchFormDate(new Date().toISOString().slice(0, 10));
+                    }}
+                    className="v2-btn-ghost text-sm px-3 py-1.5 rounded-lg"
+                    style={{color: '#3dd68c', border: '1px dashed rgba(61,214,140,0.3)'}}
+                  >
+                    + Añadir partido
+                  </button>
+                ) : (
+                  <div className="p-3 rounded-xl" style={{background: 'rgba(22,20,16,0.6)', border: '1px solid rgba(185,165,135,0.08)'}}>
+                    <div className="text-xs font-medium mb-2" style={{color: '#baa587'}}>
+                      {editingMatchId ? 'Editar partido' : 'Nuevo partido'}
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div>
+                        <label className="text-xs font-medium block mb-1" style={{color: '#baa587'}}>Rival</label>
+                        <input
+                          type="text"
+                          value={matchFormRival}
+                          onChange={e => setMatchFormRival(e.target.value)}
+                          className="v2-input text-sm"
+                          style={{minWidth: 150}}
+                          placeholder="Ej: Real Madrid"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium block mb-1" style={{color: '#baa587'}}>Fecha</label>
+                        <input
+                          type="date"
+                          value={matchFormDate}
+                          onChange={e => setMatchFormDate(e.target.value)}
+                          className="v2-input text-sm"
+                          style={{minWidth: 150}}
+                        />
+                      </div>
+                      {allPorteros.map(p => (
+                        <div key={p}>
+                          <label className="text-xs font-medium block mb-1" style={{color: '#baa587'}}>{p}</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={10}
+                            step={0.5}
+                            value={matchFormRPE[p] ?? ''}
+                            onChange={e => setMatchFormRPE(prev => ({...prev, [p]: Number(e.target.value)}))}
+                            className="v2-input text-sm"
+                            style={{width: 70, textAlign: 'center'}}
+                            placeholder="1-10"
+                          />
+                        </div>
+                      ))}
+                      <div className="flex gap-2 items-center">
+                        <button
+                          onClick={() => {
+                            const hasValues = Object.values(matchFormRPE).some(v => v > 0);
+                            if (!matchFormRival.trim() || !matchFormDate || !hasValues) return;
+                            const rpeVals = Object.values(matchFormRPE).filter(v => v > 0);
+                            const avgRPE = rpeVals.length > 0 ? rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length : null;
+                            if (editingMatchId) {
+                              setMatchRows(prev => prev.map(r => r.id === editingMatchId ? {
+                                ...r,
+                                _rival: matchFormRival.trim(),
+                                _matchDate: matchFormDate,
+                                rpe: avgRPE,
+                                ...Object.fromEntries(allPorteros.map(p => [p, matchFormRPE[p] > 0 ? matchFormRPE[p] : null])),
+                              } : r));
+                            } else {
+                              const row = {
+                                id: crypto.randomUUID(),
+                                dia: 'MD',
+                                rpe: avgRPE,
+                                sessionId: null,
+                                _match: true,
+                                _matchOrder: matchRows.length,
+                                _rival: matchFormRival.trim(),
+                                _matchDate: matchFormDate,
+                              };
+                              allPorteros.forEach(p => {
+                                row[`portero_${p}`] = matchFormRPE[p] > 0 ? matchFormRPE[p] : null;
+                              });
+                              setMatchRows(prev => [...prev, row]);
+                            }
+                            setMatchFormRPE({});
+                            setMatchFormRival('');
+                            setMatchFormDate('');
+                            setEditingMatchId(null);
+                            setShowMatchForm(false);
+                          }}
+                          className="v2-btn-primary text-sm px-3 py-1.5 rounded-lg"
+                          disabled={!matchFormRival.trim() || !matchFormDate || !Object.values(matchFormRPE).some(v => v > 0)}
+                          style={{background: !matchFormRival.trim() || !matchFormDate || !Object.values(matchFormRPE).some(v => v > 0) ? 'rgba(61,214,140,0.15)' : 'rgba(61,214,140,0.25)', color: '#3dd68c', border: '1px solid rgba(61,214,140,0.3)'}}
+                        >
+                          {editingMatchId ? 'Guardar' : 'Añadir'}
+                        </button>
+                        <button
+                          onClick={() => { setShowMatchForm(false); setMatchFormRPE({}); setMatchFormRival(''); setMatchFormDate(''); setEditingMatchId(null); }}
+                          className="v2-btn-ghost text-sm px-3 py-1.5 rounded-lg"
+                          style={{color: '#997b66'}}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {matchRows.length > 0 && (
+                  <div className="mt-2">
+                    <button
+                      onClick={() => { setMatchRows([]); setMatchFormRPE({}); setMatchFormRival(''); setMatchFormDate(''); setEditingMatchId(null); }}
+                      className="text-xs"
+                      style={{color: '#e04a4a'}}
+                    >
+                      Limpiar partidos ({matchRows.length})
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {stats === null && (

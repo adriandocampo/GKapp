@@ -598,6 +598,7 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
                     className={`v2-select ${!tipoMD ? '' : ''}`}
                   >
                     <option value="">Tipo MD *</option>
+                    <option value="Pretemporada">Pretemporada</option>
                     <option value="MD-5">MD-5</option>
                     <option value="MD-4">MD-4</option>
                     <option value="MD-3">MD-3</option>

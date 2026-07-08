@@ -243,6 +243,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
                     <span className={`${labelClass} mt-0.5`}>MD</span>
                     <select value={fields.tipoMD} onChange={e => updateField('tipoMD', e.target.value)} className="text-sm font-bold text-center bg-transparent outline-none w-full cursor-pointer" style={{ color: corporateColor }} disabled={showPreview}>
                       <option value=""></option>
+                      <option value="Pretemporada">Pretemporada</option>
                       <option value="MD-5">MD-5</option>
                       <option value="MD-4">MD-4</option>
                       <option value="MD-3">MD-3</option>

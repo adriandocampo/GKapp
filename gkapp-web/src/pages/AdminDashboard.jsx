@@ -243,7 +243,31 @@ export default function AdminDashboard() {
       const newCounts = await getUserDataCounts(uid);
       setCounts(prev => ({ ...prev, [uid]: newCounts }));
     } catch (err) {
-      addToast('Error restaurando: ' + err.message, 'error');
+      const match = err.message.match(/^El backup pertenece a (.+), no a (.+)$/);
+      if (match) {
+        const backupUid = match[1];
+        const ok = await confirm(
+          '',
+          {
+            title: 'UID diferente',
+            confirmText: 'Forzar restauración',
+            confirmColor: 'amber',
+            messageHtml: `Este backup pertenece a otro usuario (<strong class="text-gk-accent">${backupUid}</strong>).<br />Los datos se restaurarán en el usuario actual (<strong class="text-gk-accent">${uid}</strong>).<br /><br />¿Continuar de todas formas?`
+          }
+        );
+        if (ok) {
+          try {
+            await restoreFromFile(uid, file, { force: true });
+            addToast('Datos restaurados correctamente', 'success');
+            const newCounts = await getUserDataCounts(uid);
+            setCounts(prev => ({ ...prev, [uid]: newCounts }));
+          } catch (err2) {
+            addToast('Error restaurando: ' + err2.message, 'error');
+          }
+        }
+      } else {
+        addToast('Error restaurando: ' + err.message, 'error');
+      }
     } finally {
       setRestoringFile(null);
     }
