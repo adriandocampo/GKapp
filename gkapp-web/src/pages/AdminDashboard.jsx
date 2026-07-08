@@ -15,6 +15,7 @@ import {
 } from '../utils/adminFirestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
+import pako from 'pako';
 import { useConfirm, useAlert } from '../components/Modal';
 import {
   Shield, Users, Download, Trash2, Eye, ArrowLeft,
@@ -49,6 +50,7 @@ export default function AdminDashboard() {
   const [backupDates, setBackupDates] = useState({});
   const [forcingBackup, setForcingBackup] = useState({});
   const [restoringFile, setRestoringFile] = useState(null);
+  const [exportMenuUid, setExportMenuUid] = useState(null);
   const fileInputRef = useRef(null);
 
   const loadUsers = useCallback(async () => {
@@ -120,14 +122,25 @@ export default function AdminDashboard() {
     );
   });
 
-  async function handleExport(uid) {
+  async function handleExport(uid, format = 'json') {
     try {
       const data = await exportAllUserData(uid);
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const dateStr = new Date().toISOString().split('T')[0];
+      let blob, filename;
+
+      if (format === 'gzip') {
+        const compressed = pako.gzip(JSON.stringify(data), { level: 9 });
+        blob = new Blob([compressed], { type: 'application/gzip' });
+        filename = `gkapp_backup_${uid}_${dateStr}.json.gz`;
+      } else {
+        blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        filename = `gkapp_backup_${uid}_${dateStr}.json`;
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `gkapp_backup_${uid}_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -330,13 +343,34 @@ export default function AdminDashboard() {
                     >
                       <Eye size={16} />
                     </button>
-                    <button
-                      onClick={() => handleExport(u.uid)}
-                      title="Exportar backup"
-                      className="p-2 bg-gk-card hover:bg-gk-elevated rounded-lg text-gk-accent transition-colors"
-                    >
-                      <Download size={16} />
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={() => setExportMenuUid(exportMenuUid === u.uid ? null : u.uid)}
+                        title="Exportar backup"
+                        className="p-2 bg-gk-card hover:bg-gk-elevated rounded-lg text-gk-accent transition-colors"
+                      >
+                        <Download size={16} />
+                      </button>
+                      {exportMenuUid === u.uid && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setExportMenuUid(null)} />
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gk-card border border-gk-border rounded-lg shadow-xl py-1 min-w-[130px] z-20">
+                            <button
+                              onClick={() => { handleExport(u.uid, 'json'); setExportMenuUid(null); }}
+                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gk-elevated flex items-center gap-2 whitespace-nowrap text-gk-text"
+                            >
+                              <FileJson size={14} /> JSON
+                            </button>
+                            <button
+                              onClick={() => { handleExport(u.uid, 'gzip'); setExportMenuUid(null); }}
+                              className="w-full text-left px-3 py-1.5 text-sm hover:bg-gk-elevated flex items-center gap-2 whitespace-nowrap text-gk-text"
+                            >
+                              <Download size={14} /> GZip
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <button
                       onClick={() => handleRestoreFromFile(u.uid)}
                       disabled={restoringFile === u.uid}
@@ -348,7 +382,7 @@ export default function AdminDashboard() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".json.gz"
+                      accept=".json,.json.gz,.gz"
                       className="hidden"
                       onChange={onFileSelected}
                     />

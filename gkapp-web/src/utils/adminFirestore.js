@@ -308,11 +308,19 @@ export async function createBackup(uid, adminUid = null) {
   }
 }
 
-/** Restore user data from a local .json.gz backup file */
+/** Restore user data from a local backup file (.json or .json.gz) */
 export async function restoreFromFile(uid, file) {
   const buffer = await file.arrayBuffer();
-  const decompressed = pako.ungzip(new Uint8Array(buffer));
-  const data = JSON.parse(new TextDecoder().decode(decompressed));
+
+  let data;
+  const bytes = new Uint8Array(buffer.slice(0, 2));
+
+  if (bytes[0] === 0x1F && bytes[1] === 0x8B) {
+    const decompressed = pako.ungzip(new Uint8Array(buffer));
+    data = JSON.parse(new TextDecoder().decode(decompressed));
+  } else {
+    data = JSON.parse(new TextDecoder().decode(buffer));
+  }
 
   if (data.uid && data.uid !== uid) {
     throw new Error(`El backup pertenece a ${data.uid}, no a ${uid}`);
