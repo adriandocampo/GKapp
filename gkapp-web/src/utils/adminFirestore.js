@@ -119,6 +119,31 @@ export async function exportAllUserData(uid) {
   return payload;
 }
 
+const SIZE_FIELDS = ['imageBase64', 'goalkeeperPhoto', 'rawXml', 'xmlData', 'sofascoreData'];
+
+async function setDocWithRetry(ref, data) {
+  try {
+    await setDoc(ref, data, { merge: true });
+  } catch (err) {
+    if (err.message?.includes?.('exceeds the maximum allowed size')) {
+      for (const field of SIZE_FIELDS) {
+        if (field in data) {
+          const { [field]: _, ...rest } = data;
+          try {
+            await setDoc(ref, rest, { merge: true });
+            return;
+          } catch (retryErr) {
+            if (!retryErr.message?.includes?.('exceeds the maximum allowed size')) throw retryErr;
+            data = rest;
+          }
+        }
+      }
+      throw err;
+    }
+    throw err;
+  }
+}
+
 /** Import (restore) user data from a JSON object.
  *  WARNING: this OVERWRITES existing documents with matching IDs.
  */
@@ -127,18 +152,30 @@ export async function importAllUserData(uid, payload) {
     const rows = payload[table];
     if (!Array.isArray(rows) || rows.length === 0) continue;
 
-    // Firestore batch max is 500; split if necessary
     const BATCH_SIZE = 450;
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = writeBatch(firestore);
       const chunk = rows.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(firestore);
       for (const row of chunk) {
         const id = String(row.id);
         const ref = userDocRef(uid, table, id);
         const { id: _id, ...data } = row;
         batch.set(ref, data, { merge: true });
       }
-      await batch.commit();
+      try {
+        await batch.commit();
+      } catch (err) {
+        if (err.message?.includes?.('exceeds the maximum allowed size')) {
+          for (const row of chunk) {
+            const id = String(row.id);
+            const ref = userDocRef(uid, table, id);
+            const { id: _id, ...data } = row;
+            await setDocWithRetry(ref, data);
+          }
+        } else {
+          throw err;
+        }
+      }
     }
   }
 }
@@ -309,7 +346,7 @@ export async function createBackup(uid, adminUid = null) {
 }
 
 /** Restore user data from a local backup file (.json or .json.gz) */
-export async function restoreFromFile(uid, file) {
+export async function restoreFromFile(uid, file, { force } = {}) {
   const buffer = await file.arrayBuffer();
 
   let data;
@@ -322,7 +359,7 @@ export async function restoreFromFile(uid, file) {
     data = JSON.parse(new TextDecoder().decode(buffer));
   }
 
-  if (data.uid && data.uid !== uid) {
+  if (data.uid && data.uid !== uid && !force) {
     throw new Error(`El backup pertenece a ${data.uid}, no a ${uid}`);
   }
 
