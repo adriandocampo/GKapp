@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from 'react';
-import { X, User, BarChart3, Briefcase, Plus, Trash2, Star, Loader2, ChevronDown, ChevronUp, GitCompare, Camera } from 'lucide-react';
+import { X, User, BarChart3, Briefcase, Plus, Trash2, Star, Loader2, ChevronDown, ChevronUp, GitCompare, Camera, MessageSquare } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 import StarRating from './StarRating';
 import GoalkeeperHeatmap from './GoalkeeperHeatmap';
@@ -381,6 +381,7 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
   const [editing, setEditing] = useState(false);
   const [attrs, setAttrs] = useState(() => migrateAttributes(portero.customAttributes));
   const [rating, setRating] = useState(portero.personalRating || 0);
+  const [observations, setObservations] = useState(portero.observations || '');
   const maxMicroWidth = useMemo(() => {
     if (!attrs.dimensions) return 80;
     const allNames = attrs.dimensions.flatMap(d => d.microItems.map(m => m.name.length));
@@ -400,18 +401,19 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
   const saveTimer = useRef(null);
   const heatmapFetched = useRef(false);
 
-  function persistChanges(currentAttrs, currentRating) {
+  function persistChanges(currentAttrs, currentRating, currentObservations) {
     onUpdate({
       ...portero,
       customAttributes: currentAttrs,
       personalRating: currentRating,
+      observations: currentObservations,
       updatedAt: new Date(),
     });
   }
 
-  function scheduleSave(currentAttrs, currentRating) {
+  function scheduleSave(currentAttrs, currentRating, currentObservations) {
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => persistChanges(currentAttrs, currentRating), 300);
+    saveTimer.current = setTimeout(() => persistChanges(currentAttrs, currentRating, currentObservations), 300);
   }
 
   function handleEditMicroItem(dimIndex, microIndex, value) {
@@ -424,7 +426,7 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
       )
     };
     setAttrs(next);
-    scheduleSave(next, rating);
+    scheduleSave(next, rating, observations);
   }
 
   function handleAddMicroItem(dimIndex) {
@@ -439,7 +441,7 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
       )
     };
     setAttrs(next);
-    persistChanges(next, rating);
+    persistChanges(next, rating, observations);
   }
 
   function handleDeleteMicroItem(dimIndex, microIndex) {
@@ -452,7 +454,7 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
       )
     };
     setAttrs(next);
-    persistChanges(next, rating);
+    persistChanges(next, rating, observations);
   }
 
   function handleAddDimension() {
@@ -465,12 +467,17 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
       dimensions: [...attrs.dimensions, { name: name.trim(), microItems: [{ name: attrName.trim(), value: 50 }] }]
     };
     setAttrs(next);
-    persistChanges(next, rating);
+    persistChanges(next, rating, observations);
   }
 
   function handleRatingChange(v) {
     setRating(v);
-    persistChanges(attrs, v);
+    persistChanges(attrs, v, observations);
+  }
+
+  function handleObservationsChange(val) {
+    setObservations(val);
+    scheduleSave(attrs, rating, val);
   }
 
   useEffect(() => {
@@ -795,6 +802,20 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
                     </button>
                   )}
                 </div>
+              </div>
+
+              <div className="glass-card-static p-4">
+                <SectionTitle icon={MessageSquare} color="#d4a574" subtitle="Notas y observaciones del entrenador" center>
+                  Observaciones
+                </SectionTitle>
+                <textarea
+                  value={observations}
+                  onChange={e => handleObservationsChange(e.target.value)}
+                  placeholder="Escribe aquí tus observaciones sobre el portero..."
+                  className="v2-input w-full resize-none"
+                  rows={4}
+                  style={{ color: '#f1ede7', background: 'rgba(22,20,16,0.4)', borderRadius: 10, padding: '10px 14px', fontSize: '0.85rem', lineHeight: 1.5, border: '1px solid rgba(185,165,135,0.1)' }}
+                />
               </div>
             </div>
           )}
