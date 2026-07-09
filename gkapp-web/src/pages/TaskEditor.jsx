@@ -22,7 +22,8 @@ export default function TaskEditor() {
     title: '',
     subtitle: '',
     phase: '',
-    category: '',
+    category: [],
+    dimension: [],
     situation: [],
     time: '',
     reps: '',
@@ -61,6 +62,12 @@ export default function TaskEditor() {
         t.situation = t.situation && t.situation !== 'Otro' ? [t.situation] : [];
       }
       if (!Array.isArray(t.situation)) t.situation = [];
+      if (!Array.isArray(t.category)) {
+        t.category = t.category ? [t.category] : [];
+      }
+      if (!Array.isArray(t.dimension)) {
+        t.dimension = t.dimension ? [t.dimension] : [];
+      }
       setTask(t);
       if (t.imageBlob) setPreviewUrl(URL.createObjectURL(t.imageBlob));
       else if (t.imagePath) setPreviewUrl(t.imagePath);
@@ -313,7 +320,7 @@ export default function TaskEditor() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Fase</label>
             {showNewTag.phase ? (
@@ -330,19 +337,48 @@ export default function TaskEditor() {
             )}
           </div>
           <div>
+            <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Dimensión</label>
+            <MultiSelectDropdown
+              options={tags.dimension}
+              selected={Array.isArray(task.dimension) ? task.dimension : []}
+              onChange={(val) => { setTask(prev => ({ ...prev, dimension: val })); setHasChanges(true); }}
+              placeholder="Seleccionar dimensiones"
+              onAddNew={(name) => {
+                if (name && name.trim()) {
+                  addTagHook('dimension', name.trim()).then(result => {
+                    if (result) {
+                      setTask(prev => ({
+                        ...prev,
+                        dimension: prev.dimension.includes(result) ? prev.dimension : [...prev.dimension, result]
+                      }));
+                      setHasChanges(true);
+                    }
+                  });
+                }
+              }}
+            />
+          </div>
+          <div>
             <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Categoría</label>
-            {showNewTag.category ? (
-              <div className="flex gap-2">
-                <input autoFocus value={newTags.category} onChange={e => setNewTags(prev => ({ ...prev, category: e.target.value }))} placeholder="Nueva categoría" className="v2-input flex-1 py-1.5 text-xs" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInlineAdd('category'); } if (e.key === 'Escape') { setShowNewTag(prev => ({ ...prev, category: false })); setNewTags(prev => ({ ...prev, category: '' })); } }} />
-                <button onClick={() => { setShowNewTag(prev => ({ ...prev, category: false })); setNewTags(prev => ({ ...prev, category: '' })); }} className="v2-btn-ghost py-1.5 text-xs">✕</button>
-              </div>
-            ) : (
-              <select value={task.category} onChange={e => { const val = e.target.value; if (val === '__add_new__') { setShowNewTag(prev => ({ ...prev, category: true })); return; } setTask(prev => ({ ...prev, category: val })); setHasChanges(true); }} className="v2-select w-full">
-                <option value="">Seleccionar...</option>
-                {tags.category.map(c => <option key={c} value={c}>{c}</option>)}
-                <option value="__add_new__" style={{color: '#e8ac65'}}>+ Añadir</option>
-              </select>
-            )}
+            <MultiSelectDropdown
+              options={tags.category}
+              selected={Array.isArray(task.category) ? task.category : []}
+              onChange={(val) => { setTask(prev => ({ ...prev, category: val })); setHasChanges(true); }}
+              placeholder="Seleccionar categorías"
+              onAddNew={(name) => {
+                if (name && name.trim()) {
+                  addTagHook('category', name.trim()).then(result => {
+                    if (result) {
+                      setTask(prev => ({
+                        ...prev,
+                        category: prev.category.includes(result) ? prev.category : [...prev.category, result]
+                      }));
+                      setHasChanges(true);
+                    }
+                  });
+                }
+              }}
+            />
           </div>
           <div>
             <label className="block text-xs font-medium mb-2" style={{ color: '#997b66' }}>Situación</label>

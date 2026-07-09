@@ -19,6 +19,12 @@ const SITUATION_COLORS = {
   'Tiro lejano': '#e1ae1f',
 };
 
+const DIMENSION_COLORS = {
+  'Defensa de portería': '#4c85ed',
+  'Defensa de espacio': '#33b960',
+  'Juego ofensivo': '#c08df8',
+};
+
 const OTHER_COLOR = '#6b7280';
 const EMPTY_CELL = 'rgba(185,165,135,0.06)';
 
@@ -63,7 +69,7 @@ function WaffleChart({ data, total }) {
 export default function ContentAnalysisModal({ sessions, seasonName, onClose }) {
   const [taskMap, setTaskMap] = useState({});
   const [loading, setLoading] = useState(true);
-  const [timelineView, setTimelineView] = useState('categorias');
+  const [timelineView, setTimelineView] = useState('dimensiones');
 
   useEffect(() => {
     let cancelled = false;
@@ -86,12 +92,13 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
     return () => { cancelled = true; };
   }, [sessions]);
 
-  const { categoryData, situationData } = useMemo(() => {
+  const { categoryData, dimensionData, situationData } = useMemo(() => {
     if (loading || Object.keys(taskMap).length === 0 && sessions.some(s => (s.tasks || []).length > 0)) {
-      return { categoryData: [], situationData: [] };
+      return { categoryData: [], dimensionData: [], situationData: [] };
     }
 
     const catCount = {};
+    const dimCount = {};
     const sitCount = {};
 
     const sessionList = [...sessions]
@@ -99,12 +106,34 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
 
     sessionList.forEach(session => {
       const tasks = (session.tasks || [])
-        .map(tid => taskMap[tid])
+        .map(tid => {
+          const t = taskMap[tid];
+          if (!t) return null;
+          const normalized = { ...t };
+          if (typeof normalized.category === 'string') {
+            normalized.category = normalized.category ? [normalized.category] : [];
+          }
+          if (!Array.isArray(normalized.dimension)) {
+            normalized.dimension = normalized.dimension ? [normalized.dimension] : [];
+          }
+          if (typeof normalized.situation === 'string') {
+            normalized.situation = normalized.situation && normalized.situation !== 'Otro' ? [normalized.situation] : [];
+          }
+          if (!Array.isArray(normalized.situation)) normalized.situation = [];
+          return normalized;
+        })
         .filter(Boolean);
 
       tasks.forEach(task => {
-        const cat = task.category || 'Otras';
-        catCount[cat] = (catCount[cat] || 0) + 1;
+        const cats = Array.isArray(task.category) && task.category.length > 0 ? task.category : ['Otras'];
+        cats.forEach(cat => {
+          catCount[cat] = (catCount[cat] || 0) + 1;
+        });
+
+        const dimensions = Array.isArray(task.dimension) ? task.dimension : [];
+        dimensions.forEach(dim => {
+          if (dim) dimCount[dim] = (dimCount[dim] || 0) + 1;
+        });
 
         const situations = Array.isArray(task.situation) ? task.situation : [];
         situations.forEach(sit => {
@@ -114,6 +143,7 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
     });
 
     const totalCat = Object.values(catCount).reduce((a, b) => a + b, 0);
+    const totalDim = Object.values(dimCount).reduce((a, b) => a + b, 0);
     const totalSit = Object.values(sitCount).reduce((a, b) => a + b, 0);
 
     const categoryData = Object.entries(catCount)
@@ -125,6 +155,15 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
         color: CATEGORY_COLORS[name] || OTHER_COLOR,
       }));
 
+    const dimensionData = Object.entries(dimCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({
+        name,
+        value,
+        total: totalDim,
+        color: DIMENSION_COLORS[name] || OTHER_COLOR,
+      }));
+
     const situationData = Object.entries(sitCount)
       .sort((a, b) => b[1] - a[1])
       .map(([name, value]) => ({
@@ -134,10 +173,11 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
         color: SITUATION_COLORS[name] || OTHER_COLOR,
       }));
 
-    return { categoryData, situationData };
+    return { dimensionData, categoryData, situationData };
   }, [sessions, taskMap, loading]);
 
   const catKeys = useMemo(() => categoryData.map(d => d.name), [categoryData]);
+  const dimKeys = useMemo(() => dimensionData.map(d => d.name), [dimensionData]);
   const sitKeys = useMemo(() => situationData.map(d => d.name), [situationData]);
 
   const categoryColors = useMemo(() => {
@@ -146,6 +186,12 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
     return m;
   }, [categoryData]);
 
+  const dimensionColors = useMemo(() => {
+    const m = {};
+    dimensionData.forEach(d => { m[d.name] = d.color; });
+    return m;
+  }, [dimensionData]);
+
   const situationColors = useMemo(() => {
     const m = {};
     situationData.forEach(d => { m[d.name] = d.color; });
@@ -153,6 +199,7 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
   }, [situationData]);
 
   const totalCat = useMemo(() => categoryData.reduce((s, d) => s + d.value, 0), [categoryData]);
+  const totalDim = useMemo(() => dimensionData.reduce((s, d) => s + d.value, 0), [dimensionData]);
   const totalSit = useMemo(() => situationData.reduce((s, d) => s + d.value, 0), [situationData]);
 
   const sortedSessions = useMemo(() => {
@@ -161,13 +208,28 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
       .sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [sessions]);
 
-  const displayKeys = timelineView === 'categorias' ? catKeys : sitKeys;
-  const colorMap = timelineView === 'categorias' ? categoryColors : situationColors;
+  const displayKeys = timelineView === 'categorias' ? catKeys : timelineView === 'dimensiones' ? dimKeys : sitKeys;
+  const colorMap = timelineView === 'categorias' ? categoryColors : timelineView === 'dimensiones' ? dimensionColors : situationColors;
 
   const sessionAllTasks = useMemo(() => {
     const m = {};
     sortedSessions.forEach(s => {
-      m[s.id] = (s.tasks || []).map(tid => taskMap[tid]).filter(Boolean);
+      m[s.id] = (s.tasks || []).map(tid => {
+        const t = taskMap[tid];
+        if (!t) return null;
+        const normalized = { ...t };
+        if (typeof normalized.category === 'string') {
+          normalized.category = normalized.category ? [normalized.category] : [];
+        }
+        if (!Array.isArray(normalized.dimension)) {
+          normalized.dimension = normalized.dimension ? [normalized.dimension] : [];
+        }
+        if (typeof normalized.situation === 'string') {
+          normalized.situation = normalized.situation && normalized.situation !== 'Otro' ? [normalized.situation] : [];
+        }
+        if (!Array.isArray(normalized.situation)) normalized.situation = [];
+        return normalized;
+      }).filter(Boolean);
     });
     return m;
   }, [sortedSessions, taskMap]);
@@ -193,7 +255,25 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
 
         <div className="flex-1 overflow-y-auto p-5 space-y-6 v2-scrollbar">
           {/* Waffle charts row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.4)', border: '1px solid rgba(185,165,135,0.08)' }}>
+              <h3 className="text-sm font-semibold mb-3" style={{ color: '#e8ac65' }}>Waffle: Dimensiones</h3>
+              {totalDim > 0 ? (
+                <>
+                  <WaffleChart data={dimensionData} total={totalDim} />
+                  <div className="flex flex-wrap gap-3 mt-3">
+                    {dimensionData.map(d => (
+                      <div key={d.name} className="flex items-center gap-1.5 text-xs" style={{ color: '#baa587' }}>
+                        <span className="w-3 h-3 rounded" style={{ background: d.color }} />
+                        {d.name} ({((d.value / totalDim) * 100).toFixed(0)}%)
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-center py-8" style={{ color: '#997b66' }}>Sin datos</p>
+              )}
+            </div>
             <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.4)', border: '1px solid rgba(185,165,135,0.08)' }}>
               <h3 className="text-sm font-semibold mb-3" style={{ color: '#e8ac65' }}>Waffle: Categorías</h3>
               {totalCat > 0 ? (
@@ -238,6 +318,21 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
               <h3 className="text-sm font-semibold" style={{ color: '#e8ac65' }}>Evolución por sesión</h3>
               <div className="flex p-0.5 rounded-lg" style={{ background: 'rgba(22,20,16,0.6)', border: '1px solid rgba(185,165,135,0.08)' }}>
                 <button
+                  onClick={() => setTimelineView('dimensiones')}
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: 8,
+                    fontSize: '0.75rem',
+                    fontWeight: timelineView === 'dimensiones' ? 600 : 400,
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: timelineView === 'dimensiones' ? 'rgba(232,172,101,0.10)' : 'transparent',
+                    color: timelineView === 'dimensiones' ? '#e8ac65' : '#997b66',
+                  }}
+                >
+                  Dimensiones
+                </button>
+                <button
                   onClick={() => setTimelineView('categorias')}
                   style={{
                     padding: '4px 12px',
@@ -279,7 +374,7 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
                       <div
                         key={key}
                         style={{
-                          height: cellH + 4,
+                          height: cellH,
                           display: 'flex',
                           alignItems: 'center',
                           fontSize: 11,
@@ -346,8 +441,10 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
                             >
                               {n > 0 && tasks.map((t, i) => {
                                 const isMatch = timelineView === 'categorias'
-                                  ? (t.category || 'Otras') === catKey
-                                  : (Array.isArray(t.situation) ? t.situation : []).includes(catKey);
+                                  ? (Array.isArray(t.category) && t.category.length > 0 ? t.category : ['Otras']).includes(catKey)
+                                  : timelineView === 'dimensiones'
+                                    ? (Array.isArray(t.dimension) ? t.dimension : []).includes(catKey)
+                                    : (Array.isArray(t.situation) ? t.situation : []).includes(catKey);
                                 return (
                                   <div
                                     key={i}
@@ -374,7 +471,38 @@ export default function ContentAnalysisModal({ sessions, seasonName, onClose }) 
           </div>
 
           {/* Summary tables */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(185,165,135,0.08)', background: 'rgba(22,20,16,0.4)' }}>
+              <div className="px-4 py-3 text-sm font-semibold" style={{ color: '#e8ac65', borderBottom: '1px solid rgba(185,165,135,0.06)' }}>
+                Resumen Dimensiones
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(185,165,135,0.06)' }}>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider" style={{ color: '#997b66' }}>Dimensión</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider" style={{ color: '#997b66' }}>Count</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider" style={{ color: '#997b66' }}>%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dimensionData.map(row => (
+                    <tr key={row.name} style={{ borderBottom: '1px solid rgba(185,165,135,0.04)' }}>
+                      <td className="px-4 py-2" style={{ color: '#f1ede7' }}>
+                        <span className="inline-flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: row.color }} />
+                          {row.name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right font-medium" style={{ color: '#e8ac65' }}>{row.value}</td>
+                      <td className="px-4 py-2 text-right" style={{ color: '#baa587' }}>{totalDim > 0 ? ((row.value / totalDim) * 100).toFixed(1) : '0'}%</td>
+                    </tr>
+                  ))}
+                  {dimensionData.length === 0 && (
+                    <tr><td colSpan={3} className="px-4 py-4 text-center" style={{ color: '#997b66' }}>Sin datos</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
             <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(185,165,135,0.08)', background: 'rgba(22,20,16,0.4)' }}>
               <div className="px-4 py-3 text-sm font-semibold" style={{ color: '#e8ac65', borderBottom: '1px solid rgba(185,165,135,0.06)' }}>
                 Resumen Categorías

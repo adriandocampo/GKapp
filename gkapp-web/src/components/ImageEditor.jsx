@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Square, Circle, ArrowRight, Type, Trash2, RotateCw, ChevronUp, ChevronDown, ChevronRight, RotateCcw, Paintbrush, LayoutTemplate, AlignLeft, AlignCenter, AlignRight, AlignCenterVertical, AlignCenterHorizontal, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Triangle, Hash, Link, Clipboard, Plus, Save, Star, Undo2, Redo2 } from 'lucide-react';
 import { FIELDS, OBJECTS_BY_CATEGORY } from '../data/imageAssets.js';
+import { getSetting, setSetting } from '../db.js';
 
 function uid() { return Math.random().toString(36).substr(2, 9); }
 
@@ -88,9 +89,25 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
   const [textInputValue, setTextInputValue] = useState('');
   const [objectSearch, setObjectSearch] = useState('');
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
-  const [shapePresets, setShapePresets] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('shapePresets') || '{"rect":[],"circle":[],"triangle":[],"arrow":[]}'); } catch { return { rect: [], circle: [], triangle: [], arrow: [] }; }
-  });
+  const [shapePresets, setShapePresets] = useState({ rect: [], circle: [], triangle: [], arrow: [] });
+
+  useEffect(() => {
+    (async () => {
+      const saved = await getSetting('drawingPresets');
+      if (saved) {
+        setShapePresets(saved);
+      } else {
+        try {
+          const local = JSON.parse(localStorage.getItem('shapePresets'));
+          if (local) {
+            setShapePresets(local);
+            await setSetting('drawingPresets', local);
+            localStorage.removeItem('shapePresets');
+          }
+        } catch { /* ignore */ }
+      }
+    })();
+  }, []);
   const [showPresetName, setShowPresetName] = useState(false);
   const [presetName, setPresetName] = useState('');
 
@@ -888,7 +905,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     }
     const updated = { ...shapePresets, [shapeType]: [...shapePresets[shapeType], preset] };
     setShapePresets(updated);
-    localStorage.setItem('shapePresets', JSON.stringify(updated));
+    setSetting('drawingPresets', updated);
     setShowPresetName(false);
     setPresetName('');
   };
@@ -921,7 +938,7 @@ export default function ImageEditor({ onSave, onCancel, taskData = {}, initialEl
     const shapeType = primarySelected.type;
     const updated = { ...shapePresets, [shapeType]: shapePresets[shapeType].filter(p => p.id !== id) };
     setShapePresets(updated);
-    localStorage.setItem('shapePresets', JSON.stringify(updated));
+    setSetting('drawingPresets', updated);
   };
 
   const stripedStyle = (color, opacity = 0.15) => {

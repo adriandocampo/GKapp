@@ -185,7 +185,6 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
   const [sessionYoutubeUrlInput, setSessionYoutubeUrlInput] = useState(session?.youtubeUrl || '');
   const [sessionYoutubeUrl, setSessionYoutubeUrl] = useState(session?.youtubeUrl || null);
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
-  const [applyTemplateToAll, setApplyTemplateToAll] = useState(false);
   const [sessionTeamName, setSessionTeamName] = useState(session?.templateFields?.teamName || 'Club Deportivo Lugo');
   const [sessionTeamCrest, setSessionTeamCrest] = useState(session?.templateFields?.teamCrest || null);
   const [sessionSecondaryImage, setSessionSecondaryImage] = useState(session?.templateFields?.secondaryImage || null);
@@ -323,9 +322,6 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
         if (p && p.length > 0) setPorteros(p);
       });
     }
-    getSetting('applyTemplateToAll').then(v => {
-      if (v !== null) setApplyTemplateToAll(v);
-    });
     if (!session?.templateFields?.corporateColor) {
       getSetting('corporateColor').then(c => {
         if (c) setSessionCorporateColor(c);
@@ -661,7 +657,7 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
                         >
                           {task.title}
                         </button>
-                        <div className="text-xs" style={{color: '#997b66'}}>{task.phase} • {Array.isArray(task.situation) ? task.situation.join(' · ') : task.situation} • {task.time || '-'}</div>
+                        <div className="text-xs" style={{color: '#997b66'}}>{task.phase} • {Array.isArray(task.category) ? task.category.join(' · ') : task.category} • {Array.isArray(task.dimension) ? task.dimension.join(' · ') : task.dimension} • {Array.isArray(task.situation) ? task.situation.join(' · ') : task.situation} • {task.time || '-'}</div>
                       </div>
                       <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
                         {videoUrls[task.id] && (
@@ -944,7 +940,7 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium truncate" style={{color: '#f1ede7'}}>{task.title}</div>
-                      <div className="text-xs mt-0.5" style={{color: '#997b66'}}>{task.phase}{task.phase && ' • '}{Array.isArray(task.situation) && task.situation.length > 0 ? task.situation.join(' · ') : task.situation || '—'}</div>
+                      <div className="text-xs mt-0.5" style={{color: '#997b66'}}>{task.phase}{task.phase && ' • '}{Array.isArray(task.category) && task.category.length > 0 ? task.category.join(' · ') : task.category || '—'}{' • '}{Array.isArray(task.dimension) && task.dimension.length > 0 ? task.dimension.join(' · ') : task.dimension || '—'}{' • '}{Array.isArray(task.situation) && task.situation.length > 0 ? task.situation.join(' · ') : task.situation || '—'}</div>
                     </div>
                     <Plus size={16} style={{color: '#e8ac65'}} className="shrink-0 ml-2" />
                   </div>
@@ -1011,14 +1007,18 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
                   <video src={videoUrls[selectedTask.id]} controls className="w-full rounded-lg border border-gk-border" />
                 </div>
               ) : null}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
                 <div className="bg-gk-page p-3 rounded-lg">
                   <div className="text-xs text-gk-text-tertiary mb-1">Fase</div>
                   <div className="text-sm font-medium text-gk-accent">{selectedTask.phase}</div>
                 </div>
                 <div className="bg-gk-page p-3 rounded-lg">
+                  <div className="text-xs text-gk-text-tertiary mb-1">Dimensión</div>
+                  <div className="text-sm font-medium text-gk-accent">{Array.isArray(selectedTask.dimension) ? selectedTask.dimension.join(' · ') : selectedTask.dimension}</div>
+                </div>
+                <div className="bg-gk-page p-3 rounded-lg">
                   <div className="text-xs text-gk-text-tertiary mb-1">Categoría</div>
-                  <div className="text-sm font-medium text-gk-accent">{selectedTask.category}</div>
+                  <div className="text-sm font-medium text-gk-accent">{Array.isArray(selectedTask.category) ? selectedTask.category.join(' · ') : selectedTask.category}</div>
                 </div>
                 <div className="bg-gk-page p-3 rounded-lg">
                   <div className="text-xs text-gk-text-tertiary mb-1">Situación</div>
@@ -1111,27 +1111,6 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
             if (fields.teamCrest !== undefined) setSessionTeamCrest(fields.teamCrest);
             if (fields.secondaryImage !== undefined) setSessionSecondaryImage(fields.secondaryImage);
             if (fields.corporateColor) setSessionCorporateColor(fields.corporateColor);
-            if (applyTemplateToAll && sessionRef.current?.seasonId) {
-              const allSessions = await db.sessions.where({ seasonId: sessionRef.current.seasonId }).toArray();
-              for (const s of allSessions) {
-                if (s.id === sessionRef.current.id || s.deletedAt) continue;
-                const updated = {
-                  ...s,
-                  templateFields: {
-                    ...(s.templateFields || {}),
-                    porteros: fields.porteros || s.templateFields?.porteros,
-                    contenidos: fields.contenidos || s.templateFields?.contenidos,
-                    objetivos: fields.objetivos || s.templateFields?.objetivos,
-                    focos: fields.focos || s.templateFields?.focos,
-                    teamName: fields.teamName || s.templateFields?.teamName,
-                    teamCrest: fields.teamCrest !== undefined ? fields.teamCrest : s.templateFields?.teamCrest,
-                    secondaryImage: fields.secondaryImage !== undefined ? fields.secondaryImage : s.templateFields?.secondaryImage,
-                    corporateColor: fields.corporateColor || s.templateFields?.corporateColor,
-                  },
-                };
-                await db.sessions.put(updated);
-              }
-            }
             setShowTemplate(false);
           }}
           onClose={() => setShowTemplate(false)}

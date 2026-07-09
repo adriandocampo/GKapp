@@ -428,6 +428,7 @@ export async function restoreFromBackup(uid) {
 const DEFAULT_PHASES = ['Activación', 'Parte Principal'];
 const DEFAULT_CATEGORIES = ['Agarres', 'Desvíos', '1c1', 'Coberturas', 'Juego ofensivo', 'Velocidad de reacción'];
 const DEFAULT_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
+const DEFAULT_DIMENSIONS = ['Defensa de portería', 'Defensa de espacio', 'Juego ofensivo'];
 
 /** Restore missing default tags for a user in Firestore */
 export async function restoreDefaultTagsForUser(uid) {
@@ -450,6 +451,12 @@ export async function restoreDefaultTagsForUser(uid) {
   for (const name of DEFAULT_SITUATIONS) {
     if (!existingSet.has(`situation:${name}`)) {
       await setDoc(doc(firestore, 'users', uid, 'tags', `situation_${name}`), { type: 'situation', name });
+      count++;
+    }
+  }
+  for (const name of DEFAULT_DIMENSIONS) {
+    if (!existingSet.has(`dimension:${name}`)) {
+      await setDoc(doc(firestore, 'users', uid, 'tags', `dimension_${name}`), { type: 'dimension', name });
       count++;
     }
   }

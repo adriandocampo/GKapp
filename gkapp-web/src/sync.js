@@ -33,7 +33,7 @@ let hookUnsubscribers = [];
 let sessionGuardUnsubscribe = null;
 let queueTimerId = null;
 
-const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings', 'analyses'];
+const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings', 'analyses', 'porteros'];
 const MAX_ATTEMPTS = 10;
 const QUEUE_INTERVAL_MS = 30_000;
 const FIRESTORE_IMAGE_LIMIT = 900_000;

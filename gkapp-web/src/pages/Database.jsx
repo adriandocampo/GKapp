@@ -194,7 +194,12 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddTo
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
           <span className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(22,20,16,0.6)', color: '#baa587' }}>{task.phase}</span>
-          <span className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(22,20,16,0.6)', color: '#baa587' }}>{task.category}</span>
+          {Array.isArray(task.category) && task.category.length > 0 && task.category.map(c => (
+            <span key={c} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(22,20,16,0.6)', color: '#baa587' }}>{c}</span>
+          ))}
+          {Array.isArray(task.dimension) && task.dimension.length > 0 && task.dimension.map(d => (
+            <span key={d} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(22,20,16,0.6)', color: '#baa587' }}>{d}</span>
+          ))}
           {Array.isArray(task.situation) && task.situation.length > 0 && task.situation.map(s => (
             <span key={s} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(232,172,101,0.08)', color: '#e8ac65' }}>{s}</span>
           ))}
@@ -207,7 +212,7 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddTo
 export default function DatabasePage() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ phase: '', category: '', situation: '', search: '' });
+  const [filters, setFilters] = useState({ phase: '', category: '', dimension: '', situation: '', search: '' });
   const [sortBy, setSortBy] = useState('createdAt');
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -264,6 +269,12 @@ export default function DatabasePage() {
         t.situation = t.situation && t.situation !== 'Otro' ? [t.situation] : [];
       }
       if (!Array.isArray(t.situation)) t.situation = [];
+      if (!Array.isArray(t.category)) {
+        t.category = t.category ? [t.category] : [];
+      }
+      if (!Array.isArray(t.dimension)) {
+        t.dimension = t.dimension ? [t.dimension] : [];
+      }
       return t;
     });
     const sorted = active.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
@@ -279,7 +290,8 @@ export default function DatabasePage() {
   const filteredTasks = useMemo(() => {
     let result = tasks.filter(t => {
       if (filters.phase && t.phase !== filters.phase) return false;
-      if (filters.category && t.category !== filters.category) return false;
+      if (filters.category && (!Array.isArray(t.category) || !t.category.includes(filters.category))) return false;
+      if (filters.dimension && (!Array.isArray(t.dimension) || !t.dimension.includes(filters.dimension))) return false;
       if (filters.situation && (!Array.isArray(t.situation) || !t.situation.includes(filters.situation))) return false;
       if (filters.search) {
         const s = filters.search.toLowerCase();
@@ -303,7 +315,7 @@ export default function DatabasePage() {
   }, [tasks, filters, sortBy]);
 
   function clearFilters() {
-    setFilters({ phase: '', category: '', situation: '', search: '' });
+    setFilters({ phase: '', category: '', dimension: '', situation: '', search: '' });
   }
 
   async function openDetail(task) {
@@ -311,6 +323,12 @@ export default function DatabasePage() {
       task = { ...task, situation: task.situation && task.situation !== 'Otro' ? [task.situation] : [] };
     }
     if (!Array.isArray(task.situation)) task.situation = [];
+    if (!Array.isArray(task.category)) {
+      task = { ...task, category: task.category ? [task.category] : [] };
+    }
+    if (!Array.isArray(task.dimension)) {
+      task = { ...task, dimension: task.dimension ? [task.dimension] : [] };
+    }
     setSelectedTask(task);
     
     const idx = filteredTasks.findIndex(t => t.id === task.id);
@@ -705,6 +723,14 @@ export default function DatabasePage() {
             {tags.category.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <select
+            value={filters.dimension}
+            onChange={e => setFilters(f => ({ ...f, dimension: e.target.value }))}
+            className="v2-select"
+          >
+            <option value="">Todas las dimensiones</option>
+            {tags.dimension.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select
             value={filters.situation}
             onChange={e => setFilters(f => ({ ...f, situation: e.target.value }))}
             className="v2-select"
@@ -712,7 +738,7 @@ export default function DatabasePage() {
             <option value="">Todas las situaciones</option>
             {tags.situation.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          {(filters.phase || filters.category || filters.situation || filters.search) && (
+          {(filters.phase || filters.category || filters.dimension || filters.situation || filters.search) && (
             <button
               onClick={clearFilters}
               className="v2-btn-ghost shrink-0"
@@ -852,14 +878,56 @@ export default function DatabasePage() {
                   <video src={detailVideoUrl} controls className="w-full rounded-xl" style={{border: '1px solid rgba(185,165,135,0.08)'}} />
                 </div>
               ) : null}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
                 <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
                   <div className="text-xs mb-1" style={{ color: '#997b66' }}>Fase</div>
                   <InlineSelectField value={selectedTask.phase} field="phase" taskId={selectedTask.id} options={tags.phase} label="fase" />
                 </div>
                 <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
+                  <div className="text-xs mb-1" style={{ color: '#997b66' }}>Dimensión</div>
+                  <MultiSelectDropdown
+                    options={tags.dimension}
+                    selected={Array.isArray(selectedTask.dimension) ? selectedTask.dimension : []}
+                    onChange={async (updated) => {
+                      setSelectedTask(prev => ({ ...prev, dimension: updated }));
+                      await db.tasks.update(selectedTask.id, { dimension: updated, updatedAt: new Date() });
+                    }}
+                    placeholder="Seleccionar dimensiones"
+                    onAddNew={async (name) => {
+                      const trimmed = name.trim();
+                      await db.tags.add({ type: 'dimension', name: trimmed });
+                      const dim = Array.isArray(selectedTask.dimension) ? selectedTask.dimension : [];
+                      if (!dim.includes(trimmed)) {
+                        const updated = [...dim, trimmed];
+                        setSelectedTask(prev => ({ ...prev, dimension: updated }));
+                        await db.tasks.update(selectedTask.id, { dimension: updated, updatedAt: new Date() });
+                      }
+                      window.dispatchEvent(new CustomEvent('tags-changed'));
+                    }}
+                  />
+                </div>
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
                   <div className="text-xs mb-1" style={{ color: '#997b66' }}>Categoría</div>
-                  <InlineSelectField value={selectedTask.category} field="category" taskId={selectedTask.id} options={tags.category} label="categoría" />
+                  <MultiSelectDropdown
+                    options={tags.category}
+                    selected={Array.isArray(selectedTask.category) ? selectedTask.category : []}
+                    onChange={async (updated) => {
+                      setSelectedTask(prev => ({ ...prev, category: updated }));
+                      await db.tasks.update(selectedTask.id, { category: updated, updatedAt: new Date() });
+                    }}
+                    placeholder="Seleccionar categorías"
+                    onAddNew={async (name) => {
+                      const trimmed = name.trim();
+                      await db.tags.add({ type: 'category', name: trimmed });
+                      const cat = Array.isArray(selectedTask.category) ? selectedTask.category : [];
+                      if (!cat.includes(trimmed)) {
+                        const updated = [...cat, trimmed];
+                        setSelectedTask(prev => ({ ...prev, category: updated }));
+                        await db.tasks.update(selectedTask.id, { category: updated, updatedAt: new Date() });
+                      }
+                      window.dispatchEvent(new CustomEvent('tags-changed'));
+                    }}
+                  />
                 </div>
                 <div className="p-4 rounded-xl" style={{ background: 'rgba(22,20,16,0.6)' }}>
                   <div className="text-xs mb-1" style={{ color: '#997b66' }}>Situación</div>

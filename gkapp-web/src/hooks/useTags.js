@@ -2,12 +2,12 @@ import { useState, useCallback, useEffect } from 'react';
 import { db } from '../db';
 
 export function useTags() {
-  const [tags, setTags] = useState({ phase: [], category: [], situation: [] });
+  const [tags, setTags] = useState({ phase: [], category: [], dimension: [], situation: [] });
 
   const loadTags = useCallback(async () => {
     const all = await db.tags.toArray();
-    const grouped = { phase: [], category: [], situation: [] };
-    const seen = { phase: new Set(), category: new Set(), situation: new Set() };
+    const grouped = { phase: [], category: [], dimension: [], situation: [] };
+    const seen = { phase: new Set(), category: new Set(), dimension: new Set(), situation: new Set() };
     all.forEach(t => {
       if (grouped[t.type] && !seen[t.type].has(t.name)) {
         grouped[t.type].push(t.name);

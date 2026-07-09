@@ -490,7 +490,8 @@ export async function cleanupDeletedItems() {
 const DEFAULT_PHASES = ['Activación', 'Parte Principal'];
 const DEFAULT_CATEGORIES = ['Agarres', 'Desvíos', '1c1', 'Coberturas', 'Juego ofensivo', 'Velocidad de reacción'];
 const DEFAULT_SITUATIONS = ['Centro lateral', 'Centro lateral cercano', 'Tiro cercano', 'Tiro lejano'];
-const DEFAULT_TAG_NAMES = new Set([...DEFAULT_PHASES, ...DEFAULT_CATEGORIES, ...DEFAULT_SITUATIONS]);
+const DEFAULT_DIMENSIONS = ['Defensa de portería', 'Defensa de espacio', 'Juego ofensivo'];
+const DEFAULT_TAG_NAMES = new Set([...DEFAULT_PHASES, ...DEFAULT_CATEGORIES, ...DEFAULT_SITUATIONS, ...DEFAULT_DIMENSIONS]);
 
 export async function initDatabase() {
   if (navigator.storage && navigator.storage.persist) {
@@ -515,7 +516,6 @@ export async function initDatabase() {
   await ensureDefaultTags();
   await cleanupOrphanTags();
   await cleanupDeletedItems();
-  localStorage.removeItem('shapePresets');
 }
 
 export async function getSetting(key) {
@@ -536,15 +536,16 @@ export async function cleanupOrphanTags() {
   const tasks = await db.tasks.toArray();
   const activeTasks = tasks.filter(t => !t.deletedAt);
   const usedPhases = new Set(activeTasks.map(t => t.phase).filter(Boolean));
-  const usedCategories = new Set(activeTasks.map(t => t.category).filter(Boolean));
+  const usedCategories = new Set(activeTasks.flatMap(t => Array.isArray(t.category) ? t.category : (t.category ? [t.category] : [])).filter(Boolean));
   const usedSituations = new Set(activeTasks.flatMap(t => Array.isArray(t.situation) ? t.situation : (t.situation ? [t.situation] : [])).filter(Boolean));
+  const usedDimensions = new Set(activeTasks.flatMap(t => Array.isArray(t.dimension) ? t.dimension : (t.dimension ? [t.dimension] : [])).filter(Boolean));
 
   const tags = await db.tags.toArray();
   for (const tag of tags) {
     // Never delete default (standard) tags even if no task currently uses them
     if (DEFAULT_TAG_NAMES.has(tag.name)) continue;
 
-    const usedSet = tag.type === 'phase' ? usedPhases : tag.type === 'category' ? usedCategories : tag.type === 'situation' ? usedSituations : null;
+    const usedSet = tag.type === 'phase' ? usedPhases : tag.type === 'category' ? usedCategories : tag.type === 'situation' ? usedSituations : tag.type === 'dimension' ? usedDimensions : null;
     if (usedSet && !usedSet.has(tag.name)) {
       await db.tags.delete(tag.id);
     }
@@ -568,6 +569,11 @@ export async function ensureDefaultTags() {
   for (const name of DEFAULT_SITUATIONS) {
     if (!existingSet.has(`situation:${name}`)) {
       await db.tags.add({ type: 'situation', name });
+    }
+  }
+  for (const name of DEFAULT_DIMENSIONS) {
+    if (!existingSet.has(`dimension:${name}`)) {
+      await db.tags.add({ type: 'dimension', name });
     }
   }
 }
@@ -633,10 +639,7 @@ async function ensureDefaultSettings() {
   if (!existingColor) {
     await db.settings.add({ key: 'corporateColor', value: '#dc2626' });
   }
-  const existingApplyAll = await db.settings.where('key').equals('applyTemplateToAll').first();
-  if (!existingApplyAll) {
-    await db.settings.add({ key: 'applyTemplateToAll', value: false });
-  }
+
 }
 
 export async function ensureSeedTasks() {
@@ -665,14 +668,22 @@ export async function ensureSeedTasks() {
       if (task.imagePath && task.imagePath.startsWith('/')) task.imagePath = task.imagePath.substring(1);
       if (task.videoPath && task.videoPath.startsWith('/')) task.videoPath = task.videoPath.substring(1);
 
-      // Normalize situation to array
+      // Normalize situation and category to arrays
       if (!Array.isArray(task.situation)) {
         task.situation = task.situation ? [task.situation] : [];
       }
       task.situation = task.situation.filter(s => VALID_SITUATIONS.includes(s));
 
+      if (!Array.isArray(task.category)) {
+        task.category = task.category ? [task.category] : [];
+      }
+      task.category = task.category.filter(c => VALID_CATEGORIES.includes(c));
+
+      if (!Array.isArray(task.dimension)) {
+        task.dimension = task.dimension ? [task.dimension] : [];
+      }
+
       if (!VALID_PHASES.includes(task.phase)) task.phase = 'Activación';
-      if (!VALID_CATEGORIES.includes(task.category)) task.category = 'Otro';
       task.createdAt = task.createdAt || new Date();
       task.updatedAt = task.updatedAt || task.createdAt;
       task.deletedAt = null;
@@ -688,11 +699,12 @@ export async function ensureSeedTasks() {
       if (!existing) {
         toAdd.push(task);
       } else {
-        // Merge: only overwrite phase, category, situation, seedId from seed
+        // Merge: only overwrite phase, category, situation, dimension, seedId from seed
         const updateData = {
           phase: task.phase,
           category: task.category,
           situation: task.situation,
+          dimension: task.dimension,
           updatedAt: new Date(),
         };
         if (!existing.seedId && task.seedId) {
@@ -737,8 +749,8 @@ export async function deduplicateSeedTasks() {
         const bDel = b.deletedAt ? 1 : 0;
         if (aDel !== bDel) return aDel - bDel;
 
-        const aGood = (a.category && a.category !== 'Otro') || (Array.isArray(a.situation) && a.situation.length > 0);
-        const bGood = (b.category && b.category !== 'Otro') || (Array.isArray(b.situation) && b.situation.length > 0);
+        const aGood = (Array.isArray(a.category) && a.category.some(c => c !== 'Otro')) || (Array.isArray(a.situation) && a.situation.length > 0) || (Array.isArray(a.dimension) && a.dimension.length > 0);
+        const bGood = (Array.isArray(b.category) && b.category.some(c => c !== 'Otro')) || (Array.isArray(b.situation) && b.situation.length > 0) || (Array.isArray(b.dimension) && b.dimension.length > 0);
         if (aGood !== bGood) return bGood - aGood;
 
         return getTimestampMs(b.updatedAt) - getTimestampMs(a.updatedAt);
@@ -763,13 +775,15 @@ export async function deduplicateSeedTasks() {
         seed = seedByTitle.get(`${keeper.pageNumber}:${keeper.title}`);
       }
       if (seed) {
-        const needsFix = !keeper.category || keeper.category === 'Otro' || !keeper.phase || keeper.phase === 'Otro'
-          || !Array.isArray(keeper.situation) || keeper.situation.length === 0;
+        const needsFix = !Array.isArray(keeper.category) || keeper.category.length === 0 || keeper.category.every(c => c === 'Otro') || !keeper.phase || keeper.phase === 'Otro'
+          || !Array.isArray(keeper.situation) || keeper.situation.length === 0
+          || !Array.isArray(keeper.dimension) || keeper.dimension.length === 0;
         if (needsFix) {
           await db.tasks.update(keeper.id, {
             phase: seed.phase,
-            category: seed.category,
+            category: Array.isArray(seed.category) ? seed.category : (seed.category ? [seed.category] : []),
             situation: Array.isArray(seed.situation) ? seed.situation : [],
+            dimension: Array.isArray(seed.dimension) ? seed.dimension : [],
             updatedAt: new Date(),
           });
         }

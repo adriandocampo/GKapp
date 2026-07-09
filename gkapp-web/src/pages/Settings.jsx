@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Upload, X, Trash2, ArrowLeft, Plus, GripVertical, DownloadCloud, RotateCcw, Loader2, User } from 'lucide-react';
+import { Save, Upload, X, Trash2, ArrowLeft, Plus, GripVertical, DownloadCloud, RotateCcw, Loader2, User, Shield, Tags, Sliders } from 'lucide-react';
 import { db, getSetting, setSetting } from '../db';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Modal';
@@ -24,7 +24,7 @@ export default function Settings() {
   const [secondaryImage, setSecondaryImage] = useState(null);
   const [porteros, setPorteros] = useState([]);
   const [newPorteroName, setNewPorteroName] = useState('');
-  const [tags, setTags] = useState({ phase: [], category: [], situation: [] });
+  const [tags, setTags] = useState({ phase: [], category: [], situation: [], dimension: [] });
   const [newTagInputs, setNewTagInputs] = useState({ phase: '', category: '', situation: '' });
   const [saving, setSaving] = useState(false);
   const [draggedTag, setDraggedTag] = useState(null);
@@ -34,14 +34,14 @@ export default function Settings() {
   const [lastBackup, setLastBackup] = useState(null);
   const [restoring, setRestoring] = useState(false);
   const [defaultAttributes, setDefaultAttributes] = useState({ dimensions: [] });
-  const [newAttrName, setNewAttrName] = useState('');
+  const [newAttrNames, setNewAttrNames] = useState({});
   const [newDimName, setNewDimName] = useState('');
   const [editingDimIdx, setEditingDimIdx] = useState(null);
   const [editingDimName, setEditingDimName] = useState('');
   const [editingMicroIdx, setEditingMicroIdx] = useState(null);
   const [editingMicroName, setEditingMicroName] = useState('');
   const [corporateColor, setCorporateColor] = useState('#dc2626');
-  const [applyTemplateToAll, setApplyTemplateToAll] = useState(false);
+  const [activeTab, setActiveTab] = useState('equipo');
 
   async function loadSettings() {
     const name = await getSetting('teamName');
@@ -56,14 +56,12 @@ export default function Settings() {
     if (attrsData) setDefaultAttributes(attrsData);
     const color = await getSetting('corporateColor');
     if (color) setCorporateColor(color);
-    const applyAll = await getSetting('applyTemplateToAll');
-    if (applyAll !== null) setApplyTemplateToAll(applyAll);
   }
 
   async function loadTags() {
     const all = await db.tags.toArray();
-    const grouped = { phase: [], category: [], situation: [] };
-    const seen = { phase: new Set(), category: new Set(), situation: new Set() };
+    const grouped = { phase: [], category: [], situation: [], dimension: [] };
+    const seen = { phase: new Set(), category: new Set(), situation: new Set(), dimension: new Set() };
     all.forEach(t => {
       if (grouped[t.type] && !seen[t.type].has(t.name)) {
         grouped[t.type].push(t.name);
@@ -136,7 +134,6 @@ export default function Settings() {
       await setSetting('defaultPorteros', porteros);
       await setSetting('defaultAttributes', defaultAttributes);
       await setSetting('corporateColor', corporateColor);
-      await setSetting('applyTemplateToAll', applyTemplateToAll);
       addToast('Ajustes guardados', 'success');
     } catch (err) {
       addToast('Error al guardar: ' + err.message, 'error');
@@ -298,28 +295,31 @@ export default function Settings() {
   }
 
   async function addMicroItem(dimIdx) {
-    if (!newAttrName.trim()) return;
-    const name = newAttrName.trim();
-    const newItem = { name, value: 70 };
-    setDefaultAttributes(prev => ({
-      ...prev,
-      dimensions: prev.dimensions.map((d, i) =>
-        i === dimIdx ? { ...d, microItems: [...d.microItems, newItem] } : d
+    const input = (newAttrNames[dimIdx] || '').trim();
+    if (!input) return;
+    const updatedAttrs = {
+      ...defaultAttributes,
+      dimensions: defaultAttributes.dimensions.map((d, i) =>
+        i === dimIdx ? { ...d, microItems: [...d.microItems, { name: input, value: 70 }] } : d
       )
-    }));
-    setNewAttrName('');
+    };
+    setDefaultAttributes(updatedAttrs);
+    setNewAttrNames(prev => ({ ...prev, [dimIdx]: '' }));
+    await setSetting('defaultAttributes', updatedAttrs);
     try {
       const all = await db.porteros.toArray();
       for (const gk of all) {
         const gkAttrs = gk.customAttributes;
         if (!gkAttrs || !gkAttrs.dimensions || gkAttrs.dimensions.length <= dimIdx) continue;
-        const updated = {
-          ...gkAttrs,
-          dimensions: gkAttrs.dimensions.map((d, i) =>
-            i === dimIdx ? { ...d, microItems: [...d.microItems, { name, value: 50 }] } : d
-          )
-        };
-        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+        await db.porteros.update(gk.id, {
+          customAttributes: {
+            ...gkAttrs,
+            dimensions: gkAttrs.dimensions.map((d, i) =>
+              i === dimIdx ? { ...d, microItems: [...d.microItems, { name: input, value: 50 }] } : d
+            )
+          },
+          updatedAt: new Date()
+        });
       }
     } catch (err) {
       console.error('[addMicroItem] Error syncing goalkeepers:', err);
@@ -328,25 +328,29 @@ export default function Settings() {
 
   async function removeMicroItem(dimIdx, microIdx) {
     const removedName = defaultAttributes.dimensions[dimIdx]?.microItems[microIdx]?.name;
-    setDefaultAttributes(prev => ({
-      ...prev,
-      dimensions: prev.dimensions.map((d, i) =>
-        i === dimIdx ? { ...d, microItems: d.microItems.filter((_, mi) => mi !== microIdx) } : d
-      )
-    }));
     if (!removedName) return;
+    const updatedAttrs = {
+      ...defaultAttributes,
+      dimensions: defaultAttributes.dimensions.map((d, i) =>
+        i === dimIdx ? { ...d, microItems: d.microItems.filter(m => m.name !== removedName) } : d
+      )
+    };
+    setDefaultAttributes(updatedAttrs);
+    await setSetting('defaultAttributes', updatedAttrs);
     try {
       const all = await db.porteros.toArray();
       for (const gk of all) {
         const gkAttrs = gk.customAttributes;
         if (!gkAttrs || !gkAttrs.dimensions || gkAttrs.dimensions.length <= dimIdx) continue;
-        const updated = {
-          ...gkAttrs,
-          dimensions: gkAttrs.dimensions.map((d, i) =>
-            i === dimIdx ? { ...d, microItems: d.microItems.filter(m => m.name !== removedName) } : d
-          )
-        };
-        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+        await db.porteros.update(gk.id, {
+          customAttributes: {
+            ...gkAttrs,
+            dimensions: gkAttrs.dimensions.map((d, i) =>
+              i === dimIdx ? { ...d, microItems: d.microItems.filter(m => m.name !== removedName) } : d
+            )
+          },
+          updatedAt: new Date()
+        });
       }
     } catch (err) {
       console.error('[removeMicroItem] Error syncing goalkeepers:', err);
@@ -365,26 +369,31 @@ export default function Settings() {
   async function renameMicroItem(dimIdx, microIdx, name) {
     const oldName = defaultAttributes.dimensions[dimIdx]?.microItems[microIdx]?.name;
     if (!oldName) return;
-    setDefaultAttributes(prev => ({
-      ...prev,
-      dimensions: prev.dimensions.map((d, i) =>
+    const updatedAttrs = {
+      ...defaultAttributes,
+      dimensions: defaultAttributes.dimensions.map((d, i) =>
         i === dimIdx ? { ...d, microItems: d.microItems.map((m, mi) => mi === microIdx ? { ...m, name } : m) } : d
       )
-    }));
+    };
+    setDefaultAttributes(updatedAttrs);
     setEditingMicroIdx(null);
-    if (oldName === name) return;
+    if (oldName !== name) {
+      await setSetting('defaultAttributes', updatedAttrs);
+    }
     try {
       const all = await db.porteros.toArray();
       for (const gk of all) {
         const gkAttrs = gk.customAttributes;
         if (!gkAttrs || !gkAttrs.dimensions || gkAttrs.dimensions.length <= dimIdx) continue;
-        const updated = {
-          ...gkAttrs,
-          dimensions: gkAttrs.dimensions.map((d, i) =>
-            i === dimIdx ? { ...d, microItems: d.microItems.map(m => m.name === oldName ? { ...m, name } : m) } : d
-          )
-        };
-        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+        await db.porteros.update(gk.id, {
+          customAttributes: {
+            ...gkAttrs,
+            dimensions: gkAttrs.dimensions.map((d, i) =>
+              i === dimIdx ? { ...d, microItems: d.microItems.map(m => m.name === oldName ? { ...m, name } : m) } : d
+            )
+          },
+          updatedAt: new Date()
+        });
       }
     } catch (err) {
       console.error('[renameMicroItem] Error syncing goalkeepers:', err);
@@ -395,22 +404,26 @@ export default function Settings() {
     if (!newDimName.trim()) return;
     const name = newDimName.trim();
     const newDim = { name, microItems: [{ name: 'Nuevo atributo', value: 70 }] };
-    setDefaultAttributes(prev => ({
-      ...prev,
-      dimensions: [...prev.dimensions, newDim]
-    }));
+    const updatedAttrs = {
+      ...defaultAttributes,
+      dimensions: [...defaultAttributes.dimensions, newDim]
+    };
+    setDefaultAttributes(updatedAttrs);
     setNewDimName('');
+    await setSetting('defaultAttributes', updatedAttrs);
     try {
       const gkDim = { name, microItems: [{ name: 'Nuevo atributo', value: 50 }] };
       const all = await db.porteros.toArray();
       for (const gk of all) {
         const gkAttrs = gk.customAttributes;
         if (!gkAttrs || !gkAttrs.dimensions) continue;
-        const updated = {
-          ...gkAttrs,
-          dimensions: [...gkAttrs.dimensions, { ...gkDim, microItems: gkDim.microItems.map(m => ({ ...m })) }]
-        };
-        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+        await db.porteros.update(gk.id, {
+          customAttributes: {
+            ...gkAttrs,
+            dimensions: [...gkAttrs.dimensions, { ...gkDim, microItems: gkDim.microItems.map(m => ({ ...m })) }]
+          },
+          updatedAt: new Date()
+        });
       }
     } catch (err) {
       console.error('[addDimension] Error syncing goalkeepers:', err);
@@ -419,21 +432,25 @@ export default function Settings() {
 
   async function removeDimension(dimIdx) {
     const removedName = defaultAttributes.dimensions[dimIdx]?.name;
-    setDefaultAttributes(prev => ({
-      ...prev,
-      dimensions: prev.dimensions.filter((_, i) => i !== dimIdx)
-    }));
     if (!removedName) return;
+    const updatedAttrs = {
+      ...defaultAttributes,
+      dimensions: defaultAttributes.dimensions.filter((_, i) => i !== dimIdx)
+    };
+    setDefaultAttributes(updatedAttrs);
+    await setSetting('defaultAttributes', updatedAttrs);
     try {
       const all = await db.porteros.toArray();
       for (const gk of all) {
         const gkAttrs = gk.customAttributes;
         if (!gkAttrs || !gkAttrs.dimensions) continue;
-        const updated = {
-          ...gkAttrs,
-          dimensions: gkAttrs.dimensions.filter(d => d.name !== removedName)
-        };
-        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+        await db.porteros.update(gk.id, {
+          customAttributes: {
+            ...gkAttrs,
+            dimensions: gkAttrs.dimensions.filter(d => d.name !== removedName)
+          },
+          updatedAt: new Date()
+        });
       }
     } catch (err) {
       console.error('[removeDimension] Error syncing goalkeepers:', err);
@@ -443,22 +460,27 @@ export default function Settings() {
   async function renameDimension(dimIdx, name) {
     const oldName = defaultAttributes.dimensions[dimIdx]?.name;
     if (!oldName) return;
-    setDefaultAttributes(prev => ({
-      ...prev,
-      dimensions: prev.dimensions.map((d, i) => i === dimIdx ? { ...d, name } : d)
-    }));
+    const updatedAttrs = {
+      ...defaultAttributes,
+      dimensions: defaultAttributes.dimensions.map((d, i) => i === dimIdx ? { ...d, name } : d)
+    };
+    setDefaultAttributes(updatedAttrs);
     setEditingDimIdx(null);
-    if (oldName === name) return;
+    if (oldName !== name) {
+      await setSetting('defaultAttributes', updatedAttrs);
+    }
     try {
       const all = await db.porteros.toArray();
       for (const gk of all) {
         const gkAttrs = gk.customAttributes;
         if (!gkAttrs || !gkAttrs.dimensions) continue;
-        const updated = {
-          ...gkAttrs,
-          dimensions: gkAttrs.dimensions.map(d => d.name === oldName ? { ...d, name } : d)
-        };
-        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+        await db.porteros.update(gk.id, {
+          customAttributes: {
+            ...gkAttrs,
+            dimensions: gkAttrs.dimensions.map(d => d.name === oldName ? { ...d, name } : d)
+          },
+          updatedAt: new Date()
+        });
       }
     } catch (err) {
       console.error('[renameDimension] Error syncing goalkeepers:', err);
@@ -488,9 +510,15 @@ export default function Settings() {
     }
   }
 
+  const tabs = [
+    { key: 'equipo', icon: Shield, label: 'Equipo' },
+    { key: 'etiquetas', icon: Tags, label: 'Etiquetas' },
+    { key: 'atributos', icon: Sliders, label: 'Atributos' },
+  ];
+
   return (
     <div className="animate-v2-fade-in-up -mx-4 -my-6 px-4 py-6 min-h-[calc(100vh-4rem)]" style={{ backgroundColor: '#0c0b09' }}>
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <div className="flex items-center gap-4 mb-6">
         <button onClick={() => navigate('/')} className="v2-btn-ghost p-2 rounded-lg">
           <ArrowLeft size={20} />
@@ -498,292 +526,304 @@ export default function Settings() {
         <h1 className="text-2xl font-bold" style={{color: '#f1ede7'}}>Ajustes</h1>
       </div>
 
-      <div className="glass-card-static p-6 lg:p-8 space-y-8">
-        {/* Team info */}
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Equipo</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{color: '#baa587'}}>Nombre del equipo</label>
-              <input
-                value={teamName}
-                onChange={e => setTeamName(e.target.value)}
-                placeholder="Mi equipo"
-                className="v2-input w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{color: '#baa587'}}>Escudo</label>
-              <div className="flex items-center gap-4 flex-wrap">
+      <div className="glass-card-static overflow-hidden">
+        <div className="flex flex-col md:flex-row">
+          {/* Sidebar */}
+          <div className="md:w-48 shrink-0 border-b md:border-b-0 md:border-r" style={{borderColor: 'rgba(185,165,135,0.08)', background: 'rgba(22,20,16,0.3)'}}>
+            <nav className="p-3 space-y-1">
+              {tabs.map(({ key, icon: Icon, label }) => (
                 <button
-                  onClick={() => crestInputRef.current?.click()}
-                  className="v2-btn-ghost"
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+                  style={{
+                    background: activeTab === key ? 'rgba(232,172,101,0.1)' : 'transparent',
+                    color: activeTab === key ? '#e8ac65' : '#997b66',
+                    border: activeTab === key ? '1px solid rgba(232,172,101,0.2)' : '1px solid transparent',
+                  }}
                 >
-                  <Upload size={16} /> {teamCrest ? 'Cambiar escudo' : 'Subir escudo'}
+                  <Icon size={16} />
+                  {label}
                 </button>
-                {teamCrest && (
-                  <button onClick={() => removeImage('teamCrest')} className="v2-btn-danger">
-                    <X size={16} /> Eliminar
-                  </button>
-                )}
-                <input ref={crestInputRef} type="file" accept="image/*" onChange={e => handleImageUpload('teamCrest', e.target.files[0])} className="hidden" />
-              </div>
-              {teamCrest && (
-                <img src={teamCrest} alt="Escudo" className="mt-3 h-20 w-auto rounded-lg border border-gk-border" />
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{color: '#baa587'}}>Imagen secundaria</label>
-              <div className="flex items-center gap-4 flex-wrap">
-                <button
-                  onClick={() => secondaryInputRef.current?.click()}
-                  className="v2-btn-ghost"
-                >
-                  <Upload size={16} /> {secondaryImage ? 'Cambiar imagen' : 'Subir imagen'}
-                </button>
-                {secondaryImage && (
-                  <button onClick={() => removeImage('secondaryImage')} className="v2-btn-danger">
-                    <X size={16} /> Eliminar
-                  </button>
-                )}
-                <input ref={secondaryInputRef} type="file" accept="image/*" onChange={e => handleImageUpload('secondaryImage', e.target.files[0])} className="hidden" />
-              </div>
-              {secondaryImage && (
-                <img src={secondaryImage} alt="Imagen secundaria" className="mt-3 h-20 w-auto rounded-lg border border-gk-border" />
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Corporate Color */}
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Color corporativo</h3>
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              value={corporateColor}
-              onChange={e => setCorporateColor(e.target.value)}
-              className="h-10 w-16 rounded-lg cursor-pointer"
-              style={{ border: '1px solid rgba(185,165,135,0.15)', background: 'transparent', padding: 2 }}
-            />
-            <span className="text-sm font-mono text-gk-text-primary">{corporateColor}</span>
-            <span className="text-xs" style={{color: '#997b66'}}>Se usa en las líneas de la plantilla de sesión</span>
-          </div>
-        </div>
-
-        {/* Aplicar cambios de plantilla */}
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Plantilla de sesión</h3>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <button
-              onClick={() => setApplyTemplateToAll(!applyTemplateToAll)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${applyTemplateToAll ? 'bg-green-600' : 'bg-red-600'}`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${applyTemplateToAll ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
-            <div>
-              <span className="text-sm font-medium block" style={{color: '#f1ede7'}}>Aplicar cambios a sesiones anteriores</span>
-              <span className="text-xs" style={{color: '#997b66'}}>Al guardar la plantilla, los cambios se aplicarán a todas las sesiones de la temporada</span>
-            </div>
-          </label>
-        </div>
-
-        {/* Porteros */}
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Porteros por defecto</h3>
-          <div className="space-y-2 mb-3">
-              {porteros.map((p, i) => (
-                <div
-                  key={i}
-                  draggable
-                  onDragStart={(e) => handlePorteroDragStart(e, i)}
-                  onDragOver={(e) => handlePorteroDragOver(e, i)}
-                  onDragLeave={handlePorteroDragLeave}
-                  onDrop={(e) => handlePorteroDrop(e, i)}
-                  onDragEnd={handlePorteroDragEnd}
-                  className={`flex items-center gap-3 bg-gk-page px-4 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all ${
-                    draggedPorteroIdx === i ? 'opacity-50' : ''
-                  } ${
-                    dragOverPorteroIdx === i && draggedPorteroIdx !== i ? 'ring-2 ring-gk-accent/50 scale-[1.02]' : ''
-                  }`}
-                >
-                <GripVertical size={14} className="text-gk-text-tertiary shrink-0" />
-                <div className="relative shrink-0">
-                  {p.photo ? (
-                    <div className="relative group">
-                      <img src={p.photo} alt={p.name} referrerpolicy="no-referrer"
-                        className="w-9 h-9 rounded-lg object-cover border border-gk-border" />
-                      <button
-                        onClick={() => removePorteroPhoto(i)}
-                        className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                        style={{ background: 'rgba(208,140,96,0.9)', color: 'white' }}
-                      >
-                        <X size={10} />
-                      </button>
+              ))}
+              {user?.uid && (
+                <>
+                  <div className="my-3 border-t" style={{borderColor: 'rgba(185,165,135,0.08)'}} />
+                  <div className="px-3 py-2">
+                    <div className="flex items-center gap-2 text-xs font-medium mb-2" style={{color: '#baa587'}}>
+                      <DownloadCloud size={12} />
+                      Copia de seguridad
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => porteroPhotoRefs.current[i]?.click()}
-                      className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
-                      style={{ background: 'rgba(22,20,16,0.8)', border: '1px dashed rgba(185,165,135,0.2)', color: '#997b66' }}
-                      title="Añadir foto"
-                    >
-                      <User size={14} />
-                    </button>
-                  )}
-                  <input
-                    ref={el => porteroPhotoRefs.current[i] = el}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => handlePorteroPhotoUpload(i, e.target.files?.[0])}
-                  />
-                </div>
-                <span className="text-sm text-gk-text-primary flex-1 min-w-0 truncate">{p.name}</span>
-                {porteros.length > 1 && (
-                  <button onClick={() => removePortero(i)} className="p-1 hover:bg-red-900/30 rounded text-gk-text-tertiary hover:text-stat-rose transition-colors">
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              value={newPorteroName}
-              onChange={e => setNewPorteroName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addPortero()}
-              placeholder="Nombre del portero"
-              className="v2-input flex-1"
-            />
-            <button onClick={addPortero} className="v2-btn-ghost" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
-              <Plus size={14} /> Añadir
-            </button>
-          </div>
-        </div>
-
-        {/* Atributos Personalizados por defecto */}
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Atributos Personalizados</h3>
-          <p className="text-xs mb-3" style={{color: '#997b66'}}>Estos atributos se usarán al crear un nuevo portero</p>
-          <div className="space-y-3">
-            {defaultAttributes.dimensions && defaultAttributes.dimensions.map((dim, di) => (
-              <div key={di} className="rounded-xl p-4" style={{background: 'rgba(22,20,16,0.4)'}}>
-                <div className="flex items-center justify-between mb-3 pb-2" style={{borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
-                  {editingDimIdx === di ? (
-                    <input type="text" value={editingDimName}
-                      onChange={e => setEditingDimName(e.target.value)}
-                      onBlur={() => { renameDimension(di, editingDimName); }}
-                      onKeyDown={e => e.key === 'Enter' && renameDimension(di, editingDimName)}
-                      className="v2-input text-sm py-1 px-2 flex-1" autoFocus />
-                  ) : (
-                    <h4 className="text-sm font-semibold cursor-pointer" style={{color: '#f1ede7'}}
-                      onClick={() => { setEditingDimIdx(di); setEditingDimName(dim.name); }}>
-                      {dim.name}
-                    </h4>
-                  )}
-                  <button onClick={() => removeDimension(di)} className="p-1 hover:bg-red-900/30 rounded transition-colors" style={{color: '#d08c60'}}>
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {dim.microItems.map((item, mi) => (
-                    <div key={mi} className="flex items-center gap-2">
-                      {editingMicroIdx?.dimIdx === di && editingMicroIdx?.microIdx === mi ? (
-                        <input type="text" value={editingMicroName}
-                          onChange={e => setEditingMicroName(e.target.value)}
-                          onBlur={() => { renameMicroItem(di, mi, editingMicroName); }}
-                          onKeyDown={e => e.key === 'Enter' && renameMicroItem(di, mi, editingMicroName)}
-                          className="v2-input text-xs py-1 px-2 flex-1" autoFocus />
-                      ) : (
-                        <span className="text-sm flex-1 min-w-0 truncate cursor-pointer" style={{color: '#baa587'}}
-                          onClick={() => { setEditingMicroIdx({ dimIdx: di, microIdx: mi }); setEditingMicroName(item.name); }}>
-                          {item.name}
+                    {lastBackup ? (
+                      <p className="text-xs mb-2" style={{color: '#997b66'}}>
+                        Último:{' '}
+                        <span style={{color: '#f1ede7'}}>
+                          {lastBackup._createdAt?.toDate?.()?.toLocaleDateString('es-ES', {
+                            day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                          }) || 'desconocida'}
                         </span>
+                      </p>
+                    ) : (
+                      <p className="text-xs mb-2" style={{color: '#997b66'}}>No hay backups</p>
+                    )}
+                    <button
+                      onClick={handleRestore}
+                      disabled={restoring}
+                      className="w-full py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                      style={{background: 'rgba(232,172,101,0.08)', border: '1px solid rgba(232,172,101,0.15)', color: '#ecbd83'}}
+                    >
+                      {restoring ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <RotateCcw size={12} />
                       )}
-                      <input type="range" min="0" max="100" value={item.value}
-                        onChange={e => updateMicroValue(di, mi, parseInt(e.target.value))}
-                        className="v2-rpe" style={{width: 80}} />
-                      <span className="text-xs font-bold w-6 text-right" style={{color: '#e8ac65'}}>{item.value}</span>
-                      <button onClick={() => removeMicroItem(di, mi)} className="p-1 hover:bg-red-900/30 rounded transition-colors" style={{color: '#997b66'}}>
-                        <Trash2 size={12} />
-                      </button>
+                      {restoring ? 'Restaurando...' : 'Restaurar'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </nav>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 p-6 lg:p-8 overflow-y-auto" style={{maxHeight: 'calc(100vh - 14rem)'}}>
+            {activeTab === 'equipo' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Equipo</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={{color: '#baa587'}}>Nombre del equipo</label>
+                      <input
+                        value={teamName}
+                        onChange={e => setTeamName(e.target.value)}
+                        placeholder="Mi equipo"
+                        className="v2-input w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={{color: '#baa587'}}>Escudo</label>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <button
+                          onClick={() => crestInputRef.current?.click()}
+                          className="v2-btn-ghost"
+                        >
+                          <Upload size={16} /> {teamCrest ? 'Cambiar escudo' : 'Subir escudo'}
+                        </button>
+                        {teamCrest && (
+                          <button onClick={() => removeImage('teamCrest')} className="v2-btn-danger">
+                            <X size={16} /> Eliminar
+                          </button>
+                        )}
+                        <input ref={crestInputRef} type="file" accept="image/*" onChange={e => handleImageUpload('teamCrest', e.target.files[0])} className="hidden" />
+                      </div>
+                      {teamCrest && (
+                        <img src={teamCrest} alt="Escudo" className="mt-3 h-20 w-auto rounded-lg border border-gk-border" />
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={{color: '#baa587'}}>Imagen secundaria</label>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <button
+                          onClick={() => secondaryInputRef.current?.click()}
+                          className="v2-btn-ghost"
+                        >
+                          <Upload size={16} /> {secondaryImage ? 'Cambiar imagen' : 'Subir imagen'}
+                        </button>
+                        {secondaryImage && (
+                          <button onClick={() => removeImage('secondaryImage')} className="v2-btn-danger">
+                            <X size={16} /> Eliminar
+                          </button>
+                        )}
+                        <input ref={secondaryInputRef} type="file" accept="image/*" onChange={e => handleImageUpload('secondaryImage', e.target.files[0])} className="hidden" />
+                      </div>
+                      {secondaryImage && (
+                        <img src={secondaryImage} alt="Imagen secundaria" className="mt-3 h-20 w-auto rounded-lg border border-gk-border" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Color corporativo</h3>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={corporateColor}
+                      onChange={e => setCorporateColor(e.target.value)}
+                      className="h-10 w-16 rounded-lg cursor-pointer"
+                      style={{ border: '1px solid rgba(185,165,135,0.15)', background: 'transparent', padding: 2 }}
+                    />
+                    <span className="text-sm font-mono text-gk-text-primary">{corporateColor}</span>
+                    <span className="text-xs" style={{color: '#997b66'}}>Se usa en las líneas de la plantilla de sesión</span>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Porteros por defecto</h3>
+                  <div className="space-y-2 mb-3">
+                    {porteros.map((p, i) => (
+                      <div
+                        key={i}
+                        draggable
+                        onDragStart={(e) => handlePorteroDragStart(e, i)}
+                        onDragOver={(e) => handlePorteroDragOver(e, i)}
+                        onDragLeave={handlePorteroDragLeave}
+                        onDrop={(e) => handlePorteroDrop(e, i)}
+                        onDragEnd={handlePorteroDragEnd}
+                        className={`flex items-center gap-3 bg-gk-page px-4 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all ${
+                          draggedPorteroIdx === i ? 'opacity-50' : ''
+                        } ${
+                          dragOverPorteroIdx === i && draggedPorteroIdx !== i ? 'ring-2 ring-gk-accent/50 scale-[1.02]' : ''
+                        }`}
+                      >
+                        <GripVertical size={14} className="text-gk-text-tertiary shrink-0" />
+                        <div className="relative shrink-0">
+                          {p.photo ? (
+                            <div className="relative group">
+                              <img src={p.photo} alt={p.name} referrerpolicy="no-referrer"
+                                className="w-9 h-9 rounded-lg object-cover border border-gk-border" />
+                              <button
+                                onClick={() => removePorteroPhoto(i)}
+                                className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                style={{ background: 'rgba(208,140,96,0.9)', color: 'white' }}
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => porteroPhotoRefs.current[i]?.click()}
+                              className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
+                              style={{ background: 'rgba(22,20,16,0.8)', border: '1px dashed rgba(185,165,135,0.2)', color: '#997b66' }}
+                              title="Añadir foto"
+                            >
+                              <User size={14} />
+                            </button>
+                          )}
+                          <input
+                            ref={el => porteroPhotoRefs.current[i] = el}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e => handlePorteroPhotoUpload(i, e.target.files?.[0])}
+                          />
+                        </div>
+                        <span className="text-sm text-gk-text-primary flex-1 min-w-0 truncate">{p.name}</span>
+                        {porteros.length > 1 && (
+                          <button onClick={() => removePortero(i)} className="p-1 hover:bg-red-900/30 rounded text-gk-text-tertiary hover:text-stat-rose transition-colors">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={newPorteroName}
+                      onChange={e => setNewPorteroName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addPortero()}
+                      placeholder="Nombre del portero"
+                      className="v2-input flex-1"
+                    />
+                    <button onClick={addPortero} className="v2-btn-ghost" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
+                      <Plus size={14} /> Añadir
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'etiquetas' && (
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Etiquetas</h3>
+                <div className="space-y-4">
+                  {renderTagSection('phase', 'Fases')}
+                  {renderTagSection('dimension', 'Dimensiones')}
+                  {renderTagSection('category', 'Categorías')}
+                  {renderTagSection('situation', 'Situaciones')}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'atributos' && (
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Atributos Personalizados</h3>
+                <p className="text-xs mb-3" style={{color: '#997b66'}}>Estos atributos se usarán al crear un nuevo portero</p>
+                <div className="space-y-3">
+                  {defaultAttributes.dimensions && defaultAttributes.dimensions.map((dim, di) => (
+                    <div key={di} className="rounded-xl p-4" style={{background: 'rgba(22,20,16,0.4)'}}>
+                      <div className="flex items-center justify-between mb-3 pb-2" style={{borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
+                        {editingDimIdx === di ? (
+                          <input type="text" value={editingDimName}
+                            onChange={e => setEditingDimName(e.target.value)}
+                            onBlur={() => { renameDimension(di, editingDimName); }}
+                            onKeyDown={e => e.key === 'Enter' && renameDimension(di, editingDimName)}
+                            className="v2-input text-sm py-1 px-2 flex-1" autoFocus />
+                        ) : (
+                          <h4 className="text-sm font-semibold cursor-pointer" style={{color: '#f1ede7'}}
+                            onClick={() => { setEditingDimIdx(di); setEditingDimName(dim.name); }}>
+                            {dim.name}
+                          </h4>
+                        )}
+                        <button onClick={() => removeDimension(di)} className="p-1 hover:bg-red-900/30 rounded transition-colors" style={{color: '#d08c60'}}>
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {dim.microItems.map((item, mi) => (
+                          <div key={mi} className="flex items-center gap-2">
+                            {editingMicroIdx?.dimIdx === di && editingMicroIdx?.microIdx === mi ? (
+                              <input type="text" value={editingMicroName}
+                                onChange={e => setEditingMicroName(e.target.value)}
+                                onBlur={() => { renameMicroItem(di, mi, editingMicroName); }}
+                                onKeyDown={e => e.key === 'Enter' && renameMicroItem(di, mi, editingMicroName)}
+                                className="v2-input text-xs py-1 px-2 flex-1" autoFocus />
+                            ) : (
+                              <span className="text-sm flex-1 min-w-0 truncate cursor-pointer" style={{color: '#baa587'}}
+                                onClick={() => { setEditingMicroIdx({ dimIdx: di, microIdx: mi }); setEditingMicroName(item.name); }}>
+                                {item.name}
+                              </span>
+                            )}
+                            <input type="range" min="0" max="100" value={item.value}
+                              onChange={e => updateMicroValue(di, mi, parseInt(e.target.value))}
+                              className="v2-rpe" style={{width: 80}} />
+                            <span className="text-xs font-bold w-6 text-right" style={{color: '#e8ac65'}}>{item.value}</span>
+                            <button onClick={() => removeMicroItem(di, mi)} className="p-1 hover:bg-red-900/30 rounded transition-colors" style={{color: '#997b66'}}>
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 mt-3 pt-3" style={{borderTop: '1px solid rgba(185,165,135,0.06)'}}>
+                        <input value={newAttrNames[di] || ''} onChange={e => setNewAttrNames(prev => ({ ...prev, [di]: e.target.value }))}
+                          onKeyDown={e => e.key === 'Enter' && addMicroItem(di)}
+                          placeholder={`Nuevo atributo en ${dim.name}`} className="v2-input flex-1 text-xs" />
+                        <button onClick={() => addMicroItem(di)} className="v2-btn-ghost text-xs py-1 px-2 shrink-0" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
+                          <Plus size={12} /> Añadir
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-2 mt-3 pt-3" style={{borderTop: '1px solid rgba(185,165,135,0.06)'}}>
-                  <input value={newAttrName} onChange={e => setNewAttrName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addMicroItem(di)}
-                    placeholder={`Nuevo atributo en ${dim.name}`} className="v2-input flex-1 text-xs" />
-                  <button onClick={() => addMicroItem(di)} className="v2-btn-ghost text-xs py-1 px-2 shrink-0" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
-                    <Plus size={12} /> Añadir
+                <div className="flex gap-2 mt-4">
+                  <input value={newDimName} onChange={e => setNewDimName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addDimension()}
+                    placeholder="Nueva dimensión" className="v2-input flex-1" />
+                  <button onClick={addDimension} className="v2-btn-ghost" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
+                    <Plus size={14} /> Añadir dimensión
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-          <div className="flex gap-2 mt-4">
-            <input value={newDimName} onChange={e => setNewDimName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addDimension()}
-              placeholder="Nueva dimensión" className="v2-input flex-1" />
-            <button onClick={addDimension} className="v2-btn-ghost" style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}>
-              <Plus size={14} /> Añadir dimensión
-            </button>
-          </div>
-        </div>
-
-        {/* Etiquetas */}
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Etiquetas</h3>
-          <div className="space-y-4">
-            {renderTagSection('phase', 'Fases')}
-            {renderTagSection('category', 'Categorías')}
-            {renderTagSection('situation', 'Situaciones')}
-          </div>
-        </div>
-
-        {/* Backup */}
-        {user?.uid && (
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>
-              <DownloadCloud size={16} className="inline mr-2" />
-              Copia de seguridad
-            </h3>
-            {lastBackup ? (
-              <div className="space-y-3">
-                <p className="text-sm" style={{color: '#997b66'}}>
-                  Último backup:{' '}
-                  <span className="font-medium" style={{color: '#f1ede7'}}>
-                    {lastBackup._createdAt?.toDate?.()?.toLocaleDateString('es-ES', {
-                      day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                    }) || 'desconocida'}
-                  </span>
-                </p>
-                <button
-                  onClick={handleRestore}
-                  disabled={restoring}
-                  className="v2-btn-ghost"
-                  style={{background: 'rgba(232,172,101,0.12)', borderColor: 'rgba(232,172,101,0.2)', color: '#ecbd83'}}
-                >
-                  {restoring ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <RotateCcw size={16} />
-                  )}
-                  {restoring ? 'Restaurando...' : 'Restaurar desde backup'}
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-gk-text-tertiary">No hay backups disponibles</p>
             )}
           </div>
-        )}
+        </div>
 
-        <div className="flex gap-3 pt-4" style={{borderTop: '1px solid rgba(185,165,135,0.08)'}}>
+        <div className="border-t p-4" style={{borderColor: 'rgba(185,165,135,0.08)'}}>
           <button
             onClick={saveSettings}
             disabled={saving}
-            className="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 hover:shadow-lg hover:-translate-y-0.5"
+            className="w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 hover:shadow-lg hover:-translate-y-0.5"
             style={{
               background: 'linear-gradient(135deg, #e8ac65, #ecbd83)',
               color: '#0c0b09',
