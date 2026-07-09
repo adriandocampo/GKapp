@@ -476,13 +476,14 @@ db.version(20).stores({
   const settingsRows = await trans.table('settings').toArray();
   const existing = settingsRows.find(s => s.key === 'defaultAttributes');
 
+  const now = new Date();
   if (!existing) {
-    await trans.table('settings').add({ key: 'defaultAttributes', value: defaultAttributes });
+    await trans.table('settings').add({ key: 'defaultAttributes', value: defaultAttributes, updatedAt: now });
   } else {
     const val = existing.value || {};
     const dims = val.dimensions;
     if (!Array.isArray(dims) || dims.length === 0) {
-      await trans.table('settings').update(existing.id, { value: defaultAttributes });
+      await trans.table('settings').update(existing.id, { value: defaultAttributes, updatedAt: now });
     }
   }
 });

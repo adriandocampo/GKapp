@@ -53,7 +53,50 @@ export default function Settings() {
     if (crest) setTeamCrest(crest);
     if (secondary) setSecondaryImage(secondary);
     if (porterosData) setPorteros(porterosData);
-    if (attrsData) setDefaultAttributes(attrsData);
+    if (attrsData?.dimensions?.length > 0) {
+      setDefaultAttributes(attrsData);
+    } else {
+      const defaults = {
+        dimensions: [
+          {
+            name: 'Defensa de Portería',
+            microItems: [
+              { name: 'Parada en portería', value: 70 },
+              { name: '1 contra 1', value: 70 },
+              { name: 'Velocidad de reacción', value: 70 },
+              { name: 'Impulso', value: 70 },
+            ],
+          },
+          {
+            name: 'Defensa de Espacio',
+            microItems: [
+              { name: 'Altura en relación a línea defensiva', value: 70 },
+              { name: 'Juego aéreo', value: 70 },
+              { name: 'Coberturas', value: 70 },
+            ],
+          },
+          {
+            name: 'Juego Ofensivo',
+            microItems: [
+              { name: 'Continuidad', value: 70 },
+              { name: 'Reinicios', value: 70 },
+              { name: 'Saque de volea', value: 70 },
+              { name: 'Saque de mano', value: 70 },
+            ],
+          },
+          {
+            name: 'Perfil Psicológico',
+            microItems: [
+              { name: 'Liderazgo', value: 70 },
+              { name: 'Compostura', value: 70 },
+              { name: 'Asertividad', value: 70 },
+            ],
+          },
+        ],
+      };
+      setDefaultAttributes(defaults);
+      await setSetting('defaultAttributes', defaults);
+    }
     const color = await getSetting('corporateColor');
     if (color) setCorporateColor(color);
   }
