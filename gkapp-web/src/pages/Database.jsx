@@ -193,15 +193,15 @@ const TaskCard = React.memo(function TaskCard({ task, imageUrl, onClick, onAddTo
           )}
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
-          <span className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(22,20,16,0.6)', color: '#baa587' }}>{task.phase}</span>
-          {Array.isArray(task.category) && task.category.length > 0 && task.category.map(c => (
-            <span key={c} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(22,20,16,0.6)', color: '#baa587' }}>{c}</span>
-          ))}
+          <span className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(186,165,135,0.12)', color: '#baa587' }}>{task.phase}</span>
           {Array.isArray(task.dimension) && task.dimension.length > 0 && task.dimension.map(d => (
-            <span key={d} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(22,20,16,0.6)', color: '#baa587' }}>{d}</span>
+            <span key={d} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(135,165,186,0.12)', color: '#87a5ba' }}>{d}</span>
+          ))}
+          {Array.isArray(task.category) && task.category.length > 0 && task.category.map(c => (
+            <span key={c} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(165,186,135,0.12)', color: '#a5ba87' }}>{c}</span>
           ))}
           {Array.isArray(task.situation) && task.situation.length > 0 && task.situation.map(s => (
-            <span key={s} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(232,172,101,0.08)', color: '#e8ac65' }}>{s}</span>
+            <span key={s} className="px-2 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(232,172,101,0.1)', color: '#e8ac65' }}>{s}</span>
           ))}
         </div>
       </div>
@@ -715,20 +715,20 @@ export default function DatabasePage() {
             {tags.phase.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
           <select
-            value={filters.category}
-            onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}
-            className="v2-select"
-          >
-            <option value="">Todas las categorías</option>
-            {tags.category.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select
             value={filters.dimension}
             onChange={e => setFilters(f => ({ ...f, dimension: e.target.value }))}
             className="v2-select"
           >
             <option value="">Todas las dimensiones</option>
             {tags.dimension.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select
+            value={filters.category}
+            onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}
+            className="v2-select"
+          >
+            <option value="">Todas las categorías</option>
+            {tags.category.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <select
             value={filters.situation}
