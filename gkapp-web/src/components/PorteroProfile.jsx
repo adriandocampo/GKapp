@@ -4,7 +4,7 @@ import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Responsi
 import StarRating from './StarRating';
 import GoalkeeperHeatmap from './GoalkeeperHeatmap';
 import { fetchPlayerLastEvents, fetchHeatmap } from '../utils/sofascoreClient';
-import { db } from '../db';
+import { db, setSetting } from '../db';
 
 const TABS = [
   { key: 'profile', label: 'Perfil', icon: User },
@@ -429,22 +429,52 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
     scheduleSave(next, rating, observations);
   }
 
-  function handleAddMicroItem(dimIndex) {
+  async function handleAddMicroItem(dimIndex) {
     const name = window.prompt('Nombre del nuevo atributo:');
     if (!name || !name.trim()) return;
+    const trimmedName = name.trim();
     const next = {
       ...attrs,
       dimensions: attrs.dimensions.map((d, di) =>
         di === dimIndex
-          ? { ...d, microItems: [...d.microItems, { name: name.trim(), value: 50 }] }
+          ? { ...d, microItems: [...d.microItems, { name: trimmedName, value: 50 }] }
           : d
       )
     };
     setAttrs(next);
     persistChanges(next, rating, observations);
+    try {
+      const settings = await db.settings.where('key').equals('defaultAttributes').first();
+      if (settings) {
+        await setSetting('defaultAttributes', {
+          ...settings.value,
+          dimensions: settings.value.dimensions.map((d, di) =>
+            di === dimIndex
+              ? { ...d, microItems: [...d.microItems, { name: trimmedName, value: 70 }] }
+              : d
+          )
+        });
+      }
+      const all = await db.porteros.toArray();
+      for (const gk of all) {
+        if (gk.id === portero.id) continue;
+        const migrated = migrateAttributes(gk.customAttributes);
+        const updated = {
+          ...migrated,
+          dimensions: migrated.dimensions.map((d, di) =>
+            di === dimIndex
+              ? { ...d, microItems: [...d.microItems, { name: trimmedName, value: 50 }] }
+              : d
+          )
+        };
+        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[handleAddMicroItem] Error syncing all goalkeepers:', err);
+    }
   }
 
-  function handleDeleteMicroItem(dimIndex, microIndex) {
+  async function handleDeleteMicroItem(dimIndex, microIndex) {
     const next = {
       ...attrs,
       dimensions: attrs.dimensions.map((d, di) =>
@@ -455,19 +485,75 @@ export default function PorteroProfile({ portero, onClose, onUpdate, onDelete })
     };
     setAttrs(next);
     persistChanges(next, rating, observations);
+    try {
+      const settings = await db.settings.where('key').equals('defaultAttributes').first();
+      if (settings) {
+        const removedItem = attrs.dimensions[dimIndex].microItems[microIndex];
+        await setSetting('defaultAttributes', {
+          ...settings.value,
+          dimensions: settings.value.dimensions.map((d, di) =>
+            di === dimIndex
+              ? { ...d, microItems: d.microItems.filter((_, mi) => d.microItems[mi]?.name !== removedItem.name) }
+              : d
+          )
+        });
+      }
+      const removedName = attrs.dimensions[dimIndex].microItems[microIndex].name;
+      const all = await db.porteros.toArray();
+      for (const gk of all) {
+        if (gk.id === portero.id) continue;
+        const migrated = migrateAttributes(gk.customAttributes);
+        const updated = {
+          ...migrated,
+          dimensions: migrated.dimensions.map((d, di) =>
+            di === dimIndex
+              ? { ...d, microItems: d.microItems.filter(m => m.name !== removedName) }
+              : d
+          )
+        };
+        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[handleDeleteMicroItem] Error syncing all goalkeepers:', err);
+    }
   }
 
-  function handleAddDimension() {
+  async function handleAddDimension() {
     const name = window.prompt('Nombre de la nueva dimensión:');
     if (!name || !name.trim()) return;
-    const attrName = window.prompt(`Nombre del primer atributo para "${name.trim()}":`);
+    const trimmedName = name.trim();
+    const attrName = window.prompt(`Nombre del primer atributo para "${trimmedName}":`);
     if (!attrName || !attrName.trim()) return;
+    const trimmedAttr = attrName.trim();
+    const newDim = { name: trimmedName, microItems: [{ name: trimmedAttr, value: 50 }] };
     const next = {
       ...attrs,
-      dimensions: [...attrs.dimensions, { name: name.trim(), microItems: [{ name: attrName.trim(), value: 50 }] }]
+      dimensions: [...attrs.dimensions, { ...newDim, microItems: newDim.microItems.map(m => ({ ...m })) }]
     };
     setAttrs(next);
     persistChanges(next, rating, observations);
+    try {
+      const newDefaultDim = { name: trimmedName, microItems: [{ name: trimmedAttr, value: 70 }] };
+      const settings = await db.settings.where('key').equals('defaultAttributes').first();
+      if (settings) {
+        await setSetting('defaultAttributes', {
+          ...settings.value,
+          dimensions: [...settings.value.dimensions, { ...newDefaultDim, microItems: newDefaultDim.microItems.map(m => ({ ...m })) }]
+        });
+      }
+      const all = await db.porteros.toArray();
+      for (const gk of all) {
+        if (gk.id === portero.id) continue;
+        const migrated = migrateAttributes(gk.customAttributes);
+        const updated = {
+          ...migrated,
+          dimensions: [...migrated.dimensions, { ...newDim, microItems: newDim.microItems.map(m => ({ ...m })) }]
+        };
+        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[handleAddDimension] Error syncing all goalkeepers:', err);
+    }
   }
 
   function handleRatingChange(v) {

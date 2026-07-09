@@ -297,24 +297,60 @@ export default function Settings() {
     );
   }
 
-  function addMicroItem(dimIdx) {
+  async function addMicroItem(dimIdx) {
     if (!newAttrName.trim()) return;
+    const name = newAttrName.trim();
+    const newItem = { name, value: 70 };
     setDefaultAttributes(prev => ({
       ...prev,
       dimensions: prev.dimensions.map((d, i) =>
-        i === dimIdx ? { ...d, microItems: [...d.microItems, { name: newAttrName.trim(), value: 70 }] } : d
+        i === dimIdx ? { ...d, microItems: [...d.microItems, newItem] } : d
       )
     }));
     setNewAttrName('');
+    try {
+      const all = await db.porteros.toArray();
+      for (const gk of all) {
+        const gkAttrs = gk.customAttributes;
+        if (!gkAttrs || !gkAttrs.dimensions || gkAttrs.dimensions.length <= dimIdx) continue;
+        const updated = {
+          ...gkAttrs,
+          dimensions: gkAttrs.dimensions.map((d, i) =>
+            i === dimIdx ? { ...d, microItems: [...d.microItems, { name, value: 50 }] } : d
+          )
+        };
+        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[addMicroItem] Error syncing goalkeepers:', err);
+    }
   }
 
-  function removeMicroItem(dimIdx, microIdx) {
+  async function removeMicroItem(dimIdx, microIdx) {
+    const removedName = defaultAttributes.dimensions[dimIdx]?.microItems[microIdx]?.name;
     setDefaultAttributes(prev => ({
       ...prev,
       dimensions: prev.dimensions.map((d, i) =>
         i === dimIdx ? { ...d, microItems: d.microItems.filter((_, mi) => mi !== microIdx) } : d
       )
     }));
+    if (!removedName) return;
+    try {
+      const all = await db.porteros.toArray();
+      for (const gk of all) {
+        const gkAttrs = gk.customAttributes;
+        if (!gkAttrs || !gkAttrs.dimensions || gkAttrs.dimensions.length <= dimIdx) continue;
+        const updated = {
+          ...gkAttrs,
+          dimensions: gkAttrs.dimensions.map((d, i) =>
+            i === dimIdx ? { ...d, microItems: d.microItems.filter(m => m.name !== removedName) } : d
+          )
+        };
+        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[removeMicroItem] Error syncing goalkeepers:', err);
+    }
   }
 
   function updateMicroValue(dimIdx, microIdx, value) {
@@ -326,7 +362,9 @@ export default function Settings() {
     }));
   }
 
-  function renameMicroItem(dimIdx, microIdx, name) {
+  async function renameMicroItem(dimIdx, microIdx, name) {
+    const oldName = defaultAttributes.dimensions[dimIdx]?.microItems[microIdx]?.name;
+    if (!oldName) return;
     setDefaultAttributes(prev => ({
       ...prev,
       dimensions: prev.dimensions.map((d, i) =>
@@ -334,30 +372,97 @@ export default function Settings() {
       )
     }));
     setEditingMicroIdx(null);
+    if (oldName === name) return;
+    try {
+      const all = await db.porteros.toArray();
+      for (const gk of all) {
+        const gkAttrs = gk.customAttributes;
+        if (!gkAttrs || !gkAttrs.dimensions || gkAttrs.dimensions.length <= dimIdx) continue;
+        const updated = {
+          ...gkAttrs,
+          dimensions: gkAttrs.dimensions.map((d, i) =>
+            i === dimIdx ? { ...d, microItems: d.microItems.map(m => m.name === oldName ? { ...m, name } : m) } : d
+          )
+        };
+        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[renameMicroItem] Error syncing goalkeepers:', err);
+    }
   }
 
-  function addDimension() {
+  async function addDimension() {
     if (!newDimName.trim()) return;
+    const name = newDimName.trim();
+    const newDim = { name, microItems: [{ name: 'Nuevo atributo', value: 70 }] };
     setDefaultAttributes(prev => ({
       ...prev,
-      dimensions: [...prev.dimensions, { name: newDimName.trim(), microItems: [{ name: 'Nuevo atributo', value: 70 }] }]
+      dimensions: [...prev.dimensions, newDim]
     }));
     setNewDimName('');
+    try {
+      const gkDim = { name, microItems: [{ name: 'Nuevo atributo', value: 50 }] };
+      const all = await db.porteros.toArray();
+      for (const gk of all) {
+        const gkAttrs = gk.customAttributes;
+        if (!gkAttrs || !gkAttrs.dimensions) continue;
+        const updated = {
+          ...gkAttrs,
+          dimensions: [...gkAttrs.dimensions, { ...gkDim, microItems: gkDim.microItems.map(m => ({ ...m })) }]
+        };
+        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[addDimension] Error syncing goalkeepers:', err);
+    }
   }
 
-  function removeDimension(dimIdx) {
+  async function removeDimension(dimIdx) {
+    const removedName = defaultAttributes.dimensions[dimIdx]?.name;
     setDefaultAttributes(prev => ({
       ...prev,
       dimensions: prev.dimensions.filter((_, i) => i !== dimIdx)
     }));
+    if (!removedName) return;
+    try {
+      const all = await db.porteros.toArray();
+      for (const gk of all) {
+        const gkAttrs = gk.customAttributes;
+        if (!gkAttrs || !gkAttrs.dimensions) continue;
+        const updated = {
+          ...gkAttrs,
+          dimensions: gkAttrs.dimensions.filter(d => d.name !== removedName)
+        };
+        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[removeDimension] Error syncing goalkeepers:', err);
+    }
   }
 
-  function renameDimension(dimIdx, name) {
+  async function renameDimension(dimIdx, name) {
+    const oldName = defaultAttributes.dimensions[dimIdx]?.name;
+    if (!oldName) return;
     setDefaultAttributes(prev => ({
       ...prev,
       dimensions: prev.dimensions.map((d, i) => i === dimIdx ? { ...d, name } : d)
     }));
     setEditingDimIdx(null);
+    if (oldName === name) return;
+    try {
+      const all = await db.porteros.toArray();
+      for (const gk of all) {
+        const gkAttrs = gk.customAttributes;
+        if (!gkAttrs || !gkAttrs.dimensions) continue;
+        const updated = {
+          ...gkAttrs,
+          dimensions: gkAttrs.dimensions.map(d => d.name === oldName ? { ...d, name } : d)
+        };
+        await db.porteros.update(gk.id, { customAttributes: updated, updatedAt: new Date() });
+      }
+    } catch (err) {
+      console.error('[renameDimension] Error syncing goalkeepers:', err);
+    }
   }
 
   async function handleRestore() {
