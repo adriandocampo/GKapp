@@ -424,6 +424,69 @@ db.version(19).stores({
   });
 });
 
+// Version 20 — Ensure defaultAttributes has valid dimensions
+db.version(20).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+}).upgrade(async trans => {
+  const defaultAttributes = {
+    dimensions: [
+      {
+        name: 'Defensa de Portería',
+        microItems: [
+          { name: 'Parada en portería', value: 70 },
+          { name: '1 contra 1', value: 70 },
+          { name: 'Velocidad de reacción', value: 70 },
+          { name: 'Impulso', value: 70 },
+        ],
+      },
+      {
+        name: 'Defensa de Espacio',
+        microItems: [
+          { name: 'Altura en relación a línea defensiva', value: 70 },
+          { name: 'Juego aéreo', value: 70 },
+          { name: 'Coberturas', value: 70 },
+        ],
+      },
+      {
+        name: 'Juego Ofensivo',
+        microItems: [
+          { name: 'Continuidad', value: 70 },
+          { name: 'Reinicios', value: 70 },
+          { name: 'Saque de volea', value: 70 },
+          { name: 'Saque de mano', value: 70 },
+        ],
+      },
+      {
+        name: 'Perfil Psicológico',
+        microItems: [
+          { name: 'Liderazgo', value: 70 },
+          { name: 'Compostura', value: 70 },
+          { name: 'Asertividad', value: 70 },
+        ],
+      },
+    ],
+  };
+
+  const settingsRows = await trans.table('settings').toArray();
+  const existing = settingsRows.find(s => s.key === 'defaultAttributes');
+
+  if (!existing) {
+    await trans.table('settings').add({ key: 'defaultAttributes', value: defaultAttributes });
+  } else {
+    const val = existing.value || {};
+    const dims = val.dimensions;
+    if (!Array.isArray(dims) || dims.length === 0) {
+      await trans.table('settings').update(existing.id, { value: defaultAttributes });
+    }
+  }
+});
+
 const RETENTION_DAYS = 7;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
