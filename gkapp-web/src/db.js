@@ -762,19 +762,8 @@ export async function ensureSeedTasks() {
 
       if (!existing) {
         toAdd.push(task);
-      } else {
-        // Merge: only overwrite phase, category, situation, dimension, seedId from seed
-        const updateData = {
-          phase: task.phase,
-          category: task.category,
-          situation: task.situation,
-          dimension: task.dimension,
-          updatedAt: new Date(),
-        };
-        if (!existing.seedId && task.seedId) {
-          updateData.seedId = task.seedId;
-        }
-        await db.tasks.update(existing.id, updateData);
+      } else if (!existing.seedId && task.seedId) {
+        await db.tasks.update(existing.id, { seedId: task.seedId, updatedAt: new Date() });
       }
     }
 
