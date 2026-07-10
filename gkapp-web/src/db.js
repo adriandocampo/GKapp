@@ -578,7 +578,6 @@ export async function initDatabase() {
   }
   await ensureDefaultSettings();
   await ensureDefaultTags();
-  await cleanupOrphanTags();
   await cleanupDeletedItems();
 }
 
