@@ -218,19 +218,22 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
         videoType: sessionVideoType,
         youtubeUrl: sessionVideoMode === 'youtube' ? sessionYoutubeUrl : null,
       };
+      const previousTemplate = sessionRef.current?.templateFields ?? session?.templateFields ?? {};
+
       const mergedTemplateFields = {
-        ...(sessionRef.current?.templateFields || {}),
+        ...previousTemplate,
         porteros,
         contenidos,
         objetivos,
         focos,
         microciclo,
         tipoMD,
-        teamName: sessionTeamName,
-        teamCrest: sessionTeamCrest,
-        secondaryImage: sessionSecondaryImage,
-        corporateColor: sessionCorporateColor,
-      };
+        teamName: sessionTeamName ?? previousTemplate.teamName,
+        teamCrest: sessionTeamCrest ?? previousTemplate.teamCrest,
+        secondaryImage: sessionSecondaryImage ?? previousTemplate.secondaryImage,
+        corporateColor: sessionCorporateColor ?? previousTemplate.corporateColor,
+};
+      
       data.templateFields = mergedTemplateFields;
 
       let targetId = sessionRef.current?.id;
@@ -238,9 +241,13 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
         targetId = crypto.randomUUID();
       }
       data.id = targetId;
-      data.createdAt = data.createdAt || new Date();
+      data.createdAt = sessionRef.current?.createdAt || data.createdAt || new Date();
       data.updatedAt = new Date();
       await db.sessions.put(data);
+      sessionRef.current = {
+  ...data,
+  templateFields: mergedTemplateFields,
+};
 
       const today = todayISO();
       for (const task of tasks) {
