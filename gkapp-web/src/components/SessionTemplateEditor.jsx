@@ -70,10 +70,16 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
   const printRef = useRef(null);
 
   useEffect(() => {
-    if (!hasSavedTemplate) {
+    if (!teamName || teamName === 'Club Deportivo Lugo') {
       getSetting('teamName').then(n => { if (n) setTeamName(n); });
+    }
+    if (!teamCrest) {
       getSetting('teamCrest').then(c => { if (c) setTeamCrest(c); });
+    }
+    if (!secondaryImage) {
       getSetting('secondaryImage').then(s => { if (s) setSecondaryImage(s); });
+    }
+    if (!corporateColor || corporateColor === '#dc2626') {
       getSetting('corporateColor').then(c => { if (c) setCorporateColor(c); });
     }
   }, []);

@@ -334,6 +334,21 @@ function SessionDetailModal({ session, sessionTasks, allTasks, onSave, onClose, 
         if (c) setSessionCorporateColor(c);
       });
     }
+    if (!session?.templateFields?.teamName) {
+      getSetting('teamName').then(n => {
+        if (n) setSessionTeamName(n);
+      });
+    }
+    if (!session?.templateFields?.teamCrest) {
+      getSetting('teamCrest').then(c => {
+        if (c) setSessionTeamCrest(c);
+      });
+    }
+    if (!session?.templateFields?.secondaryImage) {
+      getSetting('secondaryImage').then(s => {
+        if (s) setSessionSecondaryImage(s);
+      });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

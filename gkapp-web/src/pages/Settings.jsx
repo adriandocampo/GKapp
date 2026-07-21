@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Upload, X, Trash2, ArrowLeft, Plus, GripVertical, DownloadCloud, RotateCcw, Loader2, User, Shield, Tags, Sliders } from 'lucide-react';
+import { Save, Upload, X, Trash2, ArrowLeft, Plus, GripVertical, DownloadCloud, RotateCcw, Loader2, User, Shield, Tags, Sliders, FolderOpen } from 'lucide-react';
 import { db, getSetting, setSetting } from '../db';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Modal';
@@ -42,6 +42,9 @@ export default function Settings() {
   const [editingMicroName, setEditingMicroName] = useState('');
   const [corporateColor, setCorporateColor] = useState('#dc2626');
   const [activeTab, setActiveTab] = useState('equipo');
+  const [seasons, setSeasons] = useState([]);
+  const [applySeasonId, setApplySeasonId] = useState('');
+  const [applying, setApplying] = useState(false);
 
   async function loadSettings() {
     const name = await getSetting('teamName');
@@ -101,6 +104,15 @@ export default function Settings() {
     if (color) setCorporateColor(color);
   }
 
+  async function loadSeasons() {
+    const all = await db.seasons.toArray();
+    const active = all.filter(s => !s.deletedAt);
+    setSeasons(active);
+    if (active.length > 0 && !applySeasonId) {
+      setApplySeasonId(active[active.length - 1].id);
+    }
+  }
+
   async function loadTags() {
     const all = await db.tags.toArray();
     const grouped = { phase: [], category: [], situation: [], dimension: [] };
@@ -118,6 +130,7 @@ export default function Settings() {
     loadSettings();
     loadTags();
     loadBackupInfo();
+    loadSeasons();
   }, [refreshKey]);
 
   async function loadBackupInfo() {
@@ -143,6 +156,43 @@ export default function Settings() {
   function removeImage(field) {
     if (field === 'teamCrest') setTeamCrest(null);
     else setSecondaryImage(null);
+  }
+
+  async function handleApplyToSeason() {
+    if (!applySeasonId) {
+      addToast('Selecciona una temporada', 'warning');
+      return;
+    }
+    const ok = await confirm(
+      `Se van a actualizar TODAS las sesiones de la temporada seleccionada con el nombre "${teamName}", el escudo y el color corporativo actuales. ¿Continuar?`,
+      { title: 'Aplicar cambios a temporada', confirmText: 'Aplicar', confirmColor: 'amber' }
+    );
+    if (!ok) return;
+    setApplying(true);
+    try {
+      const allSessions = await db.sessions.toArray();
+      const targetSessions = allSessions.filter(s => s.seasonId === applySeasonId && !s.deletedAt);
+      let count = 0;
+      for (const session of targetSessions) {
+        const mergedFields = {
+          ...(session.templateFields || {}),
+          teamName,
+          teamCrest,
+          secondaryImage,
+          corporateColor,
+        };
+        await db.sessions.update(session.id, {
+          templateFields: mergedFields,
+          updatedAt: new Date(),
+        });
+        count++;
+      }
+      addToast(`${count} sesiones actualizadas en la temporada`, 'success');
+    } catch (err) {
+      addToast('Error al aplicar cambios: ' + err.message, 'error');
+    } finally {
+      setApplying(false);
+    }
   }
 
   function addPortero() {
@@ -699,6 +749,45 @@ export default function Settings() {
                     />
                     <span className="text-sm font-mono text-gk-text-primary">{corporateColor}</span>
                     <span className="text-xs" style={{color: '#997b66'}}>Se usa en las líneas de la plantilla de sesión</span>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 pb-3" style={{color: '#baa587', borderBottom: '1px solid rgba(185,165,135,0.08)'}}>Aplicar cambios a temporada</h3>
+                  <p className="text-xs mb-3" style={{color: '#997b66'}}>Actualiza el nombre, escudo e imagen secundaria de todas las sesiones de una temporada con los valores actuales.</p>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-1">
+                      <FolderOpen size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{color: '#997b66'}} />
+                      <select
+                        value={applySeasonId}
+                        onChange={e => setApplySeasonId(e.target.value)}
+                        className="v2-select w-full"
+                        style={{paddingLeft: 32}}
+                      >
+                        <option value="">Seleccionar temporada...</option>
+                        {seasons.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={handleApplyToSeason}
+                      disabled={applying || !applySeasonId}
+                      className="v2-btn-ghost shrink-0"
+                      style={{
+                        background: applying ? 'rgba(232,172,101,0.05)' : 'rgba(232,172,101,0.12)',
+                        borderColor: 'rgba(232,172,101,0.2)',
+                        color: '#ecbd83',
+                        opacity: applying || !applySeasonId ? 0.5 : 1,
+                      }}
+                    >
+                      {applying ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Upload size={14} />
+                      )}
+                      {applying ? 'Aplicando...' : 'Aplicar cambios'}
+                    </button>
                   </div>
                 </div>
 
