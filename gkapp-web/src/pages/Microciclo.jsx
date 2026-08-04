@@ -15,9 +15,10 @@ function todayISO() {
 }
 
 function addDays(dateStr, days) {
-  const d = new Date(dateStr);
+  const [year, month, day] = String(dateStr).split('-').map(Number);
+  const d = new Date(year, month - 1, day);
   d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function nextMonday() {
@@ -25,7 +26,7 @@ function nextMonday() {
   const day = d.getDay();
   const diff = day === 0 ? 1 : 8 - day;
   d.setDate(d.getDate() + diff);
-  return d.toISOString().split('T')[0];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function normalizeMicrocicloDay(day, fallback) {

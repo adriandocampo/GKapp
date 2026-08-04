@@ -117,13 +117,22 @@ export function isValidMicrocycleRange(dateStart, dateEnd) {
   return days >= 3 && days <= 14;
 }
 
+function parseLocalDate(dateString) {
+  const [year, month, day] = String(dateString || '').split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatLocalDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export function getDimensionById(id) {
   return MICROCICLO_DIMENSIONS.find(d => d.id === id);
 }
 
 export function generateDays(dateStart, dateEnd) {
-  const start = new Date(dateStart);
-  const end = new Date(dateEnd);
+  const start = parseLocalDate(dateStart);
+  const end = parseLocalDate(dateEnd);
   const days = [];
   let current = new Date(start);
   while (current <= end) {
@@ -131,7 +140,7 @@ export function generateDays(dateStart, dateEnd) {
     const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     days.push({
       dayName: DIAS_NOMBRES[adjustedDay],
-      date: current.toISOString().split('T')[0],
+      date: formatLocalDate(current),
       dayIndex: days.length,
       isRestDay: false,
       foco1: '', foco2: '',

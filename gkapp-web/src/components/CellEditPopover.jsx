@@ -115,16 +115,25 @@ function MatchContent({ match, onUpdateMatch }) {
 }
 
 function DatesContent({ dateStart, dateEnd, onDatesChange }) {
+  const [draftStart, setDraftStart] = useState(dateStart);
+  const [draftEnd, setDraftEnd] = useState(dateEnd);
+
+  useEffect(() => {
+    setDraftStart(dateStart);
+    setDraftEnd(dateEnd);
+  }, [dateStart, dateEnd]);
+
   return (
     <div className="p-3 w-64 space-y-2">
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium" style={{ color: '#666' }}>Desde:</span>
-        <input type="date" value={dateStart} onChange={e => onDatesChange(e.target.value, dateEnd > e.target.value ? dateEnd : e.target.value)} className="flex-1 px-2 py-1.5 rounded text-sm" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.10)', color: '#333' }} />
+        <input type="date" value={draftStart} onChange={e => setDraftStart(e.target.value)} className="flex-1 px-2 py-1.5 rounded text-sm" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.10)', color: '#333' }} />
       </div>
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium" style={{ color: '#666' }}>Hasta:</span>
-        <input type="date" value={dateEnd} onChange={e => onDatesChange(dateStart, e.target.value)} className="flex-1 px-2 py-1.5 rounded text-sm" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.10)', color: '#333' }} />
+        <input type="date" value={draftEnd} onChange={e => setDraftEnd(e.target.value)} className="flex-1 px-2 py-1.5 rounded text-sm" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.10)', color: '#333' }} />
       </div>
+      <button type="button" onClick={() => onDatesChange(draftStart, draftEnd)} className="w-full px-2 py-1.5 rounded text-xs font-medium" style={{ background: 'rgba(46,125,50,0.12)', color: '#2e7d32', border: '1px solid rgba(46,125,50,0.25)' }}>Aplicar fechas</button>
     </div>
   );
 }

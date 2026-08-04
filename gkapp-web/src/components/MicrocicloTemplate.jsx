@@ -32,13 +32,20 @@ const rowLabelStyle = {
 
 function formatDDMMYY(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const [, month, day] = String(dateStr).split('-');
+  return `${day}/${month}`;
 }
 
 function formatRange(start, end) {
   if (!start || !end) return '';
   return `${formatDDMMYY(start)} - ${formatDDMMYY(end)}`;
+}
+
+function getLocalDateParts(dateStr) {
+  const [year, month, day] = String(dateStr || '').split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const weekday = date.getDay() === 0 ? 6 : date.getDay() - 1;
+  return { letter: DIAS_LETRA[weekday], number: date.getDate() };
 }
 
 function Pill({ text, color, onRemove, readonly }) {
@@ -270,15 +277,10 @@ export default function MicrocicloTemplate({
                 return (
                   <td
                     key={day.date}
-                    onClick={e => {
-                      if (readOnly) return;
-                      const willBeMatch = !day.isRestDay && !day.match?.hasMatch;
-                      if (willBeMatch) {
-                        cellRefs.current[`${i}-match`] = e.currentTarget.getBoundingClientRect();
-                      }
-                      onCycleDay(i);
-                      if (willBeMatch) setEditing({ dayIndex: i, rowType: 'match' });
-                    }}
+                     onClick={e => {
+                       if (readOnly) return;
+                       onCycleDay(i);
+                     }}
                     title={isRest ? 'Descanso → Partido' : isMatch ? 'Partido → Entrenamiento' : 'Entrenamiento → Descanso'}
                     style={{
                       width: 28, textAlign: 'center', fontWeight: 700, fontSize: 11,
@@ -290,7 +292,7 @@ export default function MicrocicloTemplate({
                       color: isRest || isMatch ? '#222' : '#111',
                     }}
                   >
-                    {DIAS_LETRA[i % 7]}
+                    {getLocalDateParts(day.date).letter}
                   </td>
                 );
               })}
@@ -305,15 +307,7 @@ export default function MicrocicloTemplate({
                 return (
                   <td
                     key={day.date}
-                    onClick={e => {
-                      if (readOnly) return;
-                      const willBeMatch = !day.isRestDay && !day.match?.hasMatch;
-                      if (willBeMatch) {
-                        cellRefs.current[`${i}-match`] = e.currentTarget.getBoundingClientRect();
-                      }
-                      onCycleDay(i);
-                      if (willBeMatch) setEditing({ dayIndex: i, rowType: 'match' });
-                    }}
+                    onClick={() => { if (!readOnly) onCycleDay(i); }}
                     style={{
                       width: 28, textAlign: 'center', fontSize: 11,
                       borderLeft: i === 0 ? 'none' : `1px solid ${BD}`,
@@ -323,7 +317,7 @@ export default function MicrocicloTemplate({
                       fontWeight: isRest ? 700 : 400,
                     }}
                   >
-                    {isRest ? '/' : new Date(day.date).getDate()}
+                    {getLocalDateParts(day.date).number}
                   </td>
                 );
               })}
@@ -432,7 +426,7 @@ export default function MicrocicloTemplate({
                 style={{ background: '#1a237e', color: '#fff', fontWeight: 700, textAlign: 'center', padding: '5px 3px', fontSize: 9, border: `1px solid ${BD}`, cursor: readOnly ? 'default' : 'pointer' }}
                 onClick={e => { if (!readOnly) openCell('dates', 'dates', e); }}
               >
-                {formatRange(dateStart, dateEnd)}
+                {formatRange(dateStart, dateEnd)} <span style={{ fontSize: 8, fontWeight: 400 }}>(editar)</span>
               </th>
               {days.map((day, i) => {
                 const isRest = day.isRestDay;
@@ -443,7 +437,7 @@ export default function MicrocicloTemplate({
                 else if (isMatch) { bg = MATCH_BLUE; color = '#0d47a1'; }
                 return (
                   <th key={day.date} style={{ background: bg, color, fontWeight: 700, textAlign: 'center', padding: '5px 2px', fontSize: 10, border: `1px solid ${BD}`, borderLeft: `1px dashed ${BD_DASH}` }}>
-                    {(day.dayName || '').toUpperCase()} {isRest ? '' : new Date(day.date).getDate()}
+                    <><span style={{ display: 'block' }}>{getLocalDateParts(day.date).letter}</span><span style={{ display: 'block', fontSize: 9 }}>{getLocalDateParts(day.date).number}</span></>
                   </th>
                 );
               })}
@@ -532,8 +526,6 @@ export default function MicrocicloTemplate({
                       {/* Match activation box (como imagen original) */}
                       {day.match?.hasMatch && (
                         <div
-                          className="cursor-pointer"
-                          onClick={e => { e.stopPropagation(); openCell(i, 'match', e); }}
                           style={{
                             marginTop: 4,
                             background: MATCH_BOX,

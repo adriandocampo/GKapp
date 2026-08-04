@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getInclusiveDayCount, isValidMicrocycleRange } from './microcicloItems';
+import { generateDays, getInclusiveDayCount, isValidMicrocycleRange } from './microcicloItems';
 
 describe('microcycle date range', () => {
   it('accepts the minimum three-day range', () => {
@@ -16,5 +16,12 @@ describe('microcycle date range', () => {
     expect(isValidMicrocycleRange('2026-08-03', '2026-08-04')).toBe(false);
     expect(isValidMicrocycleRange('2026-08-03', '2026-08-17')).toBe(false);
     expect(isValidMicrocycleRange('2026-08-05', '2026-08-03')).toBe(false);
+  });
+
+  it('starts on the selected local date instead of shifting to another weekday', () => {
+    const days = generateDays('2026-04-22', '2026-04-24');
+
+    expect(days.map(day => day.date)).toEqual(['2026-04-22', '2026-04-23', '2026-04-24']);
+    expect(days[0].dayName).toBe('Miércoles');
   });
 });
