@@ -139,79 +139,49 @@ function Layout() {
       <nav className={`sticky top-0 z-50 ${isDev ? 'dev-navbar' : 'bg-gk-page/95 backdrop-blur-sm border-b border-gk-border'}`} style={{fontSize: 16}}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
+            <div className="flex items-center min-w-0 flex-1 gk-nav-scroll">
               <div className="flex items-center gap-2 shrink-0">
                 <span className={`text-xl font-bold ${isDev ? 'dev-gradient-text' : 'text-gk-accent'}`}>GKApp</span>
                 {isDev && <span className="dev-badge">DEV</span>}
               </div>
               <NavLink
                 to="/"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
-                style={({ isActive }) => ({
-                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
-                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
-                  color: isActive ? '#e8ac65' : '#baa587',
-                })}
-              >
+                 className="gk-nav-link gk-nav-database"
+               >
                 <Database size={20} />
                 <span>Base de Datos</span>
               </NavLink>
               <NavLink
                 to="/editor"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
-                style={({ isActive }) => ({
-                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
-                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
-                  color: isActive ? '#e8ac65' : '#baa587',
-                })}
-              >
+                 className="gk-nav-link gk-nav-task"
+               >
                 <PlusCircle size={20} />
                 <span>Nueva Tarea</span>
               </NavLink>
               <NavLink
+                to="/microciclos"
+                className="gk-nav-link gk-nav-microcycle"
+              >
+                <CalendarDays size={20} />
+                <span>Microciclo</span>
+              </NavLink>
+              <NavLink
                 to="/sessions"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
-                style={({ isActive }) => ({
-                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
-                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
-                  color: isActive ? '#e8ac65' : '#baa587',
-                })}
+                className="gk-nav-link gk-nav-sessions"
               >
                 <ClipboardList size={20} />
                 <span>Sesiones</span>
               </NavLink>
               <NavLink
                 to="/analysis"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
-                style={({ isActive }) => ({
-                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
-                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
-                  color: isActive ? '#e8ac65' : '#baa587',
-                })}
+                className="gk-nav-link gk-nav-analysis"
               >
                 <BarChart3 size={20} />
                 <span>Análisis</span>
               </NavLink>
               <NavLink
-                to="/microciclos"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
-                style={({ isActive }) => ({
-                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
-                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
-                  color: isActive ? '#e8ac65' : '#baa587',
-                })}
-              >
-                <CalendarDays size={20} />
-                <span>Microciclos</span>
-              </NavLink>
-              <NavLink
                 to="/porteros"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
-                style={({ isActive }) => ({
-                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
-                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
-                  color: isActive ? '#e8ac65' : '#baa587',
-                })}
+                className="gk-nav-link gk-nav-goalkeepers"
               >
                 <Shield size={20} />
                 <span>Porteros</span>
@@ -229,12 +199,7 @@ function Layout() {
               {isAdmin && (
                 <NavLink
                   to="/admin"
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
-                  style={({ isActive }) => ({
-                    background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
-                    borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
-                    color: isActive ? '#e8ac65' : '#baa587',
-                  })}
+                   className="gk-nav-link gk-nav-admin"
                 >
                   <Shield size={20} />
                   <span>Admin</span>
@@ -243,12 +208,7 @@ function Layout() {
 
               <NavLink
                 to="/settings"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
-                style={({ isActive }) => ({
-                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
-                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
-                  color: isActive ? '#e8ac65' : '#baa587',
-                })}
+                 className="gk-nav-link gk-nav-settings"
               >
                 <Settings size={20} />
                 <span>Ajustes</span>

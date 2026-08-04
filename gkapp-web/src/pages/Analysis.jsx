@@ -103,6 +103,11 @@ function parseMatchFileName(fileName) {
   return { matchName: base, opponent: /^lugo$/i.test(home) ? away : home };
 }
 
+function parseAnalysisRouteId(value) {
+  if (!value) return null;
+  return /^\d+$/.test(value) ? Number(value) : value;
+}
+
 export default function AnalysisPage() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -115,7 +120,7 @@ export default function AnalysisPage() {
 
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('stats');
-  const [analysisId, setAnalysisId] = useState(id ? Number(id) : null);
+  const [analysisId, setAnalysisId] = useState(() => parseAnalysisRouteId(id));
   const [seasons, setSeasons] = useState([]);
 
   // Form state
@@ -185,15 +190,18 @@ export default function AnalysisPage() {
 
   const saveTimerRef = useRef(null);
   const savingRef = useRef(false);
+  const savePromiseRef = useRef(Promise.resolve());
   const analysisIdRef = useRef(analysisId);
   analysisIdRef.current = analysisId;
+  const createdAtRef = useRef(null);
 
   const autoSaveRef = useRef(async () => {});
   autoSaveRef.current = async function doSave(overrides = {}) {
-    if (!goalkeeperName.trim() || !seasonId || !microciclo.trim()) return;
-    if (savingRef.current) return;
+    if (savingRef.current) {
+      await savePromiseRef.current;
+    }
     savingRef.current = true;
-    try {
+    savePromiseRef.current = (async () => {
       const existingData = analysisIdRef.current ? await db.analyses.get(analysisIdRef.current) : null;
       const savedVideoType = overrides.videoType ?? videoType;
       const savedVideoSrc = overrides.videoSrc ?? videoSrc;
@@ -234,12 +242,13 @@ export default function AnalysisPage() {
         manualClipCategories,
         matchUrl,
         sofascoreData,
-        createdAt: new Date(),
+        createdAt: createdAtRef.current || existingData?.createdAt || new Date(),
         updatedAt: new Date(),
         deletedAt: null,
       };
 
       if (analysisIdRef.current) {
+        createdAtRef.current = payload.createdAt;
         await db.analyses.update(analysisIdRef.current, payload);
       } else {
         let existing = null;
@@ -253,6 +262,9 @@ export default function AnalysisPage() {
         setAnalysisId(newId);
         navigate(`/analysis/${newId}`, { replace: true });
       }
+    })();
+    try {
+      await savePromiseRef.current;
     } catch (err) {
       console.error('Auto-save error:', err);
     } finally {
@@ -755,18 +767,7 @@ export default function AnalysisPage() {
           <button
             onClick={async () => {
               if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-              const missing = [];
-              if (!goalkeeperName.trim()) missing.push('Portero');
-              if (!seasonId) missing.push('Temporada');
-              if (!microciclo.trim()) missing.push('Microciclo');
-              const requiredMissing = missing.length > 0;
-              if (requiredMissing) {
-                const html = `Hay campos obligatorios sin completar:<br/><br/>${missing.map(f => `<span style="color:#ef4444">- ${f}</span>`).join('<br/>')}<br/><br/>Si sales no se guardarán los cambios. ¿Salir?`;
-                const ok = await confirm('', { title: 'Campos obligatorios', messageHtml: html });
-                if (!ok) return;
-              } else {
-                await autoSaveRef.current();
-              }
+              await autoSaveRef.current();
               navigate('/analysis');
             }}
             className="v2-btn-ghost rounded-xl p-2 shrink-0"

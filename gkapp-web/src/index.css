@@ -366,6 +366,78 @@ input[type="range"].v2-rpe::-moz-range-thumb {
   color: #e8ac65 !important;
 }
 
+.gk-nav-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gk-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.gk-nav-link {
+  --nav-color: #e8ac65;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+  margin-left: 0.15rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.8rem;
+  color: #baa587;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.gk-nav-link svg {
+  width: 18px;
+  height: 18px;
+  color: var(--nav-color);
+  opacity: 0.9;
+  transition: opacity 160ms ease;
+}
+
+.gk-nav-link:hover {
+  background: color-mix(in srgb, var(--nav-color) 9%, transparent);
+  color: #f1ede7;
+}
+
+.gk-nav-link:hover svg,
+.gk-nav-link[aria-current='page'] svg {
+  opacity: 1;
+}
+
+.gk-nav-link[aria-current='page'] {
+  background: color-mix(in srgb, var(--nav-color) 15%, transparent);
+  border-color: color-mix(in srgb, var(--nav-color) 38%, transparent);
+  color: var(--nav-color);
+  box-shadow: inset 0 -2px 0 var(--nav-color), 0 5px 18px rgba(0, 0, 0, 0.12);
+}
+
+.gk-nav-link:focus-visible {
+  outline: 2px solid var(--nav-color);
+  outline-offset: 2px;
+}
+
+.gk-nav-database { --nav-color: #60a5fa; }
+.gk-nav-task { --nav-color: #c084fc; }
+.gk-nav-microcycle { --nav-color: #4ade80; }
+.gk-nav-sessions { --nav-color: #22d3ee; }
+.gk-nav-analysis { --nav-color: #fbbf24; }
+.gk-nav-goalkeepers { --nav-color: #fb7185; }
+.gk-nav-admin { --nav-color: #a78bfa; }
+.gk-nav-settings { --nav-color: #f0a7ca; }
+
+@media (max-width: 900px) {
+  .gk-nav-link {
+    padding-inline: 0.6rem;
+  }
+}
+
 @media print {
   @page {
     size: landscape;
