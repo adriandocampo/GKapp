@@ -6,6 +6,7 @@ import fs from 'fs';
 import https from 'https';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import ffmpegPath from 'ffmpeg-static';
 import { sendUsageTracking } from './tracking.js';
 import { SofaScoreScraper } from './sofascoreScraper.js';
 
@@ -108,7 +109,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(currentDir, '../preload/index.js'),
+      sandbox: false,
+      preload: path.join(currentDir, '../preload/index.mjs'),
     },
   });
 
@@ -249,16 +251,40 @@ ipcMain.handle('analysis:select-folder', async () => {
   return result.filePaths[0];
 });
 
+function sanitizeFileName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+}
+
+function resolveFfmpegBinary() {
+  let binary = null;
+  try {
+    binary = typeof ffmpegPath === 'string' ? ffmpegPath : (ffmpegPath?.path || null);
+  } catch {
+    binary = null;
+  }
+  if (binary && app.isPackaged) {
+    binary = binary.replace('app.asar', 'app.asar.unpacked');
+  }
+  return binary || 'ffmpeg';
+}
+
 ipcMain.handle('analysis:export-clips', async (_evt, { videoPath, clips, outputDir }) => {
   try {
+    const ffmpeg = resolveFfmpegBinary();
     const results = [];
-    for (const clip of clips) {
-      const { start, end, name } = clip;
-      const fileName = `${name.replace(/[^a-z0-9]/gi, '_')}_${start}.mp4`;
+    for (const clip of clips || []) {
+      const { start, end, name } = clip || {};
+      if (name == null || start == null || end == null) continue;
+      const fileName = `${sanitizeFileName(name)}.mp4`;
       const outputPath = path.join(outputDir, fileName);
-      
-      // Fast cut using -c copy
-      const cmd = `ffmpeg -y -ss ${start} -to ${end} -i "${videoPath}" -c copy "${outputPath}"`;
+
+      // Fast cut using -c copy (no re-encode)
+      const cmd = `"${ffmpeg}" -y -ss ${Number(start)} -to ${Number(end)} -i "${videoPath}" -c copy "${outputPath}"`;
       await execPromise(cmd);
       results.push({ name, success: true, path: outputPath });
     }

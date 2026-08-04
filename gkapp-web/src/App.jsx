@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
-import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield, BarChart3 } from 'lucide-react';
+import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield, BarChart3, CalendarDays } from 'lucide-react';
 import { initDatabase, ensureSeedTasks, ensureDefaultTags } from './db';
 import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore, withSyncGuard, setupSessionGuard, hasImageSyncFailures } from './sync';
 import { isFirebaseEnabled } from './firebase';
@@ -15,6 +15,7 @@ import SettingsPage from './pages/Settings';
 import AnalysisPage from './pages/Analysis';
 import AnalysisListPage from './pages/AnalysisList';
 import PorterosPage from './pages/Porteros';
+import MicrocicloPage from './pages/Microciclo';
 import AdminDashboard from './pages/AdminDashboard';
 import { ToastProvider, useToast } from './components/Toast';
 import { ModalProvider } from './components/Modal';
@@ -192,6 +193,18 @@ function Layout() {
                 <span>Análisis</span>
               </NavLink>
               <NavLink
+                to="/microciclos"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
+                style={({ isActive }) => ({
+                  background: isActive ? 'rgba(232,172,101,0.08)' : 'transparent',
+                  borderColor: isActive ? 'rgba(232,172,101,0.20)' : 'transparent',
+                  color: isActive ? '#e8ac65' : '#baa587',
+                })}
+              >
+                <CalendarDays size={20} />
+                <span>Microciclos</span>
+              </NavLink>
+              <NavLink
                 to="/porteros"
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all"
                 style={({ isActive }) => ({
@@ -297,6 +310,7 @@ function Layout() {
           <Route path="/analysis" element={<AnalysisListPage />} />
           <Route path="/analysis/new" element={<AnalysisPage />} />
           <Route path="/analysis/:id" element={<AnalysisPage />} />
+                  <Route path="/microciclos" element={<MicrocicloPage />} />
                   <Route path="/porteros" element={<PorterosPage />} />
                   {isAdmin && <Route path="/admin" element={<AdminDashboard />} />}
 </Routes>

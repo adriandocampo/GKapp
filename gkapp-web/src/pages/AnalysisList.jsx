@@ -322,11 +322,11 @@ export default function AnalysisListPage() {
             style={{ borderRadius: 16 }}
           >
             <div className="flex items-start gap-4">
-              {a.jornadaNumber && (
+              {(a.jornadaNumber || a.isAmistoso) && (
                 <div className="flex flex-col items-center justify-center min-w-[56px] py-1 px-2 rounded-xl shrink-0"
                   style={{ background: 'rgba(232,172,101,0.08)', border: '1px solid rgba(232,172,101,0.15)' }}>
-                  <span className="text-[9px] uppercase tracking-wider font-medium" style={{ color: '#e8ac65' }}>Jornada</span>
-                  <span className="text-xl font-black leading-none mt-0.5" style={{ color: '#e8ac65' }}>{a.jornadaNumber}</span>
+                  <span className="text-[9px] uppercase tracking-wider font-medium" style={{ color: '#e8ac65' }}>{a.isAmistoso ? 'Amistoso' : 'Jornada'}</span>
+                  <span className="text-xl font-black leading-none mt-0.5" style={{ color: '#e8ac65' }}>{a.isAmistoso ? 'A' : a.jornadaNumber}</span>
                 </div>
               )}
               <div className="flex-1 min-w-0">

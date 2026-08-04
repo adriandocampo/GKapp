@@ -944,6 +944,20 @@ db.version(24).stores({
   });
 });
 
+// Version 27 — Add microciclos table
+db.version(27).stores({
+  tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',
+  sessions: '++id, name, date, createdAt, seasonId, deletedAt',
+  seasons: '++id, name, createdAt, deletedAt',
+  tags: '++id, type, name',
+  taskHistory: '++id, taskId, sessionId, sessionName, date',
+  settings: '++id, key',
+  syncQueue: '++id, operation, table, docId, attempts, nextRetryAt',
+  analyses: '++id, [seasonId+xmlFileName], seasonId, xmlFileName, matchName, goalkeeperName, opponent, date, jornadaNumber, createdAt, deletedAt',
+  porteros: '++id, name, slug, sofascoreId, isManual, createdAt',
+  microciclos: '++id, name, seasonId, dateStart, dateEnd, createdAt, updatedAt, deletedAt',
+});
+
 // Version 25 — Add SofaScore match URL and data support
 db.version(25).stores({
   tasks: '++id, pageNumber, phase, category, situation, title, rating, createdAt, deletedAt',

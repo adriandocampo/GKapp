@@ -385,8 +385,34 @@ input[type="range"].v2-rpe::-moz-range-thumb {
     display: none !important;
   }
 
-  .fixed:not(.template-print-target) {
+  .no-print {
     display: none !important;
+  }
+
+  .fixed:not(.template-print-target):not(.microciclo-print-wrapper) {
+    display: none !important;
+  }
+
+  .microciclo-print-wrapper {
+    position: fixed !important;
+    inset: 0 !important;
+    background: white !important;
+    padding: 0 !important;
+    display: block !important;
+    height: 100vh !important;
+    width: 100vw !important;
+    z-index: auto !important;
+    overflow: auto !important;
+  }
+
+  .microciclo-print-wrapper > div {
+    background: white !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    width: 100vw !important;
   }
 
   .template-print-target {

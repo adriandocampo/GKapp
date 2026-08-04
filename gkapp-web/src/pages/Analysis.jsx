@@ -13,12 +13,13 @@ import StarRating from '../components/StarRating';
 import RPESlider from '../components/RPESlider';
 import PassMatrix from '../components/PassMatrix';
 import StatsCards from '../components/StatsCards';
-import MatchTimeline from '../components/MatchTimeline';
+import MatchTimeline, { DEFAULT_CLIP_CATEGORIES } from '../components/MatchTimeline';
 import PassDirectionChart from '../components/PassDirectionChart';
 import EventTimelineChart from '../components/EventTimelineChart';
 import GoalkeeperHeatmap from '../components/GoalkeeperHeatmap';
 import ShotMap from '../components/ShotMap';
-import { fetchMatchData } from '../utils/sofascoreClient';
+import GoalkeeperMatchStatsCard from '../components/GoalkeeperMatchStatsCard';
+import { fetchMatchData, fetchPlayerMatchStats, extractEventId, getPlayerImageUrl } from '../utils/sofascoreClient';
 // import GoalkeeperRadar from '../components/GoalkeeperRadar';
 import DefensiveGauge from '../components/DefensiveGauge';
 import PassProfileDashboard from '../components/PassProfileDashboard';
@@ -123,6 +124,7 @@ export default function AnalysisPage() {
   const [opponent, setOpponent] = useState('');
   const [seasonId, setSeasonId] = useState(null);
   const [jornadaNumber, setJornadaNumber] = useState('');
+  const [isAmistoso, setIsAmistoso] = useState(false);
   const [microciclo, setMicrociclo] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [rating, setRating] = useState(0);
@@ -133,6 +135,7 @@ export default function AnalysisPage() {
   const [videoSrc, setVideoSrc] = useState('');
   const [videoType, setVideoType] = useState('');
   const [videoPath, setVideoPath] = useState('');
+  const [videoBlob, setVideoBlob] = useState(null);
   const [xmlFileName, setXmlFileName] = useState('');
   const [videoSync, setVideoSync] = useState(getDefaultVideoSync());
   const [offsetPicker, setOffsetPicker] = useState(null);
@@ -142,6 +145,7 @@ export default function AnalysisPage() {
   const [tvVideoType, setTvVideoType] = useState('');
   const [tvVideoPath, setTvVideoPath] = useState('');
   const [tvVideoSrc, setTvVideoSrc] = useState('');
+  const [tvVideoBlob, setTvVideoBlob] = useState(null);
   const [activeVideoSource, setActiveVideoSource] = useState('tactical');
   const tvVideoInputRef = useRef();
   const [expandedVideoSections, setExpandedVideoSections] = useState(() => new Set(['tactical']));
@@ -150,6 +154,8 @@ export default function AnalysisPage() {
   // Find sessions in the same microciclo
   const [microcicloSessions, setMicrocicloSessions] = useState([]);
   const [defaultPorteros, setDefaultPorteros] = useState([]);
+  const [porteroMenuOpen, setPorteroMenuOpen] = useState(false);
+  const porteroMenuRef = useRef(null);
 
   useEffect(() => {
     if (!microciclo) { setMicrocicloSessions([]); return; }
@@ -165,11 +171,17 @@ export default function AnalysisPage() {
   const [passFlow, setPassFlow] = useState([]);
   const [clipRatings, setClipRatings] = useState({});
   const [clipCustomizations, setClipCustomizations] = useState({});
+  const [clipMarks, setClipMarks] = useState({});
+  const [manualClips, setManualClips] = useState([]);
+  const [manualClipCategories, setManualClipCategories] = useState(DEFAULT_CLIP_CATEGORIES);
 
   const [matchUrl, setMatchUrl] = useState('');
   const [sofascoreData, setSofascoreData] = useState(null);
   const [sofascoreLoading, setSofascoreLoading] = useState(false);
   const [sofascoreError, setSofascoreError] = useState(null);
+  const [sofascoreChanging, setSofascoreChanging] = useState(false);
+  const [detectedGkMenuOpen, setDetectedGkMenuOpen] = useState(false);
+  const detectedGkMenuRef = useRef(null);
 
   const saveTimerRef = useRef(null);
   const savingRef = useRef(false);
@@ -177,18 +189,23 @@ export default function AnalysisPage() {
   analysisIdRef.current = analysisId;
 
   const autoSaveRef = useRef(async () => {});
-  autoSaveRef.current = async function doSave() {
-    if (!goalkeeperName.trim() || !seasonId || !parsed || !microciclo.trim()) return;
+  autoSaveRef.current = async function doSave(overrides = {}) {
+    if (!goalkeeperName.trim() || !seasonId || !microciclo.trim()) return;
     if (savingRef.current) return;
     savingRef.current = true;
     try {
       const existingData = analysisIdRef.current ? await db.analyses.get(analysisIdRef.current) : null;
+      const savedVideoType = overrides.videoType ?? videoType;
+      const savedVideoSrc = overrides.videoSrc ?? videoSrc;
+      const savedVideoPath = overrides.videoPath ?? videoPath;
+      const savedVideoBlob = overrides.videoBlob ?? videoBlob;
       const payload = {
         goalkeeperName: goalkeeperName.trim().toUpperCase(),
         matchName: matchName.trim(),
         opponent: opponent.trim(),
         seasonId: seasonId || null,
-        jornadaNumber: jornadaNumber ? Number(jornadaNumber) : null,
+        jornadaNumber: isAmistoso ? null : (jornadaNumber ? Number(jornadaNumber) : null),
+        isAmistoso: !!isAmistoso,
         date,
         rating,
         rpe,
@@ -196,20 +213,25 @@ export default function AnalysisPage() {
         xmlData: parsed,
         rawXml,
         xmlFileName,
-        videoSrc: videoType === 'local' ? '' : videoSrc,
-        videoType: videoType || '',
-        videoSource: videoType || '',
-        videoPath: videoType === 'local' ? videoPath : '',
-        youtubeUrl: videoType === 'veo' ? videoSrc : '',
+        videoSrc: savedVideoType === 'local' ? '' : savedVideoSrc,
+        videoType: savedVideoType || '',
+        videoSource: savedVideoType || '',
+        videoPath: savedVideoType === 'local' ? savedVideoPath : '',
+        videoBlob: savedVideoType === 'local' ? savedVideoBlob : null,
+        youtubeUrl: savedVideoType === 'veo' ? savedVideoSrc : '',
         videoSync,
         tvVideoType: tvVideoType || '',
         tvVideoPath: tvVideoType === 'local' ? tvVideoPath : '',
         tvVideoSrc: tvVideoType === 'youtube' ? tvVideoSrc : '',
+        tvVideoBlob: tvVideoType === 'local' ? tvVideoBlob : null,
         tvVideoSync: getDefaultVideoSync(),
         activeVideoSource,
         microciclo: microciclo || null,
         clipRatings: existingData?.clipRatings || {},
         clipCustomizations: existingData?.clipCustomizations || {},
+        clipMarks: existingData?.clipMarks || {},
+        manualClips,
+        manualClipCategories,
         matchUrl,
         sofascoreData,
         createdAt: new Date(),
@@ -246,7 +268,7 @@ export default function AnalysisPage() {
   useEffect(() => {
     scheduleAutoSave();
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [goalkeeperName, matchName, opponent, seasonId, jornadaNumber, microciclo, date, rating, rpe, photo, rawXml, xmlFileName, parsed, videoSrc, videoType, videoPath, videoSync, matchUrl, sofascoreData, tvVideoType, tvVideoPath, tvVideoSrc, activeVideoSource]);
+  }, [goalkeeperName, matchName, opponent, seasonId, jornadaNumber, isAmistoso, microciclo, date, rating, rpe, photo, rawXml, xmlFileName, parsed, videoSrc, videoType, videoPath, videoBlob, videoSync, matchUrl, sofascoreData, clipMarks, manualClips, manualClipCategories, tvVideoType, tvVideoPath, tvVideoSrc, tvVideoBlob, activeVideoSource]);
 
   useEffect(() => {
     async function loadSeasons() {
@@ -257,6 +279,42 @@ export default function AnalysisPage() {
     loadSeasons();
     getSetting('defaultPorteros').then(p => { if (p) setDefaultPorteros(p); });
   }, []);
+
+  useEffect(() => {
+    if (!porteroMenuOpen) return;
+    function onDown(e) {
+      if (porteroMenuRef.current && !porteroMenuRef.current.contains(e.target)) {
+        setPorteroMenuOpen(false);
+      }
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') setPorteroMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [porteroMenuOpen]);
+
+  useEffect(() => {
+    if (!detectedGkMenuOpen) return;
+    function onDown(e) {
+      if (detectedGkMenuRef.current && !detectedGkMenuRef.current.contains(e.target)) {
+        setDetectedGkMenuOpen(false);
+      }
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') setDetectedGkMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [detectedGkMenuOpen]);
 
   useEffect(() => {
     if (!seasonId && seasons.length > 0 && !analysisId) {
@@ -280,27 +338,38 @@ export default function AnalysisPage() {
       setOpponent(a.opponent || '');
       setSeasonId(a.seasonId || null);
       setJornadaNumber(a.jornadaNumber ? String(a.jornadaNumber) : '');
+      setIsAmistoso(!!a.isAmistoso);
       setMicrociclo(a.microciclo || '');
       setDate(a.date || new Date().toISOString().split('T')[0]);
       setRating(a.rating || 0);
       setRpe(a.rpe || 5);
       setPhoto(a.goalkeeperPhoto || findSettingsPhoto(a.goalkeeperName, defaultPorteros) || findGoalkeeperPhoto(a.goalkeeperName) || null);
       setRawXml(a.rawXml || '');
-      const inferredVideoType = a.videoType || a.videoSource || (a.videoPath ? 'local' : (a.youtubeUrl ? 'veo' : ''));
+      const inferredVideoType = a.videoType || a.videoSource || (a.videoPath || a.videoBlob ? 'local' : (a.youtubeUrl ? 'veo' : ''));
       setVideoType(inferredVideoType);
       setVideoSrc(inferredVideoType === 'local'
-        ? (a.videoPath ? `file:///${String(a.videoPath).replace(/\\/g, '/')}` : '')
+        ? (a.videoPath
+          ? `file:///${String(a.videoPath).replace(/\\/g, '/')}`
+          : (a.videoBlob ? URL.createObjectURL(a.videoBlob) : ''))
         : (a.videoSrc || a.youtubeUrl || ''));
       setVideoPath(a.videoPath || '');
+      setVideoBlob(a.videoBlob || null);
       setXmlFileName(a.xmlFileName || '');
       setVideoSync(a.videoSync || getDefaultVideoSync(a.xmlData?.periods || []));
-      setTvVideoType(a.tvVideoType || '');
+      const inferredTvVideoType = a.tvVideoType || a.tvVideoSource || (a.tvVideoPath || a.tvVideoBlob ? 'local' : (a.tvVideoSrc ? 'youtube' : ''));
+      setTvVideoType(inferredTvVideoType);
       setTvVideoPath(a.tvVideoPath || '');
-      setTvVideoSrc(a.tvVideoSrc || '');
+      setTvVideoSrc(inferredTvVideoType === 'local' && a.tvVideoBlob
+        ? URL.createObjectURL(a.tvVideoBlob)
+        : (a.tvVideoSrc || ''));
+      setTvVideoBlob(a.tvVideoBlob || null);
       setActiveVideoSource(a.activeVideoSource || 'tactical');
       setExpandedVideoSections(new Set(['tactical', ...(a.tvVideoType ? ['tv'] : [])]));
-      setClipRatings(a.clipRatings || {});
-      setClipCustomizations(a.clipCustomizations || {});
+       setClipRatings(a.clipRatings || {});
+       setClipCustomizations(a.clipCustomizations || {});
+       setClipMarks(a.clipMarks || {});
+       setManualClips(Array.isArray(a.manualClips) ? a.manualClips : []);
+       setManualClipCategories(Array.isArray(a.manualClipCategories) ? a.manualClipCategories : DEFAULT_CLIP_CATEGORIES);
       if (a.matchUrl) setMatchUrl(a.matchUrl);
       if (a.sofascoreData) setSofascoreData(a.sofascoreData);
         if (a.rawXml) {
@@ -320,6 +389,31 @@ export default function AnalysisPage() {
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysisId]);
+
+  // Si sofascoreData viene de la BD sin goalkeeperMatchStats, se fetchca ahora
+  useEffect(() => {
+    if (!sofascoreData || !matchUrl) return;
+    if (sofascoreData.goalkeeperMatchStats !== undefined) return;
+    const eventId = extractEventId(matchUrl);
+    const playerId = sofascoreData.goalkeeper?.player?.id;
+    if (!eventId || !playerId) return;
+
+    let cancelled = false;
+    fetchPlayerMatchStats(eventId, playerId).then((stats) => {
+      if (cancelled || !stats) return;
+      const updated = { ...sofascoreData, goalkeeperMatchStats: stats };
+      setSofascoreData(updated);
+      if (analysisId) {
+        db.analyses.update(analysisId, {
+          matchUrl,
+          sofascoreData: updated,
+          updatedAt: new Date(),
+        }).catch(() => {});
+      }
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sofascoreData, matchUrl, analysisId]);
 
   const parseAndSet = useCallback(async (xmlString) => {
     try {
@@ -379,11 +473,11 @@ export default function AnalysisPage() {
   }
 
   const handleFetchSofaScore = async () => {
-    if (!matchUrl || !parsed?.goalkeeper?.name) return;
+    if (!matchUrl || !goalkeeperName.trim()) return;
     setSofascoreLoading(true);
     setSofascoreError(null);
     try {
-      const data = await fetchMatchData(matchUrl, parsed.goalkeeper.name);
+      const data = await fetchMatchData(matchUrl, goalkeeperName);
       setSofascoreData(data);
       if (analysisId) {
         await db.analyses.update(analysisId, {
@@ -396,6 +490,81 @@ export default function AnalysisPage() {
       setSofascoreError(err.message);
     } finally {
       setSofascoreLoading(false);
+    }
+  };
+
+  const handleChangeDetectedGoalkeeper = async (candidate) => {
+    if (!matchUrl || !candidate?.playerId) return;
+    setSofascoreChanging(true);
+    setSofascoreError(null);
+    try {
+      const data = await fetchMatchData(matchUrl, goalkeeperName, candidate.playerId);
+      setSofascoreData(data);
+      if (analysisId) {
+        await db.analyses.update(analysisId, {
+          matchUrl,
+          sofascoreData: data,
+          updatedAt: new Date()
+        });
+      }
+      setDetectedGkMenuOpen(false);
+    } catch (err) {
+      setSofascoreError(err.message);
+    } finally {
+      setSofascoreChanging(false);
+    }
+  };
+
+  const handleManualClipCreate = (clip) => {
+    const usedIds = new Set(manualClips.map((item) => item.id));
+    let nextNumber = manualClips.reduce((max, item) => {
+      const match = String(item.id || '').match(/^M-(\d+)$/);
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0) + 1;
+    let id = `M-${String(nextNumber).padStart(3, '0')}`;
+    while (usedIds.has(id)) {
+      nextNumber += 1;
+      id = `M-${String(nextNumber).padStart(3, '0')}`;
+    }
+    const manualClip = { ...clip, id, createdAt: new Date().toISOString() };
+    const updated = [...manualClips, manualClip];
+    setManualClips(updated);
+    if (analysisId) {
+      db.analyses.update(analysisId, { manualClips: updated, updatedAt: new Date() }).catch(() => {});
+    }
+  };
+
+  const handleManualClipDelete = (clipId) => {
+    const updated = manualClips.filter((clip) => clip.id !== clipId);
+    setManualClips(updated);
+    if (analysisId) {
+      db.analyses.update(analysisId, { manualClips: updated, updatedAt: new Date() }).catch(() => {});
+    }
+  };
+
+  const handleManualClipUpdate = (clipId, changes) => {
+    const updated = manualClips.map((clip) => clip.id === clipId ? { ...clip, ...changes } : clip);
+    setManualClips(updated);
+    if (analysisId) {
+      db.analyses.update(analysisId, { manualClips: updated, updatedAt: new Date() }).catch(() => {});
+    }
+  };
+
+  const handleManualClipCategoriesChange = (categories) => {
+    const updated = Array.from(new Set(categories));
+    setManualClipCategories(updated);
+    if (analysisId) {
+      db.analyses.update(analysisId, { manualClipCategories: updated, updatedAt: new Date() }).catch(() => {});
+    }
+  };
+
+  const handleClipMarkChange = (clipId, mark) => {
+    const updated = { ...clipMarks };
+    if (mark) updated[clipId] = mark;
+    else delete updated[clipId];
+    setClipMarks(updated);
+    if (analysisId) {
+      db.analyses.update(analysisId, { clipMarks: updated, updatedAt: new Date() }).catch(() => {});
     }
   };
 
@@ -414,19 +583,49 @@ export default function AnalysisPage() {
       if (!picked) return;
       setVideoPath(picked);
       setVideoSrc(`file:///${picked.replace(/\\/g, '/')}`);
+      setVideoBlob(null);
       setVideoType('local');
       return;
     }
     if (!file) return;
     const url = URL.createObjectURL(file);
     setVideoSrc(url);
+    setVideoBlob(file);
     setVideoType('local');
+  }
+
+  function handleVeoUrlChange(value) {
+    setVideoSrc(value);
+    setVideoPath('');
+    setVideoBlob(null);
+    setVideoType('veo');
+
+    const id = analysisIdRef.current;
+    if (id) {
+      db.analyses.update(id, {
+        videoSrc: value,
+        youtubeUrl: value,
+        videoType: 'veo',
+        videoSource: 'veo',
+        videoPath: '',
+        videoBlob: null,
+        updatedAt: new Date(),
+      }).catch(() => {});
+    } else {
+      autoSaveRef.current({
+        videoSrc: value,
+        videoType: 'veo',
+        videoPath: '',
+        videoBlob: null,
+      });
+    }
   }
 
   function clearVideoData() {
     setVideoSrc('');
     setVideoType('');
     setVideoPath('');
+    setVideoBlob(null);
     setVideoSync(getDefaultVideoSync(periods));
   }
 
@@ -434,6 +633,7 @@ export default function AnalysisPage() {
     setTvVideoSrc('');
     setTvVideoType('');
     setTvVideoPath('');
+    setTvVideoBlob(null);
   }
 
   async function handleTvVideoUpload(file) {
@@ -441,12 +641,14 @@ export default function AnalysisPage() {
       const picked = await window.electronAPI.pickVideoFile();
       if (!picked) return;
       setTvVideoPath(picked);
+      setTvVideoBlob(null);
       setTvVideoType('local');
       return;
     }
     if (!file) return;
     const url = URL.createObjectURL(file);
     setTvVideoSrc(url);
+    setTvVideoBlob(file);
     setTvVideoType('local');
   }
 
@@ -511,6 +713,7 @@ export default function AnalysisPage() {
   const gkStats = parsed?.goalkeeper?.stats || {};
   const oppStats = parsed?.opponent?.stats || {};
   const gkEvents = parsed?.goalkeeper?.events || [];
+  const activePorteros = defaultPorteros.filter(p => p.active === true || p.active === 'true');
   const videoEvents = (() => {
     const byId = new Map();
     for (const ev of gkEvents) byId.set(ev.id, ev);
@@ -555,7 +758,6 @@ export default function AnalysisPage() {
               const missing = [];
               if (!goalkeeperName.trim()) missing.push('Portero');
               if (!seasonId) missing.push('Temporada');
-              if (!parsed) missing.push('XML');
               if (!microciclo.trim()) missing.push('Microciclo');
               const requiredMissing = missing.length > 0;
               if (requiredMissing) {
@@ -600,7 +802,7 @@ export default function AnalysisPage() {
       {/* ── MAIN LAYOUT: sidebar + content ── */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* ── SIDEBAR ── */}
-        <div className="w-full lg:w-72 shrink-0 space-y-4">
+        <div className={`${activeTab === 'video' ? 'hidden' : 'w-full lg:w-72 shrink-0 space-y-4'}`}>
           {/* Photo */}
           <div className="glass-card-static p-5">
             <div className="flex justify-center mb-3">
@@ -653,7 +855,6 @@ export default function AnalysisPage() {
             />
           </div>
 
-          {parsed && (
           <div className="glass-card-static p-5">
             <div className="flex items-center gap-4 shrink-0">
               <div className="flex flex-col items-center gap-0.5">
@@ -666,7 +867,6 @@ export default function AnalysisPage() {
               </div>
             </div>
           </div>
-          )}
 
           {/* Form fields */}
           <div className="glass-card-static p-5 space-y-3">
@@ -682,13 +882,67 @@ export default function AnalysisPage() {
             </div>
             <div>
               <label className="text-xs font-medium mb-1 block" style={{ color: '#997b66' }}>Portero</label>
-              <input
-                type="text"
-                value={goalkeeperName}
-                onChange={(e) => setGoalkeeperName(e.target.value)}
-                placeholder="Nombre del portero"
-                className="v2-input w-full"
-              />
+              <div ref={porteroMenuRef} className="relative">
+                <input
+                  type="text"
+                  value={goalkeeperName}
+                  onChange={(e) => setGoalkeeperName(e.target.value)}
+                  placeholder="Nombre del portero"
+                  className="v2-input w-full"
+                  style={{ paddingRight: 32 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPorteroMenuOpen(o => !o)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded"
+                  style={{ color: porteroMenuOpen ? '#e8ac65' : '#997b66', cursor: 'pointer' }}
+                  title="Elegir portero por defecto"
+                >
+                  <ChevronDown size={14} className={`transition-transform ${porteroMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {porteroMenuOpen && (
+                  <div
+                    className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg"
+                    style={{ background: '#171512', border: '1px solid rgba(232,172,101,0.2)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+                  >
+                    {activePorteros.length === 0 && (
+                      <div className="px-3 py-2 text-xs" style={{ color: '#997b66' }}>
+                        No hay porteros activos en Ajustes
+                      </div>
+                    )}
+                    {activePorteros.map((p, i) => {
+                      const isSelected = normalizeName(p.name) === normalizeName(goalkeeperName);
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setGoalkeeperName(String(p.name || '').toUpperCase());
+                            if (p.photo) setPhoto(p.photo);
+                            setPorteroMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors"
+                          style={{
+                            background: isSelected ? 'rgba(232,172,101,0.10)' : 'transparent',
+                            color: '#f1ede7',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = isSelected ? 'rgba(232,172,101,0.10)' : 'rgba(232,172,101,0.08)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = isSelected ? 'rgba(232,172,101,0.10)' : 'transparent'; }}
+                        >
+                          {p.photo ? (
+                            <img src={p.photo} alt={p.name} className="w-6 h-6 rounded object-cover" />
+                          ) : (
+                            <span className="w-6 h-6 rounded flex items-center justify-center" style={{ background: 'rgba(22,20,16,0.8)', border: '1px solid rgba(185,165,135,0.15)', color: '#997b66' }}>
+                              <User size={12} />
+                            </span>
+                          )}
+                          <span className="truncate">{p.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="text-xs font-medium mb-1 block" style={{ color: '#997b66' }}>Rival</label>
@@ -733,7 +987,26 @@ export default function AnalysisPage() {
                 onChange={(e) => setJornadaNumber(e.target.value)}
                 placeholder="Ej: 12"
                 className="v2-input w-full"
+                disabled={isAmistoso}
+                style={isAmistoso ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isAmistoso}
+                  onChange={(e) => {
+                    setIsAmistoso(e.target.checked);
+                    if (e.target.checked) setJornadaNumber('');
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#e8ac65] after:bg-[#997b66]"
+                  style={{ background: isAmistoso ? '#e8ac65' : 'rgba(185,165,135,0.2)' }}
+                />
+              </label>
+              <span className="text-xs font-medium" style={{ color: isAmistoso ? '#e8ac65' : '#997b66' }}>Amistoso</span>
             </div>
             <div className="pt-2" style={{ borderTop: '1px solid rgba(185,165,135,0.08)' }}>
               <label className="text-xs font-medium mb-1 block flex items-center gap-1" style={{ color: '#997b66' }}>
@@ -769,10 +1042,77 @@ export default function AnalysisPage() {
                 <div className="mt-1 text-xs" style={{ color: '#d08c60' }}>{sofascoreError}</div>
               )}
               {sofascoreData && (
-                <div className="mt-1 flex items-center gap-1 text-xs" style={{ color: '#e8ac65' }}>
-                  <CheckCircle size={12} />
-                  <span>Datos cargados: {sofascoreData.goalkeeperHeatmap?.heatmap?.length || 0} puntos heatmap, {sofascoreData.rivalShots?.length || 0} tiros</span>
-                </div>
+                <>
+                  <div className="mt-1 flex items-center gap-1 text-xs" style={{ color: '#e8ac65' }}>
+                    <CheckCircle size={12} />
+                    <span>Datos cargados: {sofascoreData.goalkeeperHeatmap?.heatmap?.length || 0} puntos heatmap, {sofascoreData.rivalShots?.length || 0} tiros</span>
+                  </div>
+                  <div ref={detectedGkMenuRef} className="mt-2 relative">
+                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(22,20,16,0.5)', border: '1px solid rgba(185,165,135,0.12)' }}>
+                      {sofascoreData.goalkeeper?.player?.id && (
+                        <img
+                          src={getPlayerImageUrl(sofascoreData.goalkeeper.player.id)}
+                          alt=""
+                          className="w-5 h-5 rounded object-cover shrink-0"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
+                      <span className="text-xs truncate flex-1" style={{ color: '#997b66' }}>
+                        Portero: <span style={{ color: '#e8ac65' }}>{sofascoreData.goalkeeper?.player?.name || '?'}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setDetectedGkMenuOpen(o => !o)}
+                        className="p-1 rounded shrink-0"
+                        style={{ color: detectedGkMenuOpen ? '#e8ac65' : '#997b66', cursor: 'pointer' }}
+                        title="Cambiar portero detectado"
+                      >
+                        {sofascoreChanging ? (
+                          <div className="animate-spin h-3 w-3 border-b-2 rounded-full" style={{ borderColor: '#e8ac65' }} />
+                        ) : (
+                          <ChevronDown size={14} className={`transition-transform ${detectedGkMenuOpen ? 'rotate-180' : ''}`} />
+                        )}
+                      </button>
+                    </div>
+                    {detectedGkMenuOpen && (
+                      <div
+                        className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg"
+                        style={{ background: '#171512', border: '1px solid rgba(232,172,101,0.2)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+                      >
+                        {sofascoreData.goalkeeperCandidates?.length ? (
+                          sofascoreData.goalkeeperCandidates.map((c) => {
+                            const active = c.playerId === sofascoreData.goalkeeper?.player?.id;
+                            return (
+                              <button
+                                key={c.playerId}
+                                type="button"
+                                onClick={() => handleChangeDetectedGoalkeeper(c)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors"
+                                style={{
+                                  background: active ? 'rgba(232,172,101,0.10)' : 'transparent',
+                                  color: '#f1ede7',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = active ? 'rgba(232,172,101,0.10)' : 'rgba(232,172,101,0.08)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = active ? 'rgba(232,172,101,0.10)' : 'transparent'; }}
+                              >
+                                <img
+                                  src={c.photoUrl}
+                                  alt=""
+                                  className="w-5 h-5 rounded object-cover shrink-0"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                                <span className="truncate flex-1">{c.name}</span>
+                                <span className="text-[10px] truncate max-w-[90px]" style={{ color: '#997b66' }}>{c.teamName}</span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="px-3 py-2 text-xs" style={{ color: '#997b66' }}>No hay porteros alternativos en las alineaciones</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
             {microciclo && (
@@ -874,7 +1214,7 @@ export default function AnalysisPage() {
                       }}
                     >Local</button>
                     <button
-                      onClick={() => { setVideoPath(''); setVideoType('veo'); }}
+                      onClick={() => { setVideoPath(''); setVideoBlob(null); setVideoType('veo'); }}
                       className="px-3 py-2 rounded-lg text-xs font-semibold border-2 transition-all"
                       style={{
                         background: videoType === 'veo' ? 'rgba(232,172,101,0.12)' : 'rgba(22,20,16,0.6)',
@@ -887,7 +1227,7 @@ export default function AnalysisPage() {
                     <input
                       type="url"
                       value={videoSrc}
-                      onChange={(e) => setVideoSrc(e.target.value)}
+                      onChange={(e) => handleVeoUrlChange(e.target.value)}
                       placeholder="Pega aquí el enlace directo del video (MP4)..."
                       className="v2-input w-full"
                     />
@@ -1070,29 +1410,38 @@ export default function AnalysisPage() {
           </div>
 
           {/* Tab content */}
-          {!parsed && (
-            <div className="flex flex-col items-center justify-center py-20" style={{ color: '#997b66' }}>
-              <AlertCircle size={48} className="mb-4" style={{ opacity: 0.4 }} />
-              <p className="text-sm">Carga un archivo XML para ver el análisis</p>
-            </div>
-          )}
-
-          {parsed && activeTab === 'stats' && (
+          {activeTab === 'stats' && (
             <div className="space-y-6">
-              <StatsCards gkStats={gkStats} opponentStats={oppStats} passFlow={passFlow} />
+              {parsed ? (
+                <>
+                  <StatsCards gkStats={gkStats} opponentStats={oppStats} passFlow={passFlow} />
 
-              <div className="glass-card-static p-5">
-                <PassMatrix passFlow={passFlow} goalkeeperCode={parsed?.goalkeeper?.code || ''} />
-              </div>
+                  <div className="glass-card-static p-5">
+                    <PassMatrix passFlow={passFlow} goalkeeperCode={parsed?.goalkeeper?.code || ''} />
+                  </div>
 
-              <div className="glass-card-static p-5">
-                <PassProfileDashboard passes={gkStats.passes} />
-              </div>
+                  <div className="glass-card-static p-5">
+                    <PassProfileDashboard passes={gkStats.passes} />
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-center" style={{ color: '#997b66' }}>
+                  <AlertCircle size={40} className="mb-3" style={{ opacity: 0.4 }} />
+                  <p className="text-sm max-w-md">
+                    Sube un XML para ver estadísticas avanzadas, o añade una URL de SofaScore y un vídeo para completar el análisis.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="glass-card-static p-5">
-                  <EventTimelineChart events={gkEvents} opponentEvents={parsed?.opponent?.events || []} periods={periods} />
-                </div>
+                {parsed && (
+                  <div className="glass-card-static p-5">
+                    <EventTimelineChart events={gkEvents} opponentEvents={parsed?.opponent?.events || []} periods={periods} />
+                  </div>
+                )}
+                {!rawXml && sofascoreData && (
+                  <GoalkeeperMatchStatsCard stats={sofascoreData.goalkeeperMatchStats} />
+                )}
                 <div className="glass-card-static p-5">
                   <h3 className="text-xs font-semibold tracking-wider uppercase mb-3 flex items-center justify-center gap-1.5" style={{ color: '#997b66' }}>
                     <Activity size={14} /> Heatmap del Portero
@@ -1100,7 +1449,7 @@ export default function AnalysisPage() {
                   {sofascoreData?.goalkeeperHeatmap?.heatmap ? (
                     <GoalkeeperHeatmap
                       heatmap={sofascoreData.goalkeeperHeatmap.heatmap}
-                      goalkeeperName={parsed?.goalkeeper?.name}
+                      goalkeeperName={goalkeeperName || parsed?.goalkeeper?.name}
                     />
                   ) : (
                     <div className="flex flex-col items-center justify-center py-8" style={{ color: '#997b66' }}>
@@ -1129,7 +1478,7 @@ export default function AnalysisPage() {
             </div>
           )}
 
-          {parsed && activeTab === 'video' && (
+          {activeTab === 'video' && (
             <MatchTimeline
               events={videoEvents}
               periods={periods}
@@ -1147,6 +1496,8 @@ export default function AnalysisPage() {
                   db.analyses.update(analysisId, { clipRatings: updated, updatedAt: new Date() }).catch(() => {});
                 }
               }}
+              clipMarks={clipMarks}
+              onClipMarkChange={handleClipMarkChange}
               clipCustomizations={clipCustomizations}
               onClipCustomizationChange={(eventId, customizations) => {
                 const updated = { ...clipCustomizations, [eventId]: customizations };
@@ -1155,6 +1506,13 @@ export default function AnalysisPage() {
                   db.analyses.update(analysisId, { clipCustomizations: updated, updatedAt: new Date() }).catch(() => {});
                 }
               }}
+              manualClips={manualClips}
+              onManualClipCreate={handleManualClipCreate}
+              onManualClipUpdate={handleManualClipUpdate}
+              onManualClipDelete={handleManualClipDelete}
+              manualClipCategories={manualClipCategories}
+              onManualClipCategoriesChange={handleManualClipCategoriesChange}
+              onNotify={addToast}
             />
 
           )}

@@ -35,4 +35,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pickVideoFile: () => ipcRenderer.invoke('analysis:pick-video'),
   lookupBeSoccer: (matchName) => ipcRenderer.invoke('analysis:lookup-besoccer', matchName),
   fetchSofaScoreData: (url, goalkeeperName) => ipcRenderer.invoke('sofascore:fetch-match-data', { url, goalkeeperName }),
+  selectClipFolder: () => ipcRenderer.invoke('analysis:select-folder'),
+  exportClips: (payload) => ipcRenderer.invoke('analysis:export-clips', payload),
 });

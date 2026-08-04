@@ -152,7 +152,7 @@ export default function SessionTemplateEditor({ session, sessionTasks, taskImage
   }
 
   const porteroClass = (active) =>
-    active === false
+    active === false || active === 'false'
       ? 'bg-gradient-to-b from-gray-300 to-gray-400 text-gray-600 font-bold'
       : 'bg-gradient-to-b from-green-500 to-green-600 text-white font-bold shadow-sm';
 

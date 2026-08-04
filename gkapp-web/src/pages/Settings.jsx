@@ -842,6 +842,24 @@ export default function Settings() {
                           />
                         </div>
                         <span className="text-sm text-gk-text-primary flex-1 min-w-0 truncate">{p.name}</span>
+                        <button
+                          onClick={() => setPorteros(prev => prev.map((p, idx) => idx === i ? { ...p, active: !p.active } : p))}
+                          className="p-1 rounded transition-colors shrink-0"
+                          style={{ color: p.active ? '#22c55e' : '#6b7280' }}
+                          title={p.active ? 'Desactivar' : 'Activar'}
+                        >
+                          {p.active ? (
+                            <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: '#22c55e' }}>
+                              <span className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
+                              Activo
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: '#6b7280' }}>
+                              <span className="w-2 h-2 rounded-full" style={{ background: '#6b7280' }} />
+                              Inactivo
+                            </span>
+                          )}
+                        </button>
                         {porteros.length > 1 && (
                           <button onClick={() => removePortero(i)} className="p-1 hover:bg-red-900/30 rounded text-gk-text-tertiary hover:text-stat-rose transition-colors">
                             <Trash2 size={14} />
