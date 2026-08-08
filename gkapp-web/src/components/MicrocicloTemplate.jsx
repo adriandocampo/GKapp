@@ -84,13 +84,13 @@ function Pill({ text, color, onRemove, readonly }) {
 }
 
 function InlineInput({ value, onChange, placeholder, style, readonly }) {
-  if (readonly) return <span style={{ fontSize: 10, ...style }}>{value || ''}</span>;
+  if (readonly) return <span style={{ fontSize: 10, lineHeight: 1, ...style }}>{value || ''}</span>;
   return (
     <input
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
-      style={{ fontSize: 10, border: 'none', background: 'transparent', width: '100%', outline: 'none', padding: 0, ...style }}
+      style={{ fontSize: 10, lineHeight: 1, height: '1em', border: 'none', background: 'transparent', width: '100%', outline: 'none', padding: 0, ...style }}
     />
   );
 }
@@ -330,12 +330,17 @@ export default function MicrocicloTemplate({
       <div style={{ display: 'flex', gap: 10, padding: '8px 6px', borderBottom: `1px solid ${BD_LIGHT}` }}>
         <div style={{ flex: 1 }}>
           <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, color: CC, padding: '2px 0 6px' }}>Focos</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', border: `1px solid ${BD}` }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', border: `1px solid ${BD}`, tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: 70 }} />
+              <col />
+              <col />
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '3px 4px', border: `1px solid ${BD}`, width: 70 }}>Día</th>
-                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '3px 4px', border: `1px solid ${BD}` }}>FOCO 1</th>
-                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '3px 4px', border: `1px solid ${BD}` }}>FOCO 2</th>
+                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '2px 4px', border: `1px solid ${BD}` }}>Día</th>
+                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '2px 4px', border: `1px solid ${BD}` }}>FOCO 1</th>
+                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '2px 4px', border: `1px solid ${BD}` }}>FOCO 2</th>
               </tr>
             </thead>
             <tbody>
@@ -346,19 +351,19 @@ export default function MicrocicloTemplate({
                 const dayColor = isRest || isMatch ? '#222' : '#fff';
                 return (
                   <tr key={day.date}>
-                    <td style={{ background: dayBg, color: dayColor, fontWeight: 700, fontSize: 9, padding: '3px 4px', border: `1px solid ${BD}`, textAlign: 'left' }}>
+                    <td style={{ background: dayBg, color: dayColor, fontWeight: 700, fontSize: 9, padding: '2px 4px', border: `1px solid ${BD}`, textAlign: 'left', lineHeight: 1 }}>
                       {day.dayName}
                     </td>
                     {isRest || isMatch ? (
-                      <td colSpan={2} style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: isRest ? REST_YELLOW : MATCH_BLUE, textAlign: 'center', fontWeight: 700, fontSize: 9 }}>
+                      <td colSpan={2} style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: isRest ? REST_YELLOW : MATCH_BLUE, textAlign: 'center', fontWeight: 700, fontSize: 9, lineHeight: 1 }}>
                         {isRest ? 'DESCANSO' : 'PARTIDO'}
                       </td>
                     ) : (
                       <>
-                        <td style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: '#fff' }}>
+                        <td style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: '#fff', lineHeight: 1 }}>
                           <InlineInput value={day.foco1} onChange={v => onUpdateDay(i, { foco1: v })} placeholder="" readonly={readOnly} />
                         </td>
-                        <td style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: '#fff' }}>
+                        <td style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: '#fff', lineHeight: 1 }}>
                           <InlineInput value={day.foco2} onChange={v => onUpdateDay(i, { foco2: v })} placeholder="" readonly={readOnly} />
                         </td>
                       </>
@@ -371,13 +376,19 @@ export default function MicrocicloTemplate({
         </div>
         <div style={{ flex: 1.35 }}>
           <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, color: CC, padding: '2px 0 6px' }}>Objetivos</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', border: `1px solid ${BD}` }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', border: `1px solid ${BD}`, tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: 70 }} />
+              <col />
+              <col />
+              <col />
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '3px 4px', border: `1px solid ${BD}`, width: 70 }}>Día</th>
-                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '3px 4px', border: `1px solid ${BD}` }}>OBJETIVO 1</th>
-                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '3px 4px', border: `1px solid ${BD}` }}>OBJETIVO 2</th>
-                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '3px 4px', border: `1px solid ${BD}` }}>OBJETIVO 3</th>
+                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '2px 4px', border: `1px solid ${BD}` }}>Día</th>
+                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '2px 4px', border: `1px solid ${BD}` }}>OBJETIVO 1</th>
+                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '2px 4px', border: `1px solid ${BD}` }}>OBJETIVO 2</th>
+                <th style={{ background: '#c8c8c8', fontSize: 9, padding: '2px 4px', border: `1px solid ${BD}` }}>OBJETIVO 3</th>
               </tr>
             </thead>
             <tbody>
@@ -388,16 +399,16 @@ export default function MicrocicloTemplate({
                 const dayColor = isRest || isMatch ? '#222' : '#fff';
                 return (
                   <tr key={day.date}>
-                    <td style={{ background: dayBg, color: dayColor, fontWeight: 700, fontSize: 9, padding: '3px 4px', border: `1px solid ${BD}`, textAlign: 'left' }}>
+                    <td style={{ background: dayBg, color: dayColor, fontWeight: 700, fontSize: 9, padding: '2px 4px', border: `1px solid ${BD}`, textAlign: 'left', lineHeight: 1 }}>
                       {day.dayName}
                     </td>
                     {isRest || isMatch ? (
-                      <td colSpan={3} style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: isRest ? REST_YELLOW : MATCH_BLUE, textAlign: 'center', fontWeight: 700, fontSize: 9 }}>
+                      <td colSpan={3} style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: isRest ? REST_YELLOW : MATCH_BLUE, textAlign: 'center', fontWeight: 700, fontSize: 9, lineHeight: 1 }}>
                         {isRest ? 'DESCANSO' : 'PARTIDO'}
                       </td>
                     ) : (
                       ['objetivo1', 'objetivo2', 'objetivo3'].map(key => (
-                        <td key={key} style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: '#fff' }}>
+                        <td key={key} style={{ padding: '2px 4px', border: `1px solid ${BD}`, background: '#fff', lineHeight: 1 }}>
                           <InlineInput value={day[key]} onChange={v => onUpdateDay(i, { [key]: v })} placeholder="" readonly={readOnly} />
                         </td>
                       ))
@@ -414,7 +425,7 @@ export default function MicrocicloTemplate({
       <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 14, color: CC, padding: '8px 0 4px' }}>Microciclo</div>
 
       {/* Grid */}
-      <div style={{ overflowX: 'auto', padding: '0 4px 4px' }}>
+      <div className="microciclo-grid-scroll" style={{ overflowX: 'auto', padding: '0 4px 4px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', border: `2px solid ${BD}`, tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: 78 }} />
@@ -435,9 +446,19 @@ export default function MicrocicloTemplate({
                 let color = '#fff';
                 if (isRest) { bg = REST_YELLOW; color = '#222'; }
                 else if (isMatch) { bg = MATCH_BLUE; color = '#0d47a1'; }
+                const parts = getLocalDateParts(day.date);
                 return (
-                  <th key={day.date} style={{ background: bg, color, fontWeight: 700, textAlign: 'center', padding: '5px 2px', fontSize: 10, border: `1px solid ${BD}`, borderLeft: `1px dashed ${BD_DASH}` }}>
-                    <><span style={{ display: 'block' }}>{getLocalDateParts(day.date).letter}</span><span style={{ display: 'block', fontSize: 9 }}>{getLocalDateParts(day.date).number}</span></>
+                  <th key={day.date} style={{ background: bg, color, fontWeight: 700, textAlign: 'center', padding: '3px 2px', fontSize: 11, border: `1px solid ${BD}`, borderLeft: `1px dashed ${BD_DASH}`, verticalAlign: 'middle' }}>
+                    <span style={{ display: 'block', fontSize: 11, color: isRest || isMatch ? color : 'rgba(255,255,255,0.55)', fontWeight: 700 }}>
+                      {`${parts.letter}${parts.number}`}
+                    </span>
+                    <InlineInput
+                      value={day.sessionNumber || ''}
+                      onChange={v => onUpdateDay(i, { sessionNumber: v })}
+                      placeholder=""
+                      readonly={readOnly}
+                      style={{ fontSize: 10, fontWeight: 700, color: isRest || isMatch ? color : '#fff', textAlign: 'center', width: '100%' }}
+                    />
                   </th>
                 );
               })}
@@ -557,18 +578,18 @@ export default function MicrocicloTemplate({
               {days.map((day, i) => (
                 <td
                   key={day.date}
-                  style={{ ...cellBorder(i), ...dayColBg(day), borderBottom: 'none' }}
+                  style={{ ...cellBorder(i), ...dayColBg(day), borderBottom: 'none', verticalAlign: 'bottom' }}
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => dropItem(i, 'fisicoTipo', e)}
                 >
                   {day.isRestDay ? (
-                    <div style={{ fontSize: 8, color: '#666', paddingTop: 2 }}>
+                    <div style={{ fontSize: 8, color: '#666' }}>
                       <div>N° REPES:</div>
                       <div>TT:</div>
                       <div>RPE:</div>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%' }}>
                       <div className="cursor-pointer" onClick={e => openCell(i, 'fisicoTipo', e)}>
                         {day.grid.fisico.tipo ? (
                           <Pill
@@ -579,7 +600,7 @@ export default function MicrocicloTemplate({
                           />
                         ) : null}
                       </div>
-                      <div style={{ width: '100%', fontSize: 8, color: '#444', marginTop: 2, lineHeight: 1.4 }}>
+                      <div style={{ width: '100%', fontSize: 8, color: '#444', marginTop: 'auto', lineHeight: 1.4 }}>
                         {readOnly ? (
                           <>
                             <div>N° REPES: {day.grid.fisico.repes || ''}</div>

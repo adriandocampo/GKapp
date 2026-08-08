@@ -461,6 +461,10 @@ input[type="range"].v2-rpe::-moz-range-thumb {
     display: none !important;
   }
 
+  .microciclo-grid-scroll {
+    overflow: hidden !important;
+  }
+
   .fixed:not(.template-print-target):not(.microciclo-print-wrapper) {
     display: none !important;
   }
@@ -474,7 +478,7 @@ input[type="range"].v2-rpe::-moz-range-thumb {
     height: 100vh !important;
     width: 100vw !important;
     z-index: auto !important;
-    overflow: auto !important;
+    overflow: hidden !important;
   }
 
   .microciclo-print-wrapper > div {
