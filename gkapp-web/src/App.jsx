@@ -2,12 +2,12 @@
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield, BarChart3, CalendarDays } from 'lucide-react';
 import { initDatabase, ensureSeedTasks, ensureDefaultTags } from './db';
-import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore, withSyncGuard, setupSessionGuard, hasImageSyncFailures, processSyncQueue } from './sync';
+import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore, withSyncGuard, setupSessionGuard, hasImageSyncFailures, processSyncQueue, pushToFirestore } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { getBackupConfig, getBackup, createBackup, hasActivitySince } from './utils/adminFirestore';
+import { getBackupConfig, getBackup, createBackup, hasActivitySince, setBackupConfig } from './utils/adminFirestore';
+import { shouldRunBackup } from './utils/backupSchedule';
 import AuthGate, { handleSignOut, signInWithGoogle } from './components/AuthGate';
-import SyncStatus from './components/SyncStatus';
 import UpdateNotification from './components/UpdateNotification';
 import DatabasePage from './pages/Database';
 import TaskEditor from './pages/TaskEditor';
@@ -78,22 +78,31 @@ function Layout() {
           );
         }, 0);
 
-        // Auto-backup check: if enabled and 7+ days since last backup with activity
+        // Auto-backup check: run when requested by admin (one-shot), or when
+        // enabled and intervalDays have elapsed with activity since last backup.
+        // Always push local data to Firestore before backing up so the snapshot
+        // contains every change made on this device.
         setTimeout(async () => {
           try {
             const config = await getBackupConfig(user.uid);
-            if (config?.enabled) {
-              const backupMeta = await getBackup(user.uid);
-              const lastBackupDate = backupMeta?._createdAt?.toDate?.() || backupMeta?._createdAt;
-              const daysSince = lastBackupDate ? (Date.now() - new Date(lastBackupDate).getTime()) / 86400000 : Infinity;
+            const backupMeta = await getBackup(user.uid);
+            const lastBackupDate = backupMeta?._createdAt?.toDate?.() || backupMeta?._createdAt;
+            const hasActivity = lastBackupDate
+              ? await hasActivitySince(user.uid, lastBackupDate)
+              : true;
 
-              if (daysSince >= config.intervalDays) {
-                const hasActivity = lastBackupDate ? await hasActivitySince(user.uid, lastBackupDate) : true;
-                if (hasActivity) {
-                  await createBackup(user.uid);
-                  addToast('Backup automÃ¡tico completado', 'success');
-                }
-              }
+            if (!shouldRunBackup({ config, lastBackupDate, hasActivity })) return;
+
+            await processSyncQueue();
+            await pushToFirestore(user.uid);
+            await createBackup(user.uid);
+            addToast('Backup automÃ¡tico completado', 'success');
+
+            if (config?.requestedBackupAt) {
+              await setBackupConfig(user.uid, {
+                requestedBackupAt: null,
+                updatedAt: new Date().toISOString(),
+              });
             }
           } catch (err) {
             console.warn('[app] Auto-backup check failed:', err);
@@ -202,8 +211,6 @@ function Layout() {
                   Invitado
                 </span>
               )}
-
-              <SyncStatus />
 
               {isAdmin && (
                 <NavLink
