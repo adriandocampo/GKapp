@@ -7,7 +7,7 @@ import {
 import { firestore } from '../firebase';
 
 const BACKUP_TIMEOUT_MS = 60000;
-const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings', 'analyses', 'porteros'];
+const TABLES = ['tasks', 'sessions', 'tags', 'seasons', 'taskHistory', 'settings', 'analyses', 'porteros', 'microciclos'];
 
 function userCol(uid, table) {
   return collection(firestore, 'users', uid, table);
@@ -47,7 +47,7 @@ export async function getUserDataCounts(uid) {
   const counts = {};
   for (const table of TABLES) {
     const snap = await getDocs(userCol(uid, table));
-    if (table === 'tasks' || table === 'sessions' || table === 'seasons') {
+    if (table === 'tasks' || table === 'sessions' || table === 'seasons' || table === 'microciclos') {
       let active = 0, deleted = 0;
       snap.forEach(doc => {
         const data = doc.data();
@@ -113,13 +113,28 @@ export async function deleteUserDocument(uid, table, docId) {
 /** Export all user data as a JSON-friendly object */
 export async function exportAllUserData(uid) {
   const payload = { uid, exportedAt: new Date().toISOString() };
+  const counts = {};
   for (const table of TABLES) {
-    payload[table] = await getUserCollection(uid, table);
+    const rows = await getUserCollection(uid, table);
+    payload[table] = rows;
+    counts[table] = rows.length;
+    if (table === 'tasks' || table === 'sessions' || table === 'seasons' || table === 'microciclos') {
+      counts[`${table}Active`] = rows.filter(r => !r.deletedAt).length;
+      counts[`${table}Deleted`] = rows.filter(r => r.deletedAt).length;
+    }
   }
+  payload._counts = counts;
   return payload;
 }
 
 const SIZE_FIELDS = ['imageBase64', 'goalkeeperPhoto', 'rawXml', 'xmlData', 'sofascoreData'];
+const MAX_BATCH_OPS = 450;
+
+/** Remove heavy fields and the Firestore doc id before writing */
+function stripHeavyFields(row) {
+  const { id: _id, imageBase64, goalkeeperPhoto, rawXml, xmlData, sofascoreData, ...clean } = row;
+  return clean;
+}
 
 async function setDocWithRetry(ref, data) {
   try {
@@ -144,40 +159,40 @@ async function setDocWithRetry(ref, data) {
   }
 }
 
-/** Import (restore) user data from a JSON object.
- *  WARNING: this OVERWRITES existing documents with matching IDs.
- */
-export async function importAllUserData(uid, payload) {
-  for (const table of TABLES) {
-    const rows = payload[table];
-    if (!Array.isArray(rows) || rows.length === 0) continue;
-
-    const BATCH_SIZE = 450;
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const chunk = rows.slice(i, i + BATCH_SIZE);
-      const batch = writeBatch(firestore);
+/** Write rows into a user's Firestore table, splitting batches by operation count
+ *  and falling back to per-document writes (stripping heavy fields) when a batch
+ *  exceeds Firestore's size limits, so restores never abort halfway silently. */
+async function writeRowsToFirestore(uid, table, rows) {
+  for (let i = 0; i < rows.length; i += MAX_BATCH_OPS) {
+    const chunk = rows.slice(i, i + MAX_BATCH_OPS);
+    const batch = writeBatch(firestore);
+    for (const row of chunk) {
+      batch.set(userDocRef(uid, table, String(row.id)), stripHeavyFields(row), { merge: true });
+    }
+    try {
+      await batch.commit();
+    } catch (err) {
+      if (!err.message?.includes?.('exceeds the maximum allowed size')) throw err;
       for (const row of chunk) {
-        const id = String(row.id);
-        const ref = userDocRef(uid, table, id);
-        const { id: _id, ...data } = row;
-        batch.set(ref, data, { merge: true });
-      }
-      try {
-        await batch.commit();
-      } catch (err) {
-        if (err.message?.includes?.('exceeds the maximum allowed size')) {
-          for (const row of chunk) {
-            const id = String(row.id);
-            const ref = userDocRef(uid, table, id);
-            const { id: _id, ...data } = row;
-            await setDocWithRetry(ref, data);
-          }
-        } else {
-          throw err;
-        }
+        await setDocWithRetry(userDocRef(uid, table, String(row.id)), stripHeavyFields(row));
       }
     }
   }
+}
+
+/** Import (restore) user data from a JSON object.
+ *  WARNING: this OVERWRITES existing documents with matching IDs.
+ *  Returns per-table counts written so callers can verify against _counts.
+ */
+export async function importAllUserData(uid, payload) {
+  const written = {};
+  for (const table of TABLES) {
+    const rows = payload[table];
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+    await writeRowsToFirestore(uid, table, rows);
+    written[table] = rows.length;
+  }
+  return written;
 }
 
 /** Delete ALL data for a user (keeps the auth account) */
@@ -363,8 +378,8 @@ export async function restoreFromFile(uid, file, { force } = {}) {
     throw new Error(`El backup pertenece a ${data.uid}, no a ${uid}`);
   }
 
-  await importAllUserData(uid, data);
-  return true;
+  const written = await importAllUserData(uid, data);
+  return { data, written };
 }
 
 /** Restore all user data from the latest GitHub backup via Cloudflare Worker */
@@ -388,6 +403,7 @@ export async function restoreFromBackup(uid) {
   const data = JSON.parse(new TextDecoder().decode(decompressed));
 
   const BATCH_SIZE = 450;
+  const written = {};
 
   for (const table of TABLES) {
     const rows = data[table];
@@ -404,25 +420,15 @@ export async function restoreFromBackup(uid) {
       await batch.commit();
     }
 
-    // Write backup data (excluding imageBase64 to stay within limits)
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = writeBatch(firestore);
-      const chunk = rows.slice(i, i + BATCH_SIZE);
-      for (const row of chunk) {
-        const id = String(row.id);
-        const ref = userDocRef(uid, table, id);
-        const { id: _id, imageBase64, ...clean } = row;
-        batch.set(ref, { ...clean, updatedAt: serverTimestamp() });
-      }
-      await batch.commit();
-    }
+    await writeRowsToFirestore(uid, table, rows);
+    written[table] = rows.length;
   }
 
   // Touch backup config to mark restore happened
   const configRef = doc(firestore, 'users', uid, 'backups', 'config');
   await updateDoc(configRef, { lastRestoreAt: serverTimestamp() }).catch(() => {});
 
-  return true;
+  return { data, written };
 }
 
 const DEFAULT_PHASES = ['Activación', 'Parte Principal'];

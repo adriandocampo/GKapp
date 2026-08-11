@@ -2,11 +2,12 @@
 import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { Database, PlusCircle, ClipboardList, Settings, LogOut, User, Shield, BarChart3, CalendarDays } from 'lucide-react';
 import { initDatabase, ensureSeedTasks, ensureDefaultTags } from './db';
-import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore, withSyncGuard, setupSessionGuard, hasImageSyncFailures } from './sync';
+import { syncFromFirestore, setupFirestoreSync, clearAllLocalData, resetSyncHooks, cleanupOldDeletedFirestore, withSyncGuard, setupSessionGuard, hasImageSyncFailures, processSyncQueue } from './sync';
 import { isFirebaseEnabled } from './firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { getBackupConfig, getBackup, createBackup, hasActivitySince } from './utils/adminFirestore';
 import AuthGate, { handleSignOut, signInWithGoogle } from './components/AuthGate';
+import SyncStatus from './components/SyncStatus';
 import UpdateNotification from './components/UpdateNotification';
 import DatabasePage from './pages/Database';
 import TaskEditor from './pages/TaskEditor';
@@ -50,6 +51,12 @@ function Layout() {
         }
 
         setupFirestoreSync(user.uid);
+
+        try {
+          await processSyncQueue();
+        } catch (err) {
+          console.error('[app] Initial sync queue flush failed:', err);
+        }
 
         setupSessionGuard(user.uid, () => {
           performForceSignout('SesiÃ³n iniciada en otro dispositivo');
@@ -195,6 +202,8 @@ function Layout() {
                   Invitado
                 </span>
               )}
+
+              <SyncStatus />
 
               {isAdmin && (
                 <NavLink

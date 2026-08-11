@@ -20,6 +20,7 @@ import { useConfirm, useAlert } from '../components/Modal';
 import {
   Shield, Users, Download, Trash2, Eye, ArrowLeft,
   Database, ClipboardList, Tag, Calendar, Settings,
+  CalendarDays, BarChart3,
   Loader2, Search, FileJson, RotateCcw, Upload
 } from 'lucide-react';
 import UserDataViewer from '../components/UserDataViewer';
@@ -223,6 +224,19 @@ export default function AdminDashboard() {
     fileInputRef.current.click();
   }
 
+  function countDiscrepancies(data, written) {
+    const expected = data._counts || {};
+    const issues = [];
+    for (const table of Object.keys(written)) {
+      const expectedCount = expected[table];
+      const writtenCount = written[table];
+      if (typeof expectedCount === 'number' && expectedCount !== writtenCount) {
+        issues.push(`${table}: esperado ${expectedCount}, escrito ${writtenCount}`);
+      }
+    }
+    return issues;
+  }
+
   async function onFileSelected(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -238,8 +252,13 @@ export default function AdminDashboard() {
 
     setRestoringFile(uid);
     try {
-      await restoreFromFile(uid, file);
-      addToast('Datos restaurados correctamente', 'success');
+      const { data, written } = await restoreFromFile(uid, file);
+      const issues = countDiscrepancies(data, written);
+      if (issues.length) {
+        addToast('Restauración parcial: ' + issues.join(', '), 'warning', 8000);
+      } else {
+        addToast('Datos restaurados correctamente', 'success');
+      }
       const newCounts = await getUserDataCounts(uid);
       setCounts(prev => ({ ...prev, [uid]: newCounts }));
     } catch (err) {
@@ -257,8 +276,13 @@ export default function AdminDashboard() {
         );
         if (ok) {
           try {
-            await restoreFromFile(uid, file, { force: true });
-            addToast('Datos restaurados correctamente', 'success');
+            const { data: forcedData, written: forcedWritten } = await restoreFromFile(uid, file, { force: true });
+            const issues = countDiscrepancies(forcedData, forcedWritten);
+            if (issues.length) {
+              addToast('Restauración parcial: ' + issues.join(', '), 'warning', 8000);
+            } else {
+              addToast('Datos restaurados correctamente', 'success');
+            }
             const newCounts = await getUserDataCounts(uid);
             setCounts(prev => ({ ...prev, [uid]: newCounts }));
           } catch (err2) {
@@ -356,7 +380,10 @@ export default function AdminDashboard() {
                       <CountBadge icon={ClipboardList} label="Sesiones" count={`${c.sessionsActive ?? 0}${c.sessionsDeleted ? ` (${c.sessionsDeleted} elim.)` : ''}`} />
                       <CountBadge icon={Tag} label="Tags" count={c.tags} />
                       <CountBadge icon={Calendar} label="Temporadas" count={`${c.seasonsActive ?? 0}${c.seasonsDeleted ? ` (${c.seasonsDeleted} elim.)` : ''}`} />
+                      <CountBadge icon={CalendarDays} label="Microciclos" count={`${c.microciclosActive ?? 0}${c.microciclosDeleted ? ` (${c.microciclosDeleted} elim.)` : ''}`} />
                       <CountBadge icon={Settings} label="Ajustes" count={c.settings} />
+                      <CountBadge icon={BarChart3} label="Análisis" count={c.analyses} />
+                      <CountBadge icon={Shield} label="Porteros" count={c.porteros} />
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">

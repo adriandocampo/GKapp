@@ -216,10 +216,15 @@ export async function processSyncQueue() {
   if (!isFirebaseEnabled || !activeSyncUid) return;
 
   const now = Date.now();
-  const pending = await db.syncQueue
+  const overdue = await db.syncQueue
     .where('nextRetryAt').belowOrEqual(now)
-    .filter(entry => entry.attempts < MAX_ATTEMPTS)
     .toArray();
+  // Migrate entries stuck with nextRetryAt: Infinity from the old "permanent
+  // failure" behavior so they get retried too.
+  const stale = await db.syncQueue
+    .where('nextRetryAt').equals(Infinity)
+    .toArray();
+  const pending = overdue.concat(stale);
 
   if (pending.length === 0) return;
 
@@ -242,18 +247,47 @@ export async function processSyncQueue() {
       broadcast('local-change', { table: entry.table, docId: entry.docId });
     } catch (err) {
       const newAttempts = entry.attempts + 1;
-      if (newAttempts >= MAX_ATTEMPTS) {
-        console.error(`[sync] Queue entry permanently failed after ${MAX_ATTEMPTS} attempts:`, entry.operation, entry.table, entry.docId, err);
-        await db.syncQueue.update(entry.id, { attempts: newAttempts, nextRetryAt: Infinity });
+      await db.syncQueue.update(entry.id, {
+        attempts: newAttempts,
+        nextRetryAt: calculateBackoff(newAttempts),
+      });
+      if (newAttempts % MAX_ATTEMPTS === 0) {
+        console.error(`[sync] Queue entry still failing after ${newAttempts} attempts (will keep retrying):`, entry.operation, entry.table, entry.docId, err);
       } else {
-        await db.syncQueue.update(entry.id, {
-          attempts: newAttempts,
-          nextRetryAt: calculateBackoff(newAttempts),
-        });
         console.warn(`[sync] Queue retry failed (attempt ${newAttempts}): ${entry.operation} ${entry.table}/${entry.docId}`, err);
       }
     }
   }
+}
+
+export async function getSyncQueueStatus() {
+  try {
+    const pending = await db.syncQueue.count();
+    const overdue = await db.syncQueue
+      .where('nextRetryAt')
+      .belowOrEqual(Date.now())
+      .count()
+      .catch(() => 0);
+    const stale = await db.syncQueue
+      .where('nextRetryAt')
+      .equals(Infinity)
+      .count()
+      .catch(() => 0);
+    return { pending, overdue: overdue + stale };
+  } catch {
+    return { pending: 0, overdue: 0 };
+  }
+}
+
+export async function flushSyncQueue() {
+  if (!isFirebaseEnabled || !activeSyncUid) return 0;
+  try {
+    await processSyncQueue();
+  } catch (err) {
+    console.error('[sync] flushSyncQueue error:', err);
+  }
+  const remaining = await db.syncQueue.count();
+  return remaining;
 }
 
 export async function clearSyncQueue() {

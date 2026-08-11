@@ -480,6 +480,9 @@ export default function DatabasePage() {
     const allHistory = await db.taskHistory.toArray();
     const allSeasons = await db.seasons.toArray();
     const allSettings = await db.settings.toArray();
+    const allAnalyses = await db.analyses.toArray();
+    const allPorteros = await db.porteros.toArray();
+    const allMicrociclos = await db.microciclos.toArray();
 
     const serializeBlobs = async (items, blobFields) => {
       const result = [];
@@ -502,6 +505,9 @@ export default function DatabasePage() {
       taskHistory: allHistory,
       seasons: allSeasons.filter(s => !s.deletedAt),
       settings: allSettings,
+      analyses: await serializeBlobs(allAnalyses.filter(a => !a.deletedAt), ['videoBlob']),
+      porteros: allPorteros,
+      microciclos: allMicrociclos.filter(m => !m.deletedAt),
       exportDate: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -534,12 +540,18 @@ export default function DatabasePage() {
         await db.taskHistory.clear();
         await db.seasons.clear();
         await db.settings.clear();
+        await db.analyses.clear();
+        await db.porteros.clear();
+        await db.microciclos.clear();
         if (data.tasks?.length) await db.tasks.bulkAdd(deserializeBlobs(data.tasks, ['imageBlob', 'videoBlob']));
         if (data.sessions?.length) await db.sessions.bulkAdd(deserializeBlobs(data.sessions, ['videoBlob']));
         if (data.tags?.length) await db.tags.bulkAdd(data.tags);
         if (data.taskHistory?.length) await db.taskHistory.bulkAdd(data.taskHistory);
         if (data.seasons?.length) await db.seasons.bulkAdd(data.seasons);
         if (data.settings?.length) await db.settings.bulkAdd(data.settings);
+        if (data.analyses?.length) await db.analyses.bulkAdd(deserializeBlobs(data.analyses, ['videoBlob']));
+        if (data.porteros?.length) await db.porteros.bulkAdd(data.porteros);
+        if (data.microciclos?.length) await db.microciclos.bulkAdd(data.microciclos);
         await loadTasks();
         await loadSessions();
         addToast('Datos importados correctamente', 'success');
