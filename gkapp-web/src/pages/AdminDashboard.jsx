@@ -21,7 +21,7 @@ import {
   Shield, Users, Download, Trash2, Eye, ArrowLeft,
   Database, ClipboardList, Tag, Calendar, Settings,
   CalendarDays, BarChart3,
-  Loader2, Search, FileJson, RotateCcw, Upload
+  Loader2, Search, FileJson, RotateCcw, Upload, CalendarClock
 } from 'lucide-react';
 import UserDataViewer from '../components/UserDataViewer';
 
@@ -216,6 +216,38 @@ export default function AdminDashboard() {
       addToast('Error en backup: ' + err.message, 'error');
     } finally {
       setForcingBackup(prev => ({ ...prev, [uid]: false }));
+    }
+  }
+
+  async function handleScheduleBackup(uid, current) {
+    try {
+      const config = {
+        ...current,
+        enabled: current?.enabled ?? false,
+        intervalDays: current?.intervalDays ?? 7,
+        requestedBackupAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await setBackupConfig(uid, config);
+      setBackupConfigs(prev => ({ ...prev, [uid]: config }));
+      addToast('Backup programado: se creará en el próximo inicio de sesión', 'success');
+    } catch (err) {
+      addToast('Error: ' + err.message, 'error');
+    }
+  }
+
+  async function handleCancelScheduledBackup(uid, current) {
+    try {
+      const config = {
+        ...current,
+        requestedBackupAt: null,
+        updatedAt: new Date().toISOString(),
+      };
+      await setBackupConfig(uid, config);
+      setBackupConfigs(prev => ({ ...prev, [uid]: config }));
+      addToast('Backup programado cancelado', 'success');
+    } catch (err) {
+      addToast('Error: ' + err.message, 'error');
     }
   }
 
@@ -446,6 +478,17 @@ export default function AdminDashboard() {
                       {forcingBackup[u.uid] ? <Loader2 size={16} className="animate-spin" /> : <FileJson size={16} />}
                     </button>
                     <button
+                      onClick={() => backupConfigs[u.uid]?.requestedBackupAt
+                        ? handleCancelScheduledBackup(u.uid, backupConfigs[u.uid])
+                        : handleScheduleBackup(u.uid, backupConfigs[u.uid])}
+                      title={backupConfigs[u.uid]?.requestedBackupAt
+                        ? 'Backup programado: cancelar'
+                        : 'Programar backup para el próximo inicio de sesión'}
+                      className={`p-2 rounded-lg transition-colors ${backupConfigs[u.uid]?.requestedBackupAt ? 'bg-amber-500/15 text-amber-400' : 'bg-gk-card hover:bg-gk-elevated text-gk-text-secondary'}`}
+                    >
+                      <CalendarClock size={16} />
+                    </button>
+                    <button
                       onClick={() => handleToggleBackup(u.uid, !backupConfigs[u.uid]?.enabled)}
                       title={backupConfigs[u.uid]?.enabled ? 'Desactivar backup automático (7d)' : 'Activar backup automático (7d)'}
                       className={`p-2 rounded-lg transition-colors ${backupConfigs[u.uid]?.enabled ? 'bg-gk-accent/15 text-gk-accent' : 'bg-gk-card text-gk-text-tertiary hover:text-gk-text-secondary'}`}
@@ -470,6 +513,8 @@ export default function AdminDashboard() {
                   <div className="text-[10px] text-right shrink-0 w-28 leading-tight">
                     {forcingBackup[u.uid] ? (
                       <span className="text-cyan-400">Creando backup...</span>
+                    ) : backupConfigs[u.uid]?.requestedBackupAt ? (
+                      <span className="text-amber-400">Backup programado</span>
                     ) : backupDates[u.uid] ? (
                       <span className="text-gk-text-tertiary">Backup: {formatBackupDate(backupDates[u.uid])}</span>
                     ) : (
