@@ -20,6 +20,7 @@ import {
 import { firestore, isFirebaseEnabled } from './firebase';
 import { db } from './db';
 import { getTimestampMs } from './utils/date.js';
+import { resolveSyncKey } from './utils/syncKey.js';
 import { getBroadcastChannel } from './contexts/SyncContext.jsx';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -557,21 +558,24 @@ export function setupFirestoreSync(uid) {
       tbl.hook('creating', (primKey, obj) => {
         if (isSyncingFromFirestore) return;
         if (!activeSyncUid) return;
+        const { key: finalKey, assignToObj } = resolveSyncKey(primKey, obj);
+        if (assignToObj) obj.id = finalKey;
         (async () => {
           const stripped = await stripBlobs(obj);
           if (!stripped.deletedAt) stripped.deletedAt = null;
           try {
-            await setDoc(userDoc(activeSyncUid, table, primKey), {
+            await setDoc(userDoc(activeSyncUid, table, finalKey), {
               ...stripped,
               _syncedAt: serverTimestamp(),
             });
-            console.log(`[sync] Firestore create success: ${table}/${primKey}`);
-            broadcast('local-change', { table, docId: primKey });
+            console.log(`[sync] Firestore create success: ${table}/${finalKey}`);
+            broadcast('local-change', { table, docId: finalKey });
           } catch (err) {
-            console.warn('[sync] create failed, enqueuing', table, primKey, err);
-            await enqueueOperation('create', table, primKey, { ...stripped, deletedAt: stripped.deletedAt });
+            console.warn('[sync] create failed, enqueuing', table, finalKey, err);
+            await enqueueOperation('create', table, finalKey, { ...stripped, deletedAt: stripped.deletedAt });
           }
         })();
+        return finalKey;
       })
     );
 
