@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLeft, ChevronRight, ImageIcon, Download, Upload, ArrowUpDown, Video, Pencil, Trash2, Paintbrush } from 'lucide-react';
+import { Search, X, Eye, Plus, FileText, Clock, Repeat, ClipboardList, ChevronLeft, ChevronRight, ImageIcon, Download, Upload, ArrowUpDown, Video, Pencil, Trash2, Paintbrush, CloudUpload } from 'lucide-react';
 import { db } from '../db';
+import { pushToFirestore } from '../sync';
+import { useAuth } from '../contexts/AuthContext';
 import { extractYouTubeId, youtubeEmbedUrl } from '../hooks/useYouTubeUpload';
 import { useTags } from '../hooks/useTags';
 import MultiSelectDropdown from '../components/MultiSelectDropdown';
@@ -229,6 +231,7 @@ export default function DatabasePage() {
   const location = useLocation();
   const { tags } = useTags();
   const { addToast } = useToast();
+  const { user } = useAuth();
   const confirm = useConfirm();
   const { showModal } = useModal();
   const alert = useAlert();
@@ -562,6 +565,19 @@ export default function DatabasePage() {
     input.click();
   }
 
+  async function pushLocalToFirestore() {
+    if (!user?.uid) {
+      addToast('Inicia sesión para poder subir los datos a Firestore', 'warning');
+      return;
+    }
+    try {
+      await pushToFirestore(user.uid);
+      addToast('Datos locales subidos a Firestore', 'success');
+    } catch (err) {
+      addToast('Error al subir a Firestore: ' + err.message, 'error');
+    }
+  }
+
   const safeDesc = (desc) => {
     if (!desc) return desc;
     return desc.replace(/\\n/g, '\n');
@@ -782,6 +798,9 @@ export default function DatabasePage() {
             </button>
             <button onClick={importData} className="v2-btn-ghost text-sm">
               <Upload size={14} /> Importar
+            </button>
+            <button onClick={pushLocalToFirestore} className="v2-btn-ghost text-sm" title="Sube todos los datos locales de Dexie a Firestore">
+              <CloudUpload size={14} /> Subir a Firestore
             </button>
           </div>
         </div>
