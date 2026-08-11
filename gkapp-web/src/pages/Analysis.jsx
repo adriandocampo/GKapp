@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Upload, User, Video, BarChart3, X, Star, Trash2,
   FileText, Shield, AlertCircle, Link, Download, CheckCircle, Activity, Target,
@@ -20,6 +20,7 @@ import GoalkeeperHeatmap from '../components/GoalkeeperHeatmap';
 import ShotMap from '../components/ShotMap';
 import GoalkeeperMatchStatsCard from '../components/GoalkeeperMatchStatsCard';
 import { fetchMatchData, fetchPlayerMatchStats, extractEventId, getPlayerImageUrl } from '../utils/sofascoreClient';
+import { createAnalysisPersistence } from '../utils/analysisPersistence';
 // import GoalkeeperRadar from '../components/GoalkeeperRadar';
 import DefensiveGauge from '../components/DefensiveGauge';
 import PassProfileDashboard from '../components/PassProfileDashboard';
@@ -110,6 +111,7 @@ function parseAnalysisRouteId(value) {
 
 export default function AnalysisPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { addToast } = useToast();
   const confirm = useConfirm();
@@ -121,6 +123,7 @@ export default function AnalysisPage() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('stats');
   const [analysisId, setAnalysisId] = useState(() => parseAnalysisRouteId(id));
+  const [isHydrated, setIsHydrated] = useState(() => !analysisId);
   const [seasons, setSeasons] = useState([]);
 
   // Form state
@@ -191,18 +194,40 @@ export default function AnalysisPage() {
   const saveTimerRef = useRef(null);
   const savingRef = useRef(false);
   const savePromiseRef = useRef(Promise.resolve());
+  const analysisPersistenceRef = useRef(null);
+  if (!analysisPersistenceRef.current) {
+    analysisPersistenceRef.current = createAnalysisPersistence({
+      get: id => db.analyses.get(id),
+      add: record => db.analyses.add(record),
+      put: record => db.analyses.put(record),
+    });
+  }
   const analysisIdRef = useRef(analysisId);
   analysisIdRef.current = analysisId;
   const createdAtRef = useRef(null);
+  const skipNextHydrationRef = useRef(false);
+
+  function queueAnalysisUpdate(changes) {
+    const id = analysisIdRef.current;
+    if (!id) return Promise.resolve();
+    return analysisPersistenceRef.current.update(id, changes);
+  }
+
+  function updateAnalysisField(field, value, setter, persistedValue = value) {
+    setter(value);
+    if (isHydrated && analysisIdRef.current) {
+      queueAnalysisUpdate({ [field]: persistedValue }).catch(() => {});
+    }
+  }
 
   const autoSaveRef = useRef(async () => {});
   autoSaveRef.current = async function doSave(overrides = {}) {
+    if (!isHydrated) return;
     if (savingRef.current) {
       await savePromiseRef.current;
     }
     savingRef.current = true;
     savePromiseRef.current = (async () => {
-      const existingData = analysisIdRef.current ? await db.analyses.get(analysisIdRef.current) : null;
       const savedVideoType = overrides.videoType ?? videoType;
       const savedVideoSrc = overrides.videoSrc ?? videoSrc;
       const savedVideoPath = overrides.videoPath ?? videoPath;
@@ -235,30 +260,31 @@ export default function AnalysisPage() {
         tvVideoSync: getDefaultVideoSync(),
         activeVideoSource,
         microciclo: microciclo || null,
-        clipRatings: existingData?.clipRatings || {},
-        clipCustomizations: existingData?.clipCustomizations || {},
-        clipMarks: existingData?.clipMarks || {},
+        clipRatings,
+        clipCustomizations,
+        clipMarks,
         manualClips,
         manualClipCategories,
         matchUrl,
         sofascoreData,
-        createdAt: createdAtRef.current || existingData?.createdAt || new Date(),
+        createdAt: createdAtRef.current || new Date(),
         updatedAt: new Date(),
         deletedAt: null,
       };
 
       if (analysisIdRef.current) {
         createdAtRef.current = payload.createdAt;
-        await db.analyses.update(analysisIdRef.current, payload);
+        await queueAnalysisUpdate(payload);
       } else {
         let existing = null;
         if (seasonId && xmlFileName) {
           existing = await db.analyses.where('[seasonId+xmlFileName]').equals([seasonId, xmlFileName]).first();
         }
         const newId = existing?.id
-          ? (await db.analyses.update(existing.id, { ...payload, createdAt: existing.createdAt || payload.createdAt }), existing.id)
-          : await db.analyses.add(payload);
+          ? (await analysisPersistenceRef.current.update(existing.id, { ...payload, createdAt: existing.createdAt || payload.createdAt }), existing.id)
+          : await analysisPersistenceRef.current.create(payload);
         analysisIdRef.current = newId;
+        skipNextHydrationRef.current = true;
         setAnalysisId(newId);
         navigate(`/analysis/${newId}`, { replace: true });
       }
@@ -273,14 +299,25 @@ export default function AnalysisPage() {
   };
 
   function scheduleAutoSave() {
+    if (!isHydrated) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => autoSaveRef.current(), 800);
   }
 
   useEffect(() => {
+    const isNewRoute = location.pathname === '/analysis/new';
+    const nextId = isNewRoute ? null : parseAnalysisRouteId(id);
+    if (nextId === analysisIdRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    analysisIdRef.current = nextId;
+    setAnalysisId(nextId);
+    setIsHydrated(!nextId);
+  }, [id, location.pathname]);
+
+  useEffect(() => {
     scheduleAutoSave();
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [goalkeeperName, matchName, opponent, seasonId, jornadaNumber, isAmistoso, microciclo, date, rating, rpe, photo, rawXml, xmlFileName, parsed, videoSrc, videoType, videoPath, videoBlob, videoSync, matchUrl, sofascoreData, clipMarks, manualClips, manualClipCategories, tvVideoType, tvVideoPath, tvVideoSrc, tvVideoBlob, activeVideoSource]);
+  }, [isHydrated, goalkeeperName, matchName, opponent, seasonId, jornadaNumber, isAmistoso, microciclo, date, rating, rpe, photo, rawXml, xmlFileName, parsed, videoSrc, videoType, videoPath, videoBlob, videoSync, matchUrl, sofascoreData, clipMarks, manualClips, manualClipCategories, tvVideoType, tvVideoPath, tvVideoSrc, tvVideoBlob, activeVideoSource]);
 
   useEffect(() => {
     async function loadSeasons() {
@@ -338,13 +375,22 @@ export default function AnalysisPage() {
   // Load existing analysis
   useEffect(() => {
     if (!analysisId) return;
+    if (skipNextHydrationRef.current) {
+      skipNextHydrationRef.current = false;
+      setIsHydrated(true);
+      return;
+    }
     async function load() {
       const a = await db.analyses.get(analysisId);
       if (!a) {
         addToast('Análisis no encontrado', 'error');
+        setIsHydrated(true);
         navigate('/analysis');
         return;
       }
+      analysisIdRef.current = a.id;
+      setAnalysisId(a.id);
+      createdAtRef.current = a.createdAt || null;
       setGoalkeeperName(a.goalkeeperName || '');
       setMatchName(a.matchName || '');
       setOpponent(a.opponent || '');
@@ -395,8 +441,9 @@ export default function AnalysisPage() {
             const teammateCodes = (isHome ? teams.home : teams.away).map(p => p.code);
             const pfResult = computeBidirectionalFlow(gkCode, a.xmlData.allEvents, teammateCodes);
             setPassFlow(pfResult.flow);
-          }
+        }
       }
+      setIsHydrated(true);
     }
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -416,10 +463,9 @@ export default function AnalysisPage() {
       const updated = { ...sofascoreData, goalkeeperMatchStats: stats };
       setSofascoreData(updated);
       if (analysisId) {
-        db.analyses.update(analysisId, {
+        queueAnalysisUpdate({
           matchUrl,
           sofascoreData: updated,
-          updatedAt: new Date(),
         }).catch(() => {});
       }
     });
@@ -492,10 +538,9 @@ export default function AnalysisPage() {
       const data = await fetchMatchData(matchUrl, goalkeeperName);
       setSofascoreData(data);
       if (analysisId) {
-        await db.analyses.update(analysisId, {
+        await queueAnalysisUpdate({
           matchUrl,
           sofascoreData: data,
-          updatedAt: new Date()
         });
       }
     } catch (err) {
@@ -513,10 +558,9 @@ export default function AnalysisPage() {
       const data = await fetchMatchData(matchUrl, goalkeeperName, candidate.playerId);
       setSofascoreData(data);
       if (analysisId) {
-        await db.analyses.update(analysisId, {
+        await queueAnalysisUpdate({
           matchUrl,
           sofascoreData: data,
-          updatedAt: new Date()
         });
       }
       setDetectedGkMenuOpen(false);
@@ -542,7 +586,7 @@ export default function AnalysisPage() {
     const updated = [...manualClips, manualClip];
     setManualClips(updated);
     if (analysisId) {
-      db.analyses.update(analysisId, { manualClips: updated, updatedAt: new Date() }).catch(() => {});
+      queueAnalysisUpdate({ manualClips: updated }).catch(() => {});
     }
   };
 
@@ -550,7 +594,7 @@ export default function AnalysisPage() {
     const updated = manualClips.filter((clip) => clip.id !== clipId);
     setManualClips(updated);
     if (analysisId) {
-      db.analyses.update(analysisId, { manualClips: updated, updatedAt: new Date() }).catch(() => {});
+      queueAnalysisUpdate({ manualClips: updated }).catch(() => {});
     }
   };
 
@@ -558,7 +602,7 @@ export default function AnalysisPage() {
     const updated = manualClips.map((clip) => clip.id === clipId ? { ...clip, ...changes } : clip);
     setManualClips(updated);
     if (analysisId) {
-      db.analyses.update(analysisId, { manualClips: updated, updatedAt: new Date() }).catch(() => {});
+      queueAnalysisUpdate({ manualClips: updated }).catch(() => {});
     }
   };
 
@@ -566,7 +610,7 @@ export default function AnalysisPage() {
     const updated = Array.from(new Set(categories));
     setManualClipCategories(updated);
     if (analysisId) {
-      db.analyses.update(analysisId, { manualClipCategories: updated, updatedAt: new Date() }).catch(() => {});
+      queueAnalysisUpdate({ manualClipCategories: updated }).catch(() => {});
     }
   };
 
@@ -576,7 +620,7 @@ export default function AnalysisPage() {
     else delete updated[clipId];
     setClipMarks(updated);
     if (analysisId) {
-      db.analyses.update(analysisId, { clipMarks: updated, updatedAt: new Date() }).catch(() => {});
+      queueAnalysisUpdate({ clipMarks: updated }).catch(() => {});
     }
   };
 
@@ -614,14 +658,13 @@ export default function AnalysisPage() {
 
     const id = analysisIdRef.current;
     if (id) {
-      db.analyses.update(id, {
+      queueAnalysisUpdate({
         videoSrc: value,
         youtubeUrl: value,
         videoType: 'veo',
         videoSource: 'veo',
         videoPath: '',
         videoBlob: null,
-        updatedAt: new Date(),
       }).catch(() => {});
     } else {
       autoSaveRef.current({
@@ -860,11 +903,11 @@ export default function AnalysisPage() {
             <div className="flex items-center gap-4 shrink-0">
               <div className="flex flex-col items-center gap-0.5">
                 <span className="text-[10px] font-medium uppercase tracking-wider" style={{color: '#997b66'}}>Valoración</span>
-                <StarRating value={rating} onChange={setRating} size={16} />
+                <StarRating value={rating} onChange={value => updateAnalysisField('rating', value, setRating)} size={16} />
               </div>
               <div style={{ width: 1, height: 28, background: 'rgba(185,165,135,0.10)' }} />
               <div style={{ width: 100 }}>
-                <RPESlider value={rpe} onChange={setRpe} />
+                <RPESlider value={rpe} onChange={value => updateAnalysisField('rpe', value, setRpe)} />
               </div>
             </div>
           </div>
@@ -876,7 +919,7 @@ export default function AnalysisPage() {
               <input
                 type="text"
                 value={matchName}
-                onChange={(e) => setMatchName(e.target.value)}
+                 onChange={(e) => updateAnalysisField('matchName', e.target.value, setMatchName)}
                 placeholder="Lugo - Rival"
                 className="v2-input w-full"
               />
@@ -887,7 +930,7 @@ export default function AnalysisPage() {
                 <input
                   type="text"
                   value={goalkeeperName}
-                  onChange={(e) => setGoalkeeperName(e.target.value)}
+                   onChange={(e) => updateAnalysisField('goalkeeperName', e.target.value, setGoalkeeperName, e.target.value.trim().toUpperCase())}
                   placeholder="Nombre del portero"
                   className="v2-input w-full"
                   style={{ paddingRight: 32 }}
@@ -918,7 +961,8 @@ export default function AnalysisPage() {
                           key={i}
                           type="button"
                           onClick={() => {
-                            setGoalkeeperName(String(p.name || '').toUpperCase());
+                             const selectedName = String(p.name || '').toUpperCase();
+                             updateAnalysisField('goalkeeperName', selectedName, setGoalkeeperName, selectedName);
                             if (p.photo) setPhoto(p.photo);
                             setPorteroMenuOpen(false);
                           }}
@@ -950,7 +994,7 @@ export default function AnalysisPage() {
               <input
                 type="text"
                 value={opponent}
-                onChange={(e) => setOpponent(e.target.value)}
+                 onChange={(e) => updateAnalysisField('opponent', e.target.value, setOpponent)}
                 placeholder="Equipo rival"
                 className="v2-input w-full"
               />
@@ -959,7 +1003,7 @@ export default function AnalysisPage() {
               <label className="text-xs font-medium mb-1 block" style={{ color: '#997b66' }}>Temporada <span style={{ color: '#d08c60' }}>*</span></label>
               <select
                 value={seasonId || ''}
-                onChange={(e) => setSeasonId(e.target.value || null)}
+                 onChange={(e) => updateAnalysisField('seasonId', e.target.value || null, setSeasonId)}
                 className="v2-select w-full"
               >
                 <option value="" disabled>Seleccionar temporada</option>
@@ -974,7 +1018,7 @@ export default function AnalysisPage() {
                 type="number"
                 min="1"
                 value={microciclo}
-                onChange={(e) => setMicrociclo(e.target.value)}
+                 onChange={(e) => updateAnalysisField('microciclo', e.target.value, setMicrociclo)}
                 placeholder="Ej: 12"
                 className="v2-input w-full"
               />
@@ -985,7 +1029,7 @@ export default function AnalysisPage() {
                 type="number"
                 min="1"
                 value={jornadaNumber}
-                onChange={(e) => setJornadaNumber(e.target.value)}
+                 onChange={(e) => updateAnalysisField('jornadaNumber', e.target.value, setJornadaNumber, e.target.value ? Number(e.target.value) : null)}
                 placeholder="Ej: 12"
                 className="v2-input w-full"
                 disabled={isAmistoso}
@@ -997,10 +1041,14 @@ export default function AnalysisPage() {
                 <input
                   type="checkbox"
                   checked={isAmistoso}
-                  onChange={(e) => {
-                    setIsAmistoso(e.target.checked);
-                    if (e.target.checked) setJornadaNumber('');
-                  }}
+                   onChange={(e) => {
+                     const checked = e.target.checked;
+                     setIsAmistoso(checked);
+                     if (checked) setJornadaNumber('');
+                     if (isHydrated && analysisIdRef.current) {
+                       queueAnalysisUpdate({ isAmistoso: checked, jornadaNumber: checked ? null : (jornadaNumber ? Number(jornadaNumber) : null) }).catch(() => {});
+                     }
+                   }}
                   className="sr-only peer"
                 />
                 <div className="w-9 h-5 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#e8ac65] after:bg-[#997b66]"
@@ -1016,7 +1064,7 @@ export default function AnalysisPage() {
               <input
                 type="url"
                 value={matchUrl}
-                onChange={(e) => setMatchUrl(e.target.value)}
+                 onChange={(e) => updateAnalysisField('matchUrl', e.target.value, setMatchUrl)}
                 placeholder="https://www.sofascore.com/..."
                 className="v2-input w-full"
               />
@@ -1494,7 +1542,7 @@ export default function AnalysisPage() {
                 const updated = { ...clipRatings, [eventId]: rating };
                 setClipRatings(updated);
                 if (analysisId) {
-                  db.analyses.update(analysisId, { clipRatings: updated, updatedAt: new Date() }).catch(() => {});
+                  queueAnalysisUpdate({ clipRatings: updated }).catch(() => {});
                 }
               }}
               clipMarks={clipMarks}
@@ -1504,7 +1552,7 @@ export default function AnalysisPage() {
                 const updated = { ...clipCustomizations, [eventId]: customizations };
                 setClipCustomizations(updated);
                 if (analysisId) {
-                  db.analyses.update(analysisId, { clipCustomizations: updated, updatedAt: new Date() }).catch(() => {});
+                  queueAnalysisUpdate({ clipCustomizations: updated }).catch(() => {});
                 }
               }}
               manualClips={manualClips}

@@ -153,6 +153,7 @@ export function generateDays(dateStart, dateEnd) {
       },
       match: { hasMatch: false, jornada: '', rival: '', location: 'home', hora: '' },
       sessionId: null,
+      sessionNumber: '',
     });
     current.setDate(current.getDate() + 1);
   }
@@ -173,5 +174,6 @@ export function createDefaultDay() {
     },
     match: { hasMatch: false, jornada: '', rival: '', location: 'home', hora: '' },
     sessionId: null,
+    sessionNumber: '',
   };
 }
