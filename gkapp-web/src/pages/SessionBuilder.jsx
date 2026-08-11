@@ -1534,6 +1534,7 @@ export default function SessionBuilder() {
       {/* RPE Stats modal */}
       {showRPEStats && (
         <RPEStatsModal
+          key={selectedSeason?.id || 'default'}
           sessions={sessions}
           analyses={seasonAnalyses}
           seasonName={selectedSeason?.name || ''}

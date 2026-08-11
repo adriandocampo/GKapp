@@ -330,9 +330,22 @@ export default function RPEStatsModal({ sessions, analyses = [], seasonName, onC
 
     // Assign stable row keys and sort by rowOrder
     let rowIndexCounter = 0;
-    const allRows = [...(matchRows.length > 0 ? [...base, ...matchRows] : base)];
-    allRows.forEach(row => {
-      row._rowKey = row._match ? `match_${row.id}` : `base_${row.dia}_${row.id || rowIndexCounter++}`;
+    const baseRows = matchRows.length > 0 ? [...base, ...matchRows] : base;
+    const allRows = baseRows.map(row => {
+      // TEMP DIAGNOSTIC: detect frozen source rows behind the original
+      // "Cannot assign to read only property '_rowKey'" crash. Remove once confirmed.
+      if (Object.isFrozen(row)) {
+        console.error('[RPEStatsModal] frozen row source detected', {
+          match: !!row._match,
+          id: row.id,
+          keys: Object.keys(row),
+          desc: Object.getOwnPropertyDescriptor(row, '_rowKey'),
+        });
+      }
+      return {
+        ...row,
+        _rowKey: row._match ? `match_${row.id}` : `base_${row.dia}_${row.id || rowIndexCounter++}`,
+      };
     });
 
     // Filter stale keys from rowOrder
