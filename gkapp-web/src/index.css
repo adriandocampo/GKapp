@@ -440,13 +440,13 @@ input[type="range"].v2-rpe::-moz-range-thumb {
 
 @media print {
   @page {
-    size: landscape;
+    size: A4 landscape;
     margin: 0;
   }
 
   html, body {
-    background: white !important;
-    color: black !important;
+    background: transparent !important;
+    color: #f1ede7 !important;
     margin: 0 !important;
     padding: 0 !important;
     height: 100% !important;
@@ -551,5 +551,46 @@ input[type="range"].v2-rpe::-moz-range-thumb {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
+  }
+
+  /* Analysis report print styles — dark theme, A4 landscape */
+  .analysis-print-wrapper {
+    display: block !important;
+    position: relative !important;
+    inset: auto !important;
+    background: #0c0b09 !important;
+    z-index: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    width: auto !important;
+  }
+
+  .analysis-print-page {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .analysis-print-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  .analysis-print-wrapper .glass-card-static,
+  .analysis-print-wrapper [class*="glass-card"] {
+    background: rgba(22,20,16,0.85) !important;
+    border: 1px solid rgba(185,165,135,0.10) !important;
+    box-shadow: none !important;
+    border-radius: 16px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .analysis-print-wrapper img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  .analysis-print-wrapper .no-print {
+    display: none !important;
   }
 }

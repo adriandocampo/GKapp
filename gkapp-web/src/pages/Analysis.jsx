@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Upload, User, Video, BarChart3, X, Star, Trash2,
   FileText, Shield, AlertCircle, Link, Download, CheckCircle, Activity, Target,
-  ChevronDown, ChevronRight
+  ChevronDown, ChevronRight, Printer
 } from 'lucide-react';
 import { db, getSetting } from '../db';
 import { useToast } from '../components/Toast';
@@ -109,6 +110,174 @@ function parseAnalysisRouteId(value) {
   return /^\d+$/.test(value) ? Number(value) : value;
 }
 
+function AnalysisPrintOverlay({
+  onClose, photo, goalkeeperName, jornadaNumber, matchName, opponent, date,
+  parsed, gkStats, oppStats, passFlow, gkEvents, periods, sofascoreData,
+}) {
+  const onCloseRef = useRef(onClose);
+  const page1Ref = useRef(null);
+  const page2Ref = useRef(null);
+  const page3Ref = useRef(null);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  useEffect(() => {
+    const styleId = 'analysis-print-orientation';
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = [
+      '@page { size: A4 landscape; margin: 0; }',
+      'html, body { height: auto !important; overflow: visible !important; background: #0c0b09 !important; }',
+      '.analysis-print-stats .glass-card-static { padding: 8px 10px !important; height: 100%; }',
+      '.analysis-print-stats .grid { gap: 8px !important; height: 100%; align-content: stretch; }',
+      '.analysis-print-stats .mb-4 { margin-bottom: 6px !important; }',
+      '.analysis-print-stats .p-5 { padding: 8px 10px !important; }',
+      '.analysis-print-matrix table { font-size: 0.7rem !important; }',
+      '.analysis-print-matrix td, .analysis-print-matrix th { padding: 3px 8px !important; }',
+      '.analysis-print-matrix .p-4 { padding: 8px !important; }',
+      '.analysis-print-matrix .text-2xl { font-size: 1.1rem !important; }',
+      '.analysis-print-matrix .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 8px !important; }',
+      '.analysis-print-profile > div { padding: 4px !important; border: none !important; background: transparent !important; height: 100%; overflow: hidden; }',
+      '.analysis-print-profile .mb-4 { margin-bottom: 2px !important; }',
+      '.analysis-print-profile .gap-6 { gap: 6px !important; }',
+      '.analysis-print-profile .p-3, .analysis-print-profile .p-4 { padding: 4px !important; }',
+      '.analysis-print-profile svg { max-width: 130px !important; }',
+      '.analysis-print-profile .mt-2 { margin-top: 2px !important; }',
+      '.analysis-print-profile .space-y-4 { --tw-space-y-reverse: 0; }',
+      '.analysis-print-profile .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 6px !important; }',
+      '.analysis-print-profile .h-6 { height: 14px !important; }',
+      '.analysis-print-profile .text-lg { font-size: 0.85rem !important; }',
+      '.analysis-print-profile .mb-3 { margin-bottom: 4px !important; }',
+    ].join(' ');
+    document.head.appendChild(style);
+    function cleanupStyle() { document.getElementById(styleId)?.remove(); }
+    function finishPrint() { cleanupStyle(); onCloseRef.current?.(); }
+
+    const timer = setTimeout(() => {
+      [page1Ref.current, page2Ref.current, page3Ref.current].forEach((el) => {
+        if (!el) return;
+        const pageW = el.clientWidth;
+        const pageH = el.clientHeight;
+        const inner = el.firstElementChild;
+        if (!inner) return;
+        // Reset zoom before measuring
+        inner.style.zoom = '1';
+        const contentW = inner.scrollWidth;
+        const contentH = inner.scrollHeight;
+        const scale = Math.min(pageW / contentW, pageH / contentH, 1.0);
+        if (scale < 1.0) {
+          inner.style.zoom = String(scale);
+        }
+      });
+      window.print();
+    }, 600);
+    window.addEventListener('afterprint', finishPrint);
+    return () => { clearTimeout(timer); cleanupStyle(); window.removeEventListener('afterprint', finishPrint); };
+  }, []);
+
+  const PAGE_W = '297mm';
+  const PAGE_H = '210mm';
+  const pageBase = { width: PAGE_W, height: PAGE_H, overflow: 'hidden', position: 'relative', background: '#0c0b09', padding: '5mm', boxSizing: 'border-box' };
+  const cardStyle = { background: 'rgba(22,20,16,0.85)', border: '1px solid rgba(185,165,135,0.10)', borderRadius: 12, padding: 10 };
+  const accentStyle = { color: '#e8ac65' };
+  const secondaryStyle = { color: '#baa587' };
+
+  return (
+    <div
+      className="analysis-print-wrapper"
+      style={{ position: 'fixed', inset: 0, background: '#0c0b09', zIndex: 99999, overflow: 'hidden' }}
+    >
+      <button
+        type="button"
+        className="no-print"
+        onClick={() => onCloseRef.current?.()}
+        style={{ position: 'fixed', top: 16, right: 16, zIndex: 100000, padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(185,165,135,0.20)', background: 'rgba(22,20,16,0.85)', color: '#f1ede7', cursor: 'pointer', backdropFilter: 'blur(12px)' }}
+      >
+        Cerrar impresión
+      </button>
+
+      {/* PAGE 1: Header + StatsCards */}
+      <div ref={page1Ref} className="analysis-print-page" style={pageBase}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 6, borderBottom: '1px solid rgba(185,165,135,0.10)', flexShrink: 0 }}>
+            {photo && (
+              <img src={photo} alt={goalkeeperName} style={{ width: 64, height: 80, objectFit: 'cover', borderRadius: 10, border: '2px solid rgba(185,165,135,0.15)', flexShrink: 0 }} />
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, color: '#f1ede7' }}>
+              {jornadaNumber && <span style={{ fontSize: '0.65rem', fontWeight: 600, ...accentStyle }}>Jornada {jornadaNumber}</span>}
+              <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>{matchName || 'Partido'}</span>
+              {date && <span style={{ fontSize: '0.6rem', ...secondaryStyle }}>{date}</span>}
+            </div>
+          </div>
+          {parsed ? (
+            <div className="analysis-print-stats" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <StatsCards gkStats={gkStats} opponentStats={oppStats} passFlow={passFlow} />
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#997b66' }}>
+              <p>No hay datos de XML para mostrar en el informe.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* PAGE 2: PassMatrix + PassProfile + EventTimeline */}
+      <div ref={page2Ref} className="analysis-print-page" style={pageBase}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
+          {parsed ? (
+            <>
+              <div className="analysis-print-matrix" style={{ ...cardStyle, flex: '1 1 55%', minHeight: 0, overflow: 'hidden' }}>
+                <PassMatrix passFlow={passFlow} goalkeeperCode={parsed?.goalkeeper?.code || ''} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, flex: '1 1 48%', minHeight: 0 }}>
+                <div className="analysis-print-profile" style={{ ...cardStyle, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                  <PassProfileDashboard passes={gkStats.passes} />
+                </div>
+                <div style={{ ...cardStyle, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                  <EventTimelineChart events={gkEvents} opponentEvents={parsed?.opponent?.events || []} periods={periods} />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#997b66' }}>
+              <p>No hay datos de XML para mostrar en el informe.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* PAGE 3: Heatmap + ShotMap */}
+      <div ref={page3Ref} className="analysis-print-page" style={pageBase}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, height: '100%' }}>
+          <div style={{ ...cardStyle, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, textAlign: 'center', ...accentStyle, flexShrink: 0 }}>
+              Heatmap del Portero
+            </h3>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              {sofascoreData?.goalkeeperHeatmap?.heatmap ? (
+                <GoalkeeperHeatmap heatmap={sofascoreData.goalkeeperHeatmap.heatmap} goalkeeperName={goalkeeperName || parsed?.goalkeeper?.name} />
+              ) : (
+                <p style={{ fontSize: '0.75rem', textAlign: 'center', ...secondaryStyle }}>No disponible</p>
+              )}
+            </div>
+          </div>
+          <div style={{ ...cardStyle, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, textAlign: 'center', ...accentStyle, flexShrink: 0 }}>
+              Mapa de Tiros del Rival
+            </h3>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              {sofascoreData?.rivalShots?.length > 0 ? (
+                <ShotMap shots={sofascoreData.rivalShots} isHomeGoalkeeper={sofascoreData.goalkeeper?.teamId === sofascoreData.event?.homeTeam?.id} />
+              ) : (
+                <p style={{ fontSize: '0.75rem', textAlign: 'center', ...secondaryStyle }}>No disponible</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AnalysisPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,6 +291,7 @@ export default function AnalysisPage() {
 
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('stats');
+  const [printOpen, setPrintOpen] = useState(false);
   const [analysisId, setAnalysisId] = useState(() => parseAnalysisRouteId(id));
   const [isHydrated, setIsHydrated] = useState(() => !analysisId);
   const [seasons, setSeasons] = useState([]);
@@ -1441,26 +1611,69 @@ export default function AnalysisPage() {
         {/* ── CONTENT AREA ── */}
         <div className="flex-1 min-w-0">
           {/* Tabs */}
-          <div className="flex items-center gap-1 p-1 mb-6 glass-card-static" style={{ borderRadius: 16 }}>
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={active ? 'v2-tab v2-tab-active' : 'v2-tab'}
-                >
-                  <Icon size={16} />
-                  {tab.label}
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between gap-2 p-1 mb-6 glass-card-static" style={{ borderRadius: 16 }}>
+            <div className="flex items-center gap-1">
+              {TABS.map((tab) => {
+                const Icon = tab.icon;
+                const active = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={active ? 'v2-tab v2-tab-active' : 'v2-tab'}
+                  >
+                    <Icon size={16} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+            {activeTab === 'stats' && (parsed || sofascoreData) && (
+              <button
+                onClick={() => setPrintOpen(true)}
+                className="no-print v2-btn-ghost text-xs flex items-center gap-1.5 px-3 py-1.5"
+                style={{ borderRadius: 12 }}
+              >
+                <Printer size={14} /> Imprimir
+              </button>
+            )}
           </div>
 
           {/* Tab content */}
           {activeTab === 'stats' && (
-            <div className="space-y-6">
+            <div className="analysis-print-target space-y-6">
+              {/* Print-only header */}
+              <div className="hidden print:flex print:items-center print:gap-6 print:mb-6 print:pb-4 print:border-b" style={{ borderColor: '#ccc' }}>
+                {photo && (
+                  <img
+                    src={photo}
+                    alt={goalkeeperName}
+                    className="print:block"
+                    style={{ width: 96, height: 120, objectFit: 'cover', borderRadius: 12, border: '2px solid #ddd' }}
+                  />
+                )}
+                <div className="print:flex print:flex-col print:gap-1">
+                  {jornadaNumber && (
+                    <span className="print:block text-sm font-bold" style={{ color: '#333' }}>
+                      Jornada {jornadaNumber}
+                    </span>
+                  )}
+                  <span className="print:block text-lg font-bold" style={{ color: '#111' }}>
+                    {matchName || 'Partido'}
+                  </span>
+                  {opponent && (
+                    <span className="print:block text-sm" style={{ color: '#555' }}>
+                      Rival: {opponent}
+                    </span>
+                  )}
+                  {date && (
+                    <span className="print:block text-xs" style={{ color: '#777' }}>
+                      {date}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               {parsed ? (
                 <>
                   <StatsCards gkStats={gkStats} opponentStats={oppStats} passFlow={passFlow} />
@@ -1569,6 +1782,27 @@ export default function AnalysisPage() {
       </div>
 
     </div>
+
+      {/* Print portal — renders stats content outside #root so @media print CSS applies */}
+      {printOpen && createPortal(
+        <AnalysisPrintOverlay
+          onClose={() => setPrintOpen(false)}
+          photo={photo}
+          goalkeeperName={goalkeeperName}
+          jornadaNumber={jornadaNumber}
+          matchName={matchName}
+          opponent={opponent}
+          date={date}
+          parsed={parsed}
+          gkStats={gkStats}
+          oppStats={oppStats}
+          passFlow={passFlow}
+          gkEvents={gkEvents}
+          periods={periods}
+          sofascoreData={sofascoreData}
+        />,
+        document.body
+      )}
 
       {offsetPicker && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
