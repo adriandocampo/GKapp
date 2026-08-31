@@ -85,6 +85,8 @@ async function stripBlobs(obj) {
   delete rest.goalkeeperPhoto;
   delete rest.rawXml;
   delete rest.sofascoreData;
+  delete rest.xmlData;
+  delete rest.tvVideoBlob;
 
   let finalImageBase64 = undefined;
 
@@ -247,16 +249,23 @@ export async function processSyncQueue() {
       console.log(`[sync] Queue retry success: ${entry.operation} ${entry.table}/${entry.docId}`);
       broadcast('local-change', { table: entry.table, docId: entry.docId });
     } catch (err) {
+      const msg = err?.message || '';
+      if (msg.includes('exceeds the maximum allowed size')) {
+        await db.syncQueue.delete(entry.id);
+        console.warn(`[sync] Dropped oversized doc ${entry.table}/${entry.docId} from queue (${msg.match(/size \((\d+)/)?.[1] || '?'} bytes)`);
+        continue;
+      }
       const newAttempts = entry.attempts + 1;
+      if (newAttempts >= MAX_ATTEMPTS) {
+        await db.syncQueue.delete(entry.id);
+        console.error(`[sync] Queue entry dropped after ${newAttempts} attempts: ${entry.operation} ${entry.table}/${entry.docId}`, err);
+        continue;
+      }
       await db.syncQueue.update(entry.id, {
         attempts: newAttempts,
         nextRetryAt: calculateBackoff(newAttempts),
       });
-      if (newAttempts % MAX_ATTEMPTS === 0) {
-        console.error(`[sync] Queue entry still failing after ${newAttempts} attempts (will keep retrying):`, entry.operation, entry.table, entry.docId, err);
-      } else {
-        console.warn(`[sync] Queue retry failed (attempt ${newAttempts}): ${entry.operation} ${entry.table}/${entry.docId}`, err);
-      }
+      console.warn(`[sync] Queue retry failed (attempt ${newAttempts}/${MAX_ATTEMPTS}): ${entry.operation} ${entry.table}/${entry.docId}`, err);
     }
   }
 }

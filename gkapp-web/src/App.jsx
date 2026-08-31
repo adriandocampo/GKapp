@@ -51,12 +51,9 @@ function Layout() {
         }
 
         setupFirestoreSync(user.uid);
-
-        try {
-          await processSyncQueue();
-        } catch (err) {
-          console.error('[app] Initial sync queue flush failed:', err);
-        }
+        processSyncQueue().catch(err =>
+          console.error('[app] Background queue flush error:', err)
+        );
 
         setupSessionGuard(user.uid, () => {
           performForceSignout('SesiÃ³n iniciada en otro dispositivo');
